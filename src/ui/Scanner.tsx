@@ -168,11 +168,8 @@ export function Scanner({
         const agreed = consensus(history);
         if (!agreed) continue;
         // Keep this frame while the full reading runs on it.
-        console.info('T consensus', Date.now() % 100000, JSON.stringify(agreed));
         const file = await toFile(canvas);
-        console.info('T file', Date.now() % 100000);
         const full = await readPhoto(image, loc);
-        console.info('T full', Date.now() % 100000, JSON.stringify(full.rows), full.date);
         if (!alive) return;
         if (confirms(full, agreed)) {
           // Asked for another day but the clock still shows a different one: keep going.
@@ -189,7 +186,6 @@ export function Scanner({
           const known = [...daysRef.current, ...pending.current.map(asDay)];
           const forgotten = forgottenStamps(agreed.date, agreed.rows, known);
           const other = forgotten.length ? null : otherDayNeeded(agreed.date, agreed.rows, known, todayLocal());
-          console.info('T decide', Date.now() % 100000, forgotten.length, other);
           if (forgotten.length) setPhase({ kind: 'missing', scan, forgotten });
           else if (other) setPhase({ kind: 'otherDay', scan, direction: other, date: addDays(agreed.date, other === 'previous' ? -1 : 1) });
           else setPhase({ kind: 'done', scan, complete: true });
@@ -207,8 +203,7 @@ export function Scanner({
   // Show the result for a moment, then go on to checking the times.
   useEffect(() => {
     if (phase.kind !== 'done') return;
-    console.info('T done-phase', Date.now() % 100000);
-    const timer = setTimeout(() => { console.info('T onScanned', Date.now() % 100000); onScanned([...pending.current, phase.scan]); }, phase.complete ? 1500 : 300);
+    const timer = setTimeout(() => onScanned([...pending.current, phase.scan]), phase.complete ? 1500 : 300);
     return () => clearTimeout(timer);
   }, [phase, onScanned]);
 

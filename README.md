@@ -24,8 +24,13 @@ report you can go through with your employer.
   Oct · 2 rows read") and opens the usual check. Nothing depends on the
   screen's colours. If a stamp is missing (the clock shows "xx:xx") and it
   isn't a shift that crosses midnight, the scanner says which one looks
-  forgotten and asks whether to fill it in by hand or scan again. Days can
-  always be typed in by hand instead (from the scanner or the Days screen).
+  forgotten and asks whether to fill it in by hand or scan again. A shift
+  that ends after midnight has its In on the previous day's screen: when a
+  scan shows a morning Ut without In and that day isn't logged, the scanner
+  asks to press "Föreg Dag" on the clock and scan it too ("Nästa Dag" the
+  other way round), checks that the clock shows the right day, and saves
+  both days together. Days can always be typed in by hand instead (from the
+  scanner or the Days screen).
   Saved photos can be chosen instead; those are read by
   finding the table's coloured bars. Times are read on the device
   (Tesseract OCR) and shown next to the picture for you to confirm.
