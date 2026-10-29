@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useApp } from '../app-context.ts';
 import { db, newId, saveDay } from '../db.ts';
 import type { DayRecord, StampPair } from '../domain/model.ts';
@@ -6,6 +6,7 @@ import { todayLocal } from '../domain/time.ts';
 import { loadPhoto, readPhoto, tableCrop } from '../ocr/browser.ts';
 import type { ClockReading } from '../ocr/pipeline.ts';
 import { Icon, Modal, Notice, Spinner } from './common.tsx';
+import { Scanner, type Scan } from './Scanner.tsx';
 import { flushFocusedField, StampRowsEditor } from './StampRowsEditor.tsx';
 
 interface Pending {
@@ -16,30 +17,56 @@ interface Pending {
   error?: string;
 }
 
-/** Button that takes one or more photos of the clock and walks through them. */
+interface QueuedPhoto {
+  file: File;
+  /** Already read by the scanner. */
+  reading?: ClockReading;
+}
+
+/** Scan the clock with the camera, or pick saved photos, and walk through them. */
 export function PhotoImportButton() {
   const { t } = useApp();
   const input = useRef<HTMLInputElement>(null);
-  const [queue, setQueue] = useState<File[]>([]);
+  const [queue, setQueue] = useState<QueuedPhoto[]>([]);
   const [total, setTotal] = useState(0);
+  const [scanning, setScanning] = useState(false);
 
   const onFiles = (files: FileList | null) => {
     if (!files || files.length === 0) return;
-    setQueue([...files]);
+    setQueue([...files].map((file) => ({ file })));
     setTotal(files.length);
     if (input.current) input.current.value = '';
   };
+  const onScanned = useCallback((scan: Scan) => {
+    setScanning(false);
+    setQueue([scan]);
+    setTotal(1);
+  }, []);
 
   return (
     <>
-      <button type="button" className="button button-primary button-large" onClick={() => input.current?.click()}>
-        <Icon name="camera" /> {t('days.photo')}
+      <button type="button" className="button button-primary button-large" onClick={() => setScanning(true)}>
+        <Icon name="camera" /> {t('scan.open')}
+      </button>
+      <button type="button" className="button" onClick={() => input.current?.click()}>
+        {t('scan.pickPhotos')}
       </button>
       <input ref={input} type="file" accept="image/*" multiple hidden onChange={(e) => onFiles(e.target.files)} />
+      {scanning && (
+        <Scanner
+          onScanned={onScanned}
+          onClose={() => setScanning(false)}
+          onPickFiles={() => {
+            setScanning(false);
+            input.current?.click();
+          }}
+        />
+      )}
       {queue.length > 0 && (
         <PhotoReview
           key={`${total}-${queue.length}`}
-          file={queue[0]}
+          file={queue[0].file}
+          preread={queue[0].reading}
           position={total - queue.length + 1}
           total={total}
           onDone={() => setQueue((q) => q.slice(1))}
@@ -50,7 +77,21 @@ export function PhotoImportButton() {
   );
 }
 
-function PhotoReview({ file, position, total, onDone, onCancelAll }: { file: File; position: number; total: number; onDone: () => void; onCancelAll: () => void }) {
+function PhotoReview({
+  file,
+  preread,
+  position,
+  total,
+  onDone,
+  onCancelAll,
+}: {
+  file: File;
+  preread?: ClockReading;
+  position: number;
+  total: number;
+  onDone: () => void;
+  onCancelAll: () => void;
+}) {
   const { t, days } = useApp();
   const [state, setState] = useState<Pending>(() => ({ previewUrl: URL.createObjectURL(file) }));
   const [date, setDate] = useState('');
@@ -65,7 +106,7 @@ function PhotoReview({ file, position, total, onDone, onCancelAll }: { file: Fil
     (async () => {
       try {
         const photo = await loadPhoto(file);
-        const reading = await readPhoto(photo.image);
+        const reading = preread ?? (await readPhoto(photo.image));
         const crop = reading.table ? URL.createObjectURL(await tableCrop(photo, reading.table)) : undefined;
         if (!alive) {
           if (crop) URL.revokeObjectURL(crop);
@@ -86,7 +127,7 @@ function PhotoReview({ file, position, total, onDone, onCancelAll }: { file: Fil
       alive = false;
       clearTimeout(timer);
     };
-  }, [file]);
+  }, [file, preread]);
 
   useEffect(
     () => () => {

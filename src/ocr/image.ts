@@ -35,6 +35,21 @@ function isLavender(r: number, g: number, b: number): boolean {
   return b > 210 && b - g > 50 && r > 110 && r - g > -10 && g > 100;
 }
 
+// Seen from another angle or in other light the same screen shows a
+// yellow-green bar (~215,245,150) over a pink header (~200,150,190). Looser
+// tests that accept both, used when the strict ones find nothing.
+function isBarLoose(r: number, g: number, b: number): boolean {
+  return g > 160 && g >= Math.max(r, b) - 15 && g - Math.min(r, b) > 20;
+}
+
+function isHeaderLoose(r: number, g: number, b: number): boolean {
+  return Math.max(r, b) > 140 && g > 70 && (r + b) / 2 - g > 25 && r - g > -10 && b - g > -10;
+}
+
+type ColorTest = (r: number, g: number, b: number) => boolean;
+const STRICT = { bar: isCyan, header: isLavender };
+export const LOOSE = { bar: isBarLoose, header: isHeaderLoose };
+
 export function downscale(img: RGBAImage, maxWidth: number): RGBAImage {
   if (img.width <= maxWidth) return img;
   const f = img.width / maxWidth;
@@ -92,12 +107,13 @@ function rowCounts(img: RGBAImage, test: (r: number, g: number, b: number) => bo
   return counts;
 }
 
-export function locateTable(img: RGBAImage): TableLocation | null {
+export function locateTable(img: RGBAImage, colors: { bar: ColorTest; header: ColorTest } = STRICT): TableLocation | null {
+  const isBar = colors.bar;
   const half = img.width / 2;
-  const cyan = rowCounts(img, isCyan);
-  const lav = rowCounts(img, isLavender);
-  const cyanRuns = runs(cyan.map((n) => n > 0.15 * half), 8, 2);
-  const lavRuns = runs(lav.map((n) => n > 0.15 * half), 6, 2);
+  const cyan = rowCounts(img, isBar);
+  const lav = rowCounts(img, colors.header);
+  const cyanRuns = runs(cyan.map((n) => n > 0.08 * half), 8, 2);
+  const lavRuns = runs(lav.map((n) => n > 0.08 * half), 6, 2);
 
   // The date bar is directly above the header row.
   let best: { bar: Run; header: Run } | null = null;
@@ -119,14 +135,14 @@ export function locateTable(img: RGBAImage): TableLocation | null {
     const rowStart = y * img.width * 4;
     for (let x = 0; x < img.width; x++) {
       const i = rowStart + x * 4;
-      if (isCyan(img.data[i], img.data[i + 1], img.data[i + 2])) colHits[x]++;
+      if (isBar(img.data[i], img.data[i + 1], img.data[i + 2])) colHits[x]++;
     }
   }
   const colRuns = runs(colHits.map((n) => n > barHeight * 0.3), 20, 12);
   if (colRuns.length === 0) return null;
   const left = Math.min(...colRuns.map((r) => r.start));
   const right = Math.max(...colRuns.map((r) => r.end));
-  if (right - left < img.width * 0.2) return null;
+  if (right - left < img.width * 0.12) return null;
 
   // Tilt: compare where the bar starts (top edge) near its left and right ends.
   const topEdge = (x0: number, x1: number): number | null => {
@@ -134,7 +150,7 @@ export function locateTable(img: RGBAImage): TableLocation | null {
     for (let x = x0; x < x1; x += 3) {
       for (let y = Math.max(0, bar.start - barHeight); y <= bar.end; y++) {
         const i = (y * img.width + x) * 4;
-        if (isCyan(img.data[i], img.data[i + 1], img.data[i + 2])) {
+        if (isBar(img.data[i], img.data[i + 1], img.data[i + 2])) {
           tops.push(y);
           break;
         }
@@ -157,6 +173,67 @@ export function locateTable(img: RGBAImage): TableLocation | null {
     headerBottom: header.end,
     angle,
   };
+}
+
+/**
+ * Tilt of the date bar (radians, positive = right side lower), found by
+ * projecting the bar-coloured pixels along candidate angles: the bar is a long
+ * thin stripe, so its projection is sharpest at the right angle.
+ */
+export function estimateTilt(img: RGBAImage): number {
+  const small = downscale(img, 500);
+  const points: [number, number][] = [];
+  for (let y = 0; y < small.height; y++) {
+    for (let x = 0; x < small.width; x++) {
+      const i = (y * small.width + x) * 4;
+      if (isBarLoose(small.data[i], small.data[i + 1], small.data[i + 2])) points.push([x, y]);
+    }
+  }
+  // Too little of the bar's colour to say anything.
+  if (points.length < small.width * small.height * 0.002) return 0;
+  let best = 0;
+  let bestScore = -1;
+  for (let a = -0.3; a <= 0.3001; a += 0.005) {
+    const t = Math.tan(a);
+    const bins = new Map<number, number>();
+    for (const [x, y] of points) {
+      const k = Math.round(y - x * t);
+      bins.set(k, (bins.get(k) ?? 0) + 1);
+    }
+    let score = 0;
+    for (const n of bins.values()) score += n * n;
+    if (score > bestScore) {
+      bestScore = score;
+      best = a;
+    }
+  }
+  return best;
+}
+
+/** The image rotated by -angle around its centre (straightens a tilt of `angle`). */
+export function straighten(img: RGBAImage, angle: number): RGBAImage {
+  const { width: w, height: h } = img;
+  const out = new Uint8ClampedArray(w * h * 4);
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  const cx = w / 2;
+  const cy = h / 2;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const ux = x - cx;
+      const uy = y - cy;
+      const sx = Math.round(cx + ux * cos - uy * sin);
+      const sy = Math.round(cy + ux * sin + uy * cos);
+      const o = (y * w + x) * 4;
+      out[o + 3] = 255;
+      if (sx < 0 || sy < 0 || sx >= w || sy >= h) continue;
+      const i = (sy * w + sx) * 4;
+      out[o] = img.data[i];
+      out[o + 1] = img.data[i + 1];
+      out[o + 2] = img.data[i + 2];
+    }
+  }
+  return { width: w, height: h, data: out };
 }
 
 /** Bilinear sample of one channel combination, returning 0-255. */

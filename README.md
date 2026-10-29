@@ -12,9 +12,16 @@ report you can go through with your employer.
 
 ## What it does
 
-- **Photo → times.** After clocking out, photograph the clock's day screen.
-  The times are read on the device (Tesseract OCR, three readings voted per
-  time) and shown next to a zoomed crop of the clock for you to confirm.
+- **Scan → times.** After clocking out, scan the clock's day screen with the
+  camera. A guide shows where the table goes, and the scanner says what to fix
+  (move closer or back, hold straight, line the date bar up with the guide).
+  When the table is in place and steady it captures by itself, reads the
+  times and confirms ("Done! Thu 29 Oct · 2 rows read"), trying again if
+  something couldn't be read. Saved photos can be chosen instead. The times
+  are read on the device (Tesseract OCR, three readings voted per time) and
+  shown next to a zoomed crop of the clock for you to confirm. The table is
+  found by its coloured bars, which look cyan/lavender or yellow/pink
+  depending on the angle; tilted photos are straightened.
   Times the readings disagree on are highlighted. Missing stamps can be typed
   in and are marked as typed in. A shift over midnight (In on one day, Ut on
   the next) becomes one shift.
@@ -99,9 +106,10 @@ shifts. This is a calculation aid, not a legal assessment.
    personal supplement under "varav tillägg"),
    choose your schedule (or none), switch off supplements that don't apply to
    you, and choose your municipality under Tax.
-3. After each shift, **Days → Photograph the time clock**. Missed a day? Page
-   back on the clock with "Föreg Dag" and photograph it later. Several photos
-   can be picked at once.
+3. After each shift, **Days → Scan the time clock** and follow the hints until
+   it says Done. Missed a day? Page back on the clock with "Föreg Dag" and scan
+   it. Saved photos (several at once) can be chosen with **Choose saved
+   photos**.
 4. When the pay slip arrives, **Pay slips → Import pay slip (PDF)**. Hours
    worked in one month are usually paid the month after.
 5. **Create report for the employer** → print or save as PDF.
@@ -146,7 +154,7 @@ Code layout:
   building, pay calculation, pay slip parsing and comparison (no browser APIs;
   all unit-tested).
 - `src/ocr/`: locating the clock table by colour, preprocessing, Tesseract
-  wrapper, voting.
+  wrapper, voting, and the live frame checks used by the scanner.
 - `src/pdf/`: pdf.js text extraction.
 - `src/ui/`: React screens; `src/db.ts` (Dexie/IndexedDB), `src/backup.ts`,
   `src/i18n.ts` (Swedish and English).
