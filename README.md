@@ -29,7 +29,8 @@ report you can go through with your employer.
   scan shows a morning Ut without In and that day isn't logged, the scanner
   asks to press "Föreg Dag" on the clock and scan it too ("Nästa Dag" the
   other way round), checks that the clock shows the right day, and saves
-  both days together. Days can always be typed in by hand instead (from the
+  both days together. An animated sketch of the clock shows which button to
+  tap and how the date changes. Days can always be typed in by hand instead (from the
   scanner or the Days screen).
   Saved photos can be chosen instead; those are read by
   finding the table's coloured bars. Times are read on the device

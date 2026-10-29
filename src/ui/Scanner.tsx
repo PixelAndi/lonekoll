@@ -5,6 +5,7 @@ import { confirms, consensus, guideBox, guideLocation, hintFor, HISTORY, readReg
 import type { DayRecord } from '../domain/model.ts';
 import { forgottenStamps, otherDayNeeded, type ForgottenStamp } from '../domain/shifts.ts';
 import { addDays, todayLocal } from '../domain/time.ts';
+import { ClockHowTo } from './ClockHowTo.tsx';
 import type { ClockReading, QuickReading } from '../ocr/pipeline.ts';
 
 // Live camera scanner for the clock screen. The user lines the clock's table
@@ -99,6 +100,9 @@ export function Scanner({
   const [target, setTarget] = useState<{ date: string; direction: 'previous' | 'next' } | null>(null);
   const targetRef = useRef(target);
   targetRef.current = target;
+  /** The day the other day is scanned from, for the how-to sketch. */
+  const [fromDate, setFromDate] = useState<string | null>(null);
+  const [showHow, setShowHow] = useState(false);
 
   // Camera on while the scanner is open; text recognition loads meanwhile.
   useEffect(() => {
@@ -175,6 +179,8 @@ export function Scanner({
           // Asked for another day but the clock still shows a different one: keep going.
           if (targetRef.current && agreed.date !== targetRef.current.date) {
             setPhase({ kind: 'aiming', hint: 'wrongDay', latest: q });
+            // Show how to page the clock until the right day is scanned.
+            setShowHow(true);
             history = [];
             continue;
           }
@@ -288,10 +294,28 @@ export function Scanner({
             )}
           </svg>
         )}
-        {target && phase.kind === 'aiming' && (
-          <div className="scanner-target">
-            {t(target.direction === 'previous' ? 'scan.targetPrevious' : 'scan.targetNext', { date: fmt.date(target.date) })}
+        {phase.kind === 'otherDay' && phase.scan.reading.date && (
+          <div className="scanner-howto">
+            <ClockHowTo from={phase.scan.reading.date} to={phase.date} direction={phase.direction} />
           </div>
+        )}
+        {target && phase.kind === 'aiming' && fromDate && showHow ? (
+          <div className="scanner-howto">
+            <ClockHowTo from={fromDate} to={target.date} direction={target.direction} compact />
+            <button type="button" className="link-button scanner-howto-hide" onClick={() => setShowHow(false)}>
+              {t('scan.hideHow')}
+            </button>
+          </div>
+        ) : (
+          target &&
+          phase.kind === 'aiming' && (
+            <div className="scanner-target">
+              <span>{t(target.direction === 'previous' ? 'scan.targetPrevious' : 'scan.targetNext', { date: fmt.date(target.date) })}</span>
+              <button type="button" className="link-button" onClick={() => setShowHow(true)}>
+                {t('scan.showHow')}
+              </button>
+            </div>
+          )
         )}
         {(phase.kind === 'aiming' || phase.kind === 'done' || phase.kind === 'missing' || phase.kind === 'otherDay') && (
           // While aiming only what was found; the times themselves once they are confirmed.
@@ -327,6 +351,7 @@ export function Scanner({
               className="button button-primary"
               onClick={() => {
                 pending.current = [...pending.current, phase.scan];
+                setFromDate(phase.scan.reading.date);
                 setTarget({ date: phase.date, direction: phase.direction });
                 setPhase({ kind: 'aiming', hint: 'place', latest: null });
               }}
