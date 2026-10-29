@@ -1,7 +1,9 @@
 import { useMemo } from 'react';
 import { useApp } from '../app-context.ts';
 import { calculatePeriod, type CategoryTotal, type PayCategory, type PeriodResult } from '../domain/calc.ts';
-import { formatDuration, monthEnd, todayLocal } from '../domain/time.ts';
+import { taxBasis, taxColumn, taxFor } from '../domain/tax.ts';
+import { addDays, formatDuration, monthEnd, todayLocal } from '../domain/time.ts';
+import { useTaxData } from '../taxData.ts';
 import { href } from '../router.ts';
 import { Card, Notice, Page } from './common.tsx';
 import { MonthNav } from './DaysView.tsx';
@@ -14,6 +16,8 @@ export const CATEGORY_ORDER: PayCategory[] = [
   'ob4',
   'ot50',
   'ot100',
+  'shiftedTime',
+  'shiftForm',
   'sickPay',
   'karens',
   'holidayPay',
@@ -26,12 +30,14 @@ export function MonthView({ month }: { month?: string }) {
   const monthKey = month ?? todayLocal().slice(0, 7);
   const start = `${monthKey}-01`;
   const end = monthEnd(start);
-  const period = useMemo(() => calculatePeriod(days, settings, start, end), [days, settings, start, end]);
+  const today = todayLocal();
+  const period = useMemo(() => calculatePeriod(days, settings, start, end, { today }), [days, settings, start, end, today]);
 
   return (
     <Page title={t('month.title')}>
       <MonthNav month={monthKey} route="month" />
       <PeriodTotals period={period} />
+      <NetEstimate period={period} />
       <p className="muted small">{t('month.excludesVacation')} {t('month.paidNextMonth')}</p>
       <PeriodWarnings period={period} />
       <Card title={t('month.shifts')}>
@@ -122,9 +128,7 @@ export function PeriodWarnings({ period }: { period: PeriodResult }) {
       {period.warnings.map((w, i) => (
         <Notice key={`p${i}`} kind="warn">
           {t(`warn.${w.code}`, {
-            ...w.values,
-            ...(typeof w.values?.rate === 'number' ? { rate: fmt.number(w.values.rate) } : {}),
-            ...(typeof w.values?.minimum === 'number' ? { minimum: fmt.number(w.values.minimum) } : {}),
+            ...Object.fromEntries(Object.entries(w.values ?? {}).map(([k, v]) => [k, typeof v === 'number' ? fmt.number(v) : v])),
             date: w.date ? fmt.date(w.date) : '',
           })}
         </Notice>
@@ -141,6 +145,36 @@ export function PeriodWarnings({ period }: { period: PeriodResult }) {
           </li>
         ))}
       </ul>
+    </Card>
+  );
+}
+
+/** Tax and net pay for the month's calculated gross, using the tables for the year it is paid. */
+function NetEstimate({ period }: { period: PeriodResult }) {
+  const { t, fmt, settings } = useApp();
+  // Hours are usually paid the month after.
+  const payYear = Number(addDays(period.end, 25).slice(0, 4));
+  const { tables, rates, loading } = useTaxData(payYear);
+  if (loading || period.expectedGross <= 0) return null;
+  const basis = taxBasis(settings.tax, rates);
+  if (basis.kind === 'unknown') return null;
+  const tax = taxFor(basis, tables, period.expectedGross, taxColumn(settings.birthDate, payYear));
+  if (tax === undefined) return <p className="muted small">{t('settings.taxNoData', { year: payYear })}</p>;
+  return (
+    <Card>
+      <dl className="kv">
+        <div className="kv-pair">
+          <dt>{t('month.tax')}</dt>
+          <dd>{fmt.money(-tax)}</dd>
+        </div>
+        <div className="kv-pair kv-strong">
+          <dt>{t('month.net')}</dt>
+          <dd>{fmt.money(Math.round(period.expectedGross - tax))}</dd>
+        </div>
+      </dl>
+      <p className="muted small">
+        {basis.kind === 'table' ? t('month.taxBasis', { table: basis.table, year: payYear }) : t('month.taxPercent', { percent: fmt.number(basis.percent) })}
+      </p>
     </Card>
   );
 }

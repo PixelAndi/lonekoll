@@ -1,22 +1,16 @@
-import { useEffect, useRef, useState, type InputHTMLAttributes } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../app-context.ts';
 import { deleteEverything, downloadBlob, exportBackup, importBackup } from '../backup.ts';
 import { isPersisted, requestPersistence, saveSettings } from '../db.ts';
-import type { Settings, WagePeriod } from '../domain/model.ts';
+import type { Settings } from '../domain/model.ts';
 import { formatDuration, todayLocal, toMinutes } from '../domain/time.ts';
 import { Card, Field, Notice, Page } from './common.tsx';
-
-/** Text/number input that saves when it loses focus (not on every keystroke). */
-function LazyInput({ value, onCommit, ...rest }: { value: string; onCommit: (v: string) => void } & Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'>) {
-  const [draft, setDraft] = useState(value);
-  useEffect(() => setDraft(value), [value]);
-  return <input {...rest} value={draft} onChange={(e) => setDraft(e.target.value)} onBlur={() => draft !== value && onCommit(draft)} />;
-}
-
-const numberOrUndefined = (v: string) => {
-  const n = Number(v.replace(',', '.'));
-  return v.trim() === '' || !Number.isFinite(n) ? undefined : n;
-};
+import { decimalText, LazyInput, numberOrUndefined } from './settings/inputs.tsx';
+import { TimeField } from './StampRowsEditor.tsx';
+import { ScheduleSettings } from './settings/ScheduleSettings.tsx';
+import { SupplementSettings } from './settings/SupplementSettings.tsx';
+import { TaxSettings } from './settings/TaxSettings.tsx';
+import { WageSettings } from './settings/WageSettings.tsx';
 
 export function SettingsView() {
   const { t, settings } = useApp();
@@ -28,8 +22,6 @@ export function SettingsView() {
   useEffect(() => {
     void isPersisted().then(setPersisted);
   }, []);
-
-  const setWages = (wages: WagePeriod[]) => save({ wages: [...wages].sort((a, b) => a.from.localeCompare(b.from)) });
 
   const onImport = async (file: File | undefined) => {
     if (importInput.current) importInput.current.value = '';
@@ -50,41 +42,10 @@ export function SettingsView() {
 
   return (
     <Page title={t('nav.settings')}>
-      <Card title={t('settings.wages')}>
-        <p className="muted small">{t('settings.wagesHint')}</p>
-        {settings.wages.map((w, i) => (
-          <div className="field-row" key={`${w.from}-${i}`}>
-            <Field label={t('settings.wageFrom')}>
-              <input
-                type="date"
-                value={w.from}
-                onChange={(e) => e.target.value && setWages(settings.wages.map((x, j) => (j === i ? { ...x, from: e.target.value } : x)))}
-              />
-            </Field>
-            <Field label={t('settings.wageHourly')}>
-              <LazyInput
-                type="text"
-                inputMode="decimal"
-                value={String(w.hourly).replace('.', settings.language === 'sv' ? ',' : '.')}
-                onCommit={(v) => {
-                  const n = numberOrUndefined(v);
-                  if (n !== undefined) setWages(settings.wages.map((x, j) => (j === i ? { ...x, hourly: n } : x)));
-                }}
-              />
-            </Field>
-            <button type="button" className="icon-button" aria-label={t('common.delete')} onClick={() => setWages(settings.wages.filter((_, j) => j !== i))}>
-              ×
-            </button>
-          </div>
-        ))}
-        <button
-          type="button"
-          className="button button-small"
-          onClick={() => setWages([...settings.wages, { from: todayLocal(), hourly: settings.wages.at(-1)?.hourly ?? 0 }])}
-        >
-          + {t('settings.addWage')}
-        </button>
-      </Card>
+      <WageSettings />
+      <ScheduleSettings />
+      <SupplementSettings />
+      <TaxSettings />
 
       <Card title={t('settings.you')}>
         <Field label={t('settings.language')}>
@@ -133,37 +94,41 @@ export function SettingsView() {
       </Card>
 
       <Card title={t('settings.rules')}>
-        <div className="field-row">
-          <Field label={t('settings.ordinaryShift')} hint={t('settings.ordinaryShiftHint')}>
-            <LazyInput
-              type="text"
-              inputMode="numeric"
-              pattern="\d{1,2}:\d{2}"
-              value={formatDuration(settings.ordinaryShiftMinutes)}
-              onCommit={(v) => /^\d{1,2}:\d{2}$/.test(v) && save({ ordinaryShiftMinutes: toMinutes(v) })}
-            />
-          </Field>
-          <Field label={t('settings.maxShifts')}>
-            <LazyInput
-              type="number"
-              min="0"
-              max="7"
-              value={String(settings.maxShiftsPerWeek)}
-              onCommit={(v) => {
-                const n = numberOrUndefined(v);
-                if (n !== undefined && n >= 0) save({ maxShiftsPerWeek: Math.round(n) });
-              }}
-            />
-          </Field>
+        {/* With a schedule, overtime follows the schedule instead of these limits. */}
+        {settings.scheduleMode !== 'fixed' && (
+          <div className="field-row">
+            <Field label={t('settings.ordinaryShift')} hint={t('settings.ordinaryShiftHint')}>
+              <LazyInput
+                type="text"
+                inputMode="numeric"
+                pattern="\d{1,2}:\d{2}"
+                value={formatDuration(settings.ordinaryShiftMinutes)}
+                onCommit={(v) => /^\d{1,2}:\d{2}$/.test(v) && save({ ordinaryShiftMinutes: toMinutes(v) })}
+              />
+            </Field>
+            <Field label={t('settings.maxShifts')}>
+              <LazyInput
+                type="number"
+                min="0"
+                max="7"
+                value={String(settings.maxShiftsPerWeek)}
+                onCommit={(v) => {
+                  const n = numberOrUndefined(v);
+                  if (n !== undefined && n >= 0) save({ maxShiftsPerWeek: Math.round(n) });
+                }}
+              />
+            </Field>
+          </div>
+        )}
+        <div className="field">
+          <TimeField label={t('settings.ordinaryStart')} value={settings.ordinaryStart} onChange={(v) => v && save({ ordinaryStart: v })} />
+          <span className="field-hint">{t('settings.ordinaryStartHint')}</span>
         </div>
-        <Field label={t('settings.ordinaryStart')} hint={t('settings.ordinaryStartHint')}>
-          <input type="time" value={settings.ordinaryStart} onChange={(e) => e.target.value && save({ ordinaryStart: e.target.value })} />
-        </Field>
         <Field label={t('settings.timeBankRate')} hint={t('settings.timeBankHint')}>
           <LazyInput
             type="text"
             inputMode="decimal"
-            value={settings.timeBankRate !== undefined ? String(settings.timeBankRate).replace('.', settings.language === 'sv' ? ',' : '.') : ''}
+            value={decimalText(settings.timeBankRate, settings.language)}
             onCommit={(v) => save({ timeBankRate: numberOrUndefined(v) })}
           />
         </Field>

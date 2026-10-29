@@ -21,10 +21,23 @@ report you can go through with your employer.
 - **Absences.** Sick (optionally the shift you were booked for), vacation,
   time off from the working-time account, a public holiday you would have
   worked, permission, unpaid leave.
+- **With or without a schedule.** Without one, overtime follows the
+  agreement's default limits. With a fixed (optionally rotating) schedule,
+  overtime is time beyond the scheduled shift, a shift on a day off is
+  overtime, a shift the employer moved pays förskjuten tid, and holiday pay
+  and sick pay come from the schedule. Single days can be changed.
+- **Only what applies to you.** OB, overtime, förskjuten tid and holiday pay
+  can be switched off (e.g. when a personal supplement replaces förskjuten
+  tid), skiftformstillägg can be switched on, and a personal supplement in the
+  hourly wage is kept apart when checking the minimum wage.
 - **Calculation per month.** Hourly wage, OB in four levels, overtime +50 % /
-  +100 %, sick pay and waiting-day deduction, holiday pay, time-bank payout,
+  +100 %, förskjuten tid, skiftformstillägg, sick pay and waiting-day
+  deduction, holiday pay, time-bank payout, and estimated tax and net pay,
   plus warnings (below minimum wage, no break for 5 h, < 11 h rest, missing
   stamps).
+- **Tax from the municipality.** Choose where you live (and whether you are
+  in Svenska kyrkan); the app works out the tax table from Skatteverket's rates
+  and checks the tax and net pay on the slip with Skatteverket's tables.
 - **Pay slip comparison.** Import the PDF; each line is matched against the
   calculation, with the difference and the agreement section that applies.
 - **Report.** A printable A4 report (Swedish or English) with the summary,
@@ -53,6 +66,10 @@ report you can go through with your employer.
 | Holiday pay | Hours you would have worked, with the OB of an ordinary weekday | Avtalet §5.1 |
 | Vacation pay | Checked against the minimum per day (1 789 kr from 1 Apr 2026) | Avtalet §5.7; Bageri §5 |
 | Working-time account | Hours taken and, if the hourly payout rate is entered, the amount | Bilaga C |
+| With a schedule | Overtime past the scheduled length (optionally from a minimum per shift); a shift on a day off is overtime; work on a scheduled holiday is overtime plus holiday pay | Avtalet §3.3, §5.1 |
+| Förskjuten tid | 37.07 kr/h (from 1 Apr 2026) for ordinary time outside the schedule when the employer moved the shift (marked on the day) | Bageri §3 |
+| Skiftformstillägg | 5.3 % (two-shift, discontinuous three-shift, permanent night) or 11.1 % (continuous three-shift) of the hourly wage, not on overtime | Avtalet §4.4 |
+| Tax | Table = municipal + regional tax + burial fee (+ church fee for members), 32.50 → 32 and 32.51 → 33; monthly table, column 1 (column 3 from 66) | Skatteverket |
 
 Amounts change every 1 April; both agreement years are in
 `src/domain/agreement.ts`. Add a new period there when a new agreement is
@@ -61,8 +78,8 @@ signed.
 ### Not covered
 
 Vacation pay beyond the daily minimum (it depends on the whole earning year),
-shifted hours (förskjuten tid), shift-form supplements, monthly salaries and
-time off in lieu, and tax. Without a schedule, the end of the Sunday/holiday
+monthly salaries and time off in lieu, and one-time tax (engångsskatt) on
+irregular payments. Without a schedule, the end of the Sunday/holiday
 overtime window uses a configurable "ordinary start" (default 06:00), and sick
 pay without a booked shift is an estimate from up to 13 weeks of logged
 shifts. This is a calculation aid, not a legal assessment.
@@ -70,14 +87,28 @@ shifts. This is a calculation aid, not a legal assessment.
 ## Using it
 
 1. Open the app on your phone and choose **Add to Home Screen**.
-2. **Settings → Hourly wage:** enter your full hourly wage and the date it
-   applies from (add a row when it changes).
+2. **Settings:** enter your full hourly wage and the date it applies from (add
+   a row when it changes; put any personal supplement under "varav tillägg"),
+   choose your schedule (or none), switch off supplements that don't apply to
+   you, and choose your municipality under Tax.
 3. After each shift, **Days → Photograph the time clock**. Missed a day? Page
    back on the clock with "Föreg Dag" and photograph it later. Several photos
    can be picked at once.
 4. When the pay slip arrives, **Pay slips → Import pay slip (PDF)**. Hours
    worked in one month are usually paid the month after.
 5. **Create report for the employer** → print or save as PDF.
+
+## Tax data
+
+Skatteverket's monthly tax tables (tables 29–42, columns 1 and 3) and the
+municipal tax rates per parish are bundled in `src/domain/tax-data/`. Fetch a
+new year when Skatteverket publishes it (December):
+
+```sh
+node scripts/fetch-tax-data.mjs 2027
+```
+
+(Behind an HTTP proxy, Node's fetch needs `NODE_USE_ENV_PROXY=1`.)
 
 ## Development
 

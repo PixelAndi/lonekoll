@@ -5,8 +5,10 @@ import { db, newId, type SlipRecord } from '../db.ts';
 import { calculatePeriod } from '../domain/calc.ts';
 import { comparePeriod } from '../domain/compare.ts';
 import { hourlyRateOn } from '../domain/model.ts';
+import { taxBasis, taxColumn } from '../domain/tax.ts';
 import { todayLocal } from '../domain/time.ts';
 import { readPaySlipPdf } from '../pdf/browser.ts';
+import { useTaxData } from '../taxData.ts';
 import { href, navigate } from '../router.ts';
 import { Card, Icon, Notice, Page, Spinner } from './common.tsx';
 import { applyOverrides, countFindings, slipPeriod } from './slipComparison.ts';
@@ -63,7 +65,10 @@ function SlipItem({ record }: { record: SlipRecord }) {
   const { t, fmt, days, settings } = useApp();
   const slip = applyOverrides(record.slip, settings.codeOverrides);
   const { start, end } = slipPeriod(slip, record.importedAt);
-  const findings = countFindings(comparePeriod(calculatePeriod(days, settings, start, end), slip, days, settings));
+  const taxYear = Number((slip.payDate ?? end).slice(0, 4));
+  const taxData = useTaxData(taxYear);
+  const tax = { basis: taxBasis(settings.tax, taxData.rates), tables: taxData.tables, column: taxColumn(settings.birthDate, taxYear) };
+  const findings = countFindings(comparePeriod(calculatePeriod(days, settings, start, end), slip, days, settings, tax));
   return (
     <li>
       <a className="slip-item" href={href({ name: 'slip', id: record.id })}>

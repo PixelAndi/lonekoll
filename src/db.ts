@@ -56,7 +56,15 @@ export async function loadSettings(): Promise<Settings> {
     const sv = (navigator.language ?? '').toLowerCase().startsWith('sv');
     return { ...DEFAULT_SETTINGS, language: sv ? 'sv' : 'en' };
   }
-  return { ...DEFAULT_SETTINGS, ...record.value };
+  // Nested settings are merged too, so fields added in later versions get defaults.
+  const value = record.value;
+  return {
+    ...DEFAULT_SETTINGS,
+    ...value,
+    supplements: { ...DEFAULT_SETTINGS.supplements, ...value.supplements },
+    tax: { ...DEFAULT_SETTINGS.tax, ...value.tax },
+    schedule: value.schedule ?? DEFAULT_SETTINGS.schedule,
+  };
 }
 
 export async function saveSettings(patch: Partial<Settings>): Promise<void> {

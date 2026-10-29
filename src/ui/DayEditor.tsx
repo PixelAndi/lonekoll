@@ -1,14 +1,15 @@
 import { useMemo, useRef, useState } from 'react';
 import { useApp } from '../app-context.ts';
 import { db, deleteDay, saveDay } from '../db.ts';
-import { OB_LEVELS } from '../domain/agreement.ts';
+import { agreementFor, OB_LEVELS } from '../domain/agreement.ts';
 import { calculateShifts, type ShiftResult } from '../domain/calc.ts';
-import { specialDay } from '../domain/holidays.ts';
-import type { Absence, AbsenceType, DayRecord, StampPair } from '../domain/model.ts';
+import { isHoliday, specialDay } from '../domain/holidays.ts';
+import type { Absence, AbsenceType, DayRecord, ScheduledShift, StampPair } from '../domain/model.ts';
+import { scheduledShift } from '../domain/schedule.ts';
 import { addDays, formatDuration } from '../domain/time.ts';
 import { goBack, href } from '../router.ts';
 import { Card, Field, Icon, Modal, Notice, Page, PhotoThumb, usePhotoUrl } from './common.tsx';
-import { flushFocusedField, StampRowsEditor } from './StampRowsEditor.tsx';
+import { flushFocusedField, StampRowsEditor, TimeField } from './StampRowsEditor.tsx';
 
 const ABSENCE_TYPES: AbsenceType[] = ['sick', 'vacation', 'timebank', 'holiday', 'permission', 'unpaid'];
 
@@ -26,15 +27,18 @@ function DayForm({ date, existing, days, t, fmt, settings }: FormProps) {
   const [absence, setAbsence] = useState<Absence | undefined>(existing?.absence);
   const [note, setNote] = useState(existing?.note ?? '');
   const [viewPhoto, setViewPhoto] = useState<string>();
+  const [scheduleOverride, setScheduleOverride] = useState<ScheduledShift | 'off' | undefined>(existing?.scheduleOverride);
+  const [shiftMoved, setShiftMoved] = useState(existing?.shiftMoved ?? false);
+  const fixed = settings.scheduleMode === 'fixed';
   const latestRows = useRef(rows);
   latestRows.current = rows;
   const special = specialDay(date);
 
   // Preview the calculation with the edited stamps.
   const preview = useMemo(() => {
-    const edited: DayRecord = { date, rows, absence, photoIds: existing?.photoIds ?? [], updatedAt: 0 };
+    const edited: DayRecord = { date, rows, absence, scheduleOverride, shiftMoved, photoIds: existing?.photoIds ?? [], updatedAt: 0 };
     return calculateShifts([...days.filter((d) => d.date !== date), edited], settings);
-  }, [days, date, rows, absence, existing, settings]);
+  }, [days, date, rows, absence, scheduleOverride, shiftMoved, existing, settings]);
   const shifts = preview.results.filter((r) => r.shift.date === date);
   const continued = preview.results.find((r) => r.shift.date !== date && r.shift.dates.includes(date));
   const issues = preview.issues.filter((i) => i.date === date);
@@ -46,6 +50,8 @@ function DayForm({ date, existing, days, t, fmt, settings }: FormProps) {
       date,
       rows: latestRows.current.filter((r) => r.in || r.out),
       absence,
+      scheduleOverride,
+      shiftMoved: shiftMoved || undefined,
       note: note.trim() || undefined,
       photoIds: existing?.photoIds ?? [],
       ocrConfidence: existing?.ocrConfidence,
@@ -89,11 +95,22 @@ function DayForm({ date, existing, days, t, fmt, settings }: FormProps) {
         <p className="muted small">{t('day.midnightHint')}</p>
       </Card>
 
+      {fixed && (
+        <ScheduleCard
+          date={date}
+          override={scheduleOverride}
+          onOverride={setScheduleOverride}
+          moved={shiftMoved}
+          onMoved={setShiftMoved}
+        />
+      )}
+
       <Card title={t('day.absence')}>
         <Field label={t('day.absence')}>
           <select value={absence?.type ?? ''} onChange={(e) => setAbsenceType(e.target.value)}>
             <option value="">{t('absence.none')}</option>
-            {ABSENCE_TYPES.map((type) => (
+            {/* With a schedule, holiday pay comes from the schedule. */}
+            {ABSENCE_TYPES.filter((type) => !(fixed && type === 'holiday' && absence?.type !== 'holiday')).map((type) => (
               <option key={type} value={type}>
                 {t(`absence.${type}`)}
               </option>
@@ -114,13 +131,10 @@ function DayForm({ date, existing, days, t, fmt, settings }: FormProps) {
         )}
         {(absence?.type === 'sick' || absence?.type === 'holiday') && (
           <>
-            <div className="field-row">
-              <Field label={`${t('day.booked')} – ${t('day.in')}`}>
-                <input type="time" value={absence.bookedStart ?? ''} onChange={(e) => patchAbsence({ bookedStart: e.target.value || undefined })} />
-              </Field>
-              <Field label={t('day.out')}>
-                <input type="time" value={absence.bookedEnd ?? ''} onChange={(e) => patchAbsence({ bookedEnd: e.target.value || undefined })} />
-              </Field>
+            <span className="field-label">{t('day.booked')}</span>
+            <div className="stamp-row">
+              <TimeField label={t('day.in')} value={absence.bookedStart ?? null} onChange={(v) => patchAbsence({ bookedStart: v ?? undefined })} />
+              <TimeField label={t('day.out')} value={absence.bookedEnd ?? null} onChange={(v) => patchAbsence({ bookedEnd: v ?? undefined })} />
             </div>
             <p className="muted small">{t(absence.type === 'sick' ? 'day.bookedHint.sick' : 'day.bookedHint.holiday')}</p>
           </>
@@ -201,6 +215,12 @@ export function ShiftSummary({ result }: { result: ShiftResult }) {
             <dd>{formatDuration(r.overtime100)}</dd>
           </div>
         )}
+        {r.shiftedMinutes > 0 && (
+          <div className="kv-pair">
+            <dt>{t('cat.shiftedTime')}</dt>
+            <dd>{formatDuration(r.shiftedMinutes)}</dd>
+          </div>
+        )}
       </dl>
       {r.overtimeReason && <p className="muted small">{t('day.overtime')}: {t(`day.overtimeReason.${r.overtimeReason}`, { limit })}</p>}
       {r.warnings.map((w) => (
@@ -227,5 +247,77 @@ function PhotoViewer({ id, onClose, onDelete }: { id: string; onClose: () => voi
     >
       {url && <img className="review-photo" src={url} alt="" />}
     </Modal>
+  );
+}
+
+/** The day's schedule, a change for just this day, and the "shift was moved" mark. */
+function ScheduleCard({
+  date,
+  override,
+  onOverride,
+  moved,
+  onMoved,
+}: {
+  date: string;
+  override: ScheduledShift | 'off' | undefined;
+  onOverride: (o: ScheduledShift | 'off' | undefined) => void;
+  moved: boolean;
+  onMoved: (m: boolean) => void;
+}) {
+  const { t, fmt, settings } = useApp();
+  const regular = scheduledShift(settings, date);
+  const effective = override === 'off' ? null : (override ?? regular);
+  const describe = (s: ScheduledShift | null) =>
+    s ? t('day.scheduled', { start: s.start, end: s.end, break: s.breakMinutes }) : t('day.scheduledOff');
+  const shiftedRate = agreementFor(date)?.shiftedTime;
+  return (
+    <Card title={t('day.schedule')}>
+      <p>{describe(effective)}</p>
+      {override !== undefined && <p className="muted small">{t('day.overridden')}</p>}
+      {override !== undefined && override !== 'off' && (
+        <div className="stamp-row stamp-row-3">
+          <TimeField label={t('day.in')} value={override.start} onChange={(v) => v && onOverride({ ...override, start: v })} />
+          <TimeField label={t('day.out')} value={override.end} onChange={(v) => v && onOverride({ ...override, end: v })} />
+          <label>
+            <span className="field-label">{t('day.break')}</span>
+            <input
+              type="number"
+              min="0"
+              max="240"
+              inputMode="numeric"
+              value={override.breakMinutes}
+              onChange={(e) => onOverride({ ...override, breakMinutes: Math.max(0, Number(e.target.value) || 0) })}
+            />
+          </label>
+        </div>
+      )}
+      <div className="button-row">
+        {override === undefined || override === 'off' ? (
+          <button type="button" className="button button-small" onClick={() => onOverride(regular ?? { start: '06:00', end: '14:30', breakMinutes: 30 })}>
+            {t('day.changeSchedule')}
+          </button>
+        ) : null}
+        {override !== 'off' && (
+          <button type="button" className="button button-small" onClick={() => onOverride('off')}>
+            {t('day.markOff')}
+          </button>
+        )}
+        {override !== undefined && (
+          <button type="button" className="button button-small" onClick={() => onOverride(undefined)}>
+            {t('day.useRegular')}
+          </button>
+        )}
+      </div>
+      {effective && isHoliday(date) && settings.supplements.holidayPay && <Notice>{t('day.holidayScheduled')}</Notice>}
+      {effective && settings.supplements.shiftedTime && (
+        <>
+          <label className="checkbox">
+            <input type="checkbox" checked={moved} onChange={(e) => onMoved(e.target.checked)} />
+            {t('day.shiftMoved')}
+          </label>
+          {shiftedRate !== undefined && <p className="muted small">{t('day.shiftMovedHint', { rate: fmt.number(shiftedRate) })}</p>}
+        </>
+      )}
+    </Card>
   );
 }

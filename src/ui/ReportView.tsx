@@ -24,10 +24,16 @@ export function ReportView({ id }: { id: string }) {
 
   if (data === undefined) return <Spinner />;
   if (data === null) return <SlipNotFound />;
-  const { slip, comparison, start, end, period } = data;
+  const { slip, comparison, start, end, period, tax, taxYear } = data;
   const settings = app.settings;
   const total = totalText(comparison, t, fmt);
-  const findings = comparison.rows.filter((r) => ['diff', 'check', 'missing', 'extra'].includes(r.status) && r.key !== 'gross');
+  const findings = comparison.rows.filter((r) => ['diff', 'check', 'missing', 'extra'].includes(r.status) && r.key !== 'gross' && r.key !== 'net');
+  const notApplied = [
+    !settings.supplements.ob && t('settings.supp.ob'),
+    !settings.supplements.overtime && t('settings.supp.overtime'),
+    settings.scheduleMode === 'fixed' && !settings.supplements.shiftedTime && t('cat.shiftedTime'),
+    !settings.supplements.holidayPay && t('settings.supp.holidayPay'),
+  ].filter((x): x is string => !!x);
   const rates = [...new Set(datesInRange(start, end).map((d) => hourlyRateOn(settings, d)).filter((r): r is number => r !== null))];
   const byDate = new Map(app.days.map((d) => [d.date, d]));
   const logDates = datesInRange(start, end).filter((d) => byDate.has(d));
@@ -139,7 +145,7 @@ export function ReportView({ id }: { id: string }) {
                 {row.notes.map((n, i) => (
                   <p key={i}>{noteText(n, t, fmt)}</p>
                 ))}
-                <p className="report-ref">{rowReference(row, t, settings, end)}</p>
+                <p className="report-ref">{rowReference(row, t, settings, end, taxYear, fmt)}</p>
               </div>
             ))}
           </section>
@@ -148,7 +154,25 @@ export function ReportView({ id }: { id: string }) {
         <section>
           <h2>{t('report.assumptions')}</h2>
           <ul>
-            <li>{t('report.overtimeRule', { limit: formatDuration(settings.ordinaryShiftMinutes) })}</li>
+            {settings.scheduleMode === 'fixed' ? (
+              <li>{t('report.scheduleFixed', { n: settings.schedule.weeks.length })}</li>
+            ) : (
+              <>
+                <li>{t('report.scheduleNone')}</li>
+                <li>{t('report.overtimeRule', { limit: formatDuration(settings.ordinaryShiftMinutes) })}</li>
+              </>
+            )}
+            {notApplied.length > 0 && <li>{t('report.notApplied', { list: notApplied.join(', ') })}</li>}
+            {tax.basis.kind !== 'unknown' && (
+              <li>
+                {t('report.taxBasis', {
+                  text:
+                    tax.basis.kind === 'table'
+                      ? `${tax.basis.municipality ? `${tax.basis.municipality}, ` : ''}${t('cat.taxTable').toLowerCase()} ${tax.basis.table} (${taxYear})`
+                      : `${fmt.number(tax.basis.percent)} %`,
+                })}
+              </li>
+            )}
             {period.sick && period.sick.weeksUsed > 0 && <li>{t('month.sickBasis', { weeks: period.sick.weeksUsed })}</li>}
             <li>{t('month.excludesVacation')}</li>
             {settings.localDeals && (

@@ -46,6 +46,11 @@ export interface PaySlip {
   gross?: number;
   tax?: number;
   net?: number;
+  /** "Skatt beräknad på": the tax table the employer used and the pay it was applied to. */
+  taxTable?: number;
+  taxBase?: number;
+  oneTimeTaxPercent?: number;
+  otherDeductions?: number;
   balances: {
     vacationDaysPaid?: number;
     vacationDaysSaved?: number;
@@ -111,6 +116,7 @@ export function classifyLine(text: string, amount: number | undefined, unitPrice
   if (/arbetstidskonto|tidbank/.test(t)) return amount === undefined ? 'timebankHours' : 'timebankPay';
   if (t.includes('permission')) return 'permission';
   if (t.includes('förskjut')) return 'shiftedTime';
+  if (/skiftform|skifttillägg/.test(t)) return 'shiftForm';
   if (/timlön|^lön\b/.test(t)) return 'wage';
   return 'other';
 }
@@ -209,6 +215,19 @@ export function parsePaySlip(items: TextItem[], hourlyRate?: number): PaySlip {
   if (gross) slip.gross = parseSwedishNumber(gross.value);
   const tax = rightmost(valuesAfter(lines, /^Skatt$/i));
   if (tax) slip.tax = parseSwedishNumber(tax.value);
+
+  // The "Skatt beräknad på" block: its Bruttolön is the taxed pay.
+  const taxBlock = lines.flat().find((i) => /^Skatt beräknad på$/i.test(i.str.trim()));
+  if (taxBlock) {
+    const base = valuesAfter(lines, /^Bruttolön$/i).find((v) => Math.abs(v.label.x - taxBlock.x) < 5);
+    if (base) slip.taxBase = parseSwedishNumber(base.value);
+  }
+  const table = valuesAfter(lines, /^Tabell$/i)[0];
+  if (table) slip.taxTable = parseSwedishNumber(table.value);
+  const oneTime = valuesAfter(lines, /^Engångsskatt\s*%?$/i)[0];
+  if (oneTime) slip.oneTimeTaxPercent = parseSwedishNumber(oneTime.value);
+  const deductions = valuesAfter(lines, /^Övriga avdrag$/i)[0];
+  if (deductions) slip.otherDeductions = parseSwedishNumber(deductions.value);
 
   const balance = (label: RegExp) => {
     const v = valuesAfter(lines, label)[0]?.value;

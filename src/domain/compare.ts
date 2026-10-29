@@ -2,6 +2,7 @@ import { agreementFor, RULES } from './agreement.ts';
 import type { PayCategory, PeriodResult } from './calc.ts';
 import { hourlyRateOn, type DayRecord, type Settings } from './model.ts';
 import type { PaySlip, SlipCategory, SlipLine } from './payslip.ts';
+import { taxFor, type TaxBasis, type TaxColumn, type TaxTables } from './tax.ts';
 import type { LocalDate } from './time.ts';
 
 // Lines up the calculated pay for a period with what the pay slip says.
@@ -14,7 +15,10 @@ export type RowKey =
   | 'otTotal'
   | 'vacationDays'
   | 'timebankHours'
-  | 'gross';
+  | 'gross'
+  | 'taxTable'
+  | 'tax'
+  | 'net';
 
 export type NoteCode =
   | 'wage-deductions'
@@ -24,7 +28,12 @@ export type NoteCode =
   | 'vacation-pay-unchecked'
   | 'timebank-rate-unknown'
   | 'ob-missing-level'
-  | 'gross-includes-unchecked';
+  | 'gross-includes-unchecked'
+  | 'tax-table-differs'
+  | 'tax-percent'
+  | 'tax-data-missing'
+  | 'tax-not-set'
+  | 'net-other-deductions';
 
 export interface Note {
   code: NoteCode;
@@ -50,6 +59,15 @@ export interface Comparison {
   coverage: CoverageNote[];
   /** Slip gross minus expected gross. */
   totalDifference?: number;
+  /** Slip net pay minus expected net pay (when tax can be worked out). */
+  netDifference?: number;
+}
+
+/** What is needed to work out the tax: the table (or rate) and Skatteverket's tables for the pay year. */
+export interface TaxContext {
+  basis: TaxBasis;
+  tables: TaxTables | null;
+  column: TaxColumn;
 }
 
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
@@ -108,7 +126,7 @@ function moneyRow(
   return row;
 }
 
-export function comparePeriod(period: PeriodResult, slip: PaySlip, days: DayRecord[], settings: Settings): Comparison {
+export function comparePeriod(period: PeriodResult, slip: PaySlip, days: DayRecord[], settings: Settings, tax?: TaxContext): Comparison {
   const rows: ComparisonRow[] = [];
   const t = period.totals;
   const lines = slip.lines;
@@ -156,6 +174,9 @@ export function comparePeriod(period: PeriodResult, slip: PaySlip, days: DayReco
     push(moneyRow('ot100', t.ot100, sumSlip(lines, ['ot100']), hourly));
   }
 
+  push(moneyRow('shiftedTime', t.shiftedTime, sumSlip(lines, ['shiftedTime']), 40));
+  push(moneyRow('shiftForm', t.shiftForm, sumSlip(lines, ['shiftForm']), hourly * 0.11));
+
   // Sick pay: the expected value is an estimate when it rests on averages.
   const sickRow = moneyRow('sickPay', t.sickPay && { amount: t.sickPay.amount, hours: t.sickPay.hours }, sumSlip(lines, ['sickPay']), hourly);
   if (sickRow) {
@@ -165,7 +186,7 @@ export function comparePeriod(period: PeriodResult, slip: PaySlip, days: DayReco
       const hadOb = period.shifts.some((s) => s.obMinutes[1] + s.obMinutes[2] + s.obMinutes[3] + s.obMinutes[4] > 0);
       if (hadOb) sickRow.notes.push({ code: 'sick-base-only', values: { price: basePrice } });
     }
-    if (period.sick?.days.some((d) => d.basis !== 'booked')) {
+    if (period.sick?.days.some((d) => d.basis === 'average')) {
       sickRow.notes.push({ code: 'sick-estimate', values: { weeks: period.sick.weeksUsed } });
       if (sickRow.status === 'diff') sickRow.status = 'check';
     }
@@ -174,7 +195,7 @@ export function comparePeriod(period: PeriodResult, slip: PaySlip, days: DayReco
     push(sickRow);
   }
   const karens = moneyRow('karens', t.karens, sumSlip(lines, ['karens']), hourly);
-  if (karens && period.sick?.days.some((d) => d.basis !== 'booked') && karens.status === 'diff') karens.status = 'check';
+  if (karens && period.sick?.days.some((d) => d.basis === 'average') && karens.status === 'diff') karens.status = 'check';
   if (karens) karens.diff.hours = undefined;
   push(karens);
 
@@ -234,11 +255,12 @@ export function comparePeriod(period: PeriodResult, slip: PaySlip, days: DayReco
   }
 
   // Gross: lines we can't calculate (vacation pay, other) are taken as printed.
-  const unchecked = lines.filter((l) => ['vacationPay', 'other', 'shiftedTime'].includes(l.category) || (l.category === 'timebankPay' && !t.timebankPay));
+  const unchecked = lines.filter((l) => ['vacationPay', 'other'].includes(l.category) || (l.category === 'timebankPay' && !t.timebankPay));
   const passThrough = round2(unchecked.reduce((s, l) => s + (l.amount ?? 0), 0));
   let totalDifference: number | undefined;
+  let netDifference: number | undefined;
+  const expectedGross = round2(period.expectedGross + passThrough);
   if (slip.gross !== undefined) {
-    const expectedGross = round2(period.expectedGross + passThrough);
     totalDifference = round2(slip.gross - expectedGross);
     rows.push({
       key: 'gross',
@@ -248,6 +270,59 @@ export function comparePeriod(period: PeriodResult, slip: PaySlip, days: DayReco
       status: Math.abs(totalDifference) <= 1 ? 'ok' : 'diff',
       notes: passThrough ? [{ code: 'gross-includes-unchecked', values: { amount: passThrough } }] : [],
     });
+  }
+
+  // Tax: the table for where you live, the tax on the pay the slip taxed, and net pay.
+  if (tax && (slip.tax !== undefined || tax.basis.kind !== 'unknown')) {
+    const basis = tax.basis;
+    const expectedTable = basis.kind === 'table' ? basis.table : undefined;
+    const tableRow: ComparisonRow = {
+      key: 'taxTable',
+      expected: { count: expectedTable },
+      slip: { count: slip.taxTable, prices: [] },
+      diff: {},
+      status: expectedTable === undefined || slip.taxTable === undefined ? 'info' : expectedTable === slip.taxTable ? 'ok' : 'diff',
+      notes: [],
+    };
+    if (basis.kind === 'percent') tableRow.notes.push({ code: 'tax-percent', values: { percent: basis.percent } });
+    if (basis.kind === 'unknown') tableRow.notes.push({ code: 'tax-not-set' });
+    rows.push(tableRow);
+
+    const base = slip.taxBase ?? slip.gross;
+    const expectedTax = base !== undefined ? taxFor(basis, tax.tables, base, tax.column) : undefined;
+    const taxRow: ComparisonRow = {
+      key: 'tax',
+      expected: { amount: expectedTax },
+      slip: { amount: slip.tax, prices: [] },
+      diff: {},
+      status: 'info',
+      notes: [],
+    };
+    if (expectedTax !== undefined && slip.tax !== undefined) {
+      taxRow.diff.amount = round2(slip.tax - expectedTax);
+      taxRow.status = Math.abs(taxRow.diff.amount) <= 1 ? 'ok' : 'diff';
+      if (taxRow.status === 'diff' && slip.taxTable !== undefined && expectedTable !== undefined && slip.taxTable !== expectedTable) {
+        taxRow.notes.push({ code: 'tax-table-differs', values: { slip: slip.taxTable, expected: expectedTable } });
+      }
+    } else if (basis.kind === 'table' && !tax.tables) {
+      taxRow.notes.push({ code: 'tax-data-missing' });
+    }
+    rows.push(taxRow);
+
+    // Net = calculated gross − tax on it − other deductions, rounded to whole kronor.
+    const taxOnExpected = taxFor(basis, tax.tables, expectedGross, tax.column);
+    if (taxOnExpected !== undefined && slip.net !== undefined) {
+      const expectedNet = Math.round(expectedGross - taxOnExpected - (slip.otherDeductions ?? 0));
+      netDifference = round2(slip.net - expectedNet);
+      rows.push({
+        key: 'net',
+        expected: { amount: expectedNet },
+        slip: { amount: slip.net, prices: [] },
+        diff: { amount: netDifference },
+        status: Math.abs(netDifference) <= 1 ? 'ok' : 'diff',
+        notes: slip.otherDeductions ? [{ code: 'net-other-deductions', values: { amount: slip.otherDeductions } }] : [],
+      });
+    }
   }
 
   // Does the log cover the period? Days before the first logged day are unknown.
@@ -261,8 +336,9 @@ export function comparePeriod(period: PeriodResult, slip: PaySlip, days: DayReco
 
   return {
     rows,
-    otherLines: lines.filter((l) => l.category === 'other' || l.category === 'shiftedTime'),
+    otherLines: lines.filter((l) => l.category === 'other'),
     coverage,
     totalDifference,
+    netDifference,
   };
 }

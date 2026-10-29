@@ -80,6 +80,10 @@ export const RULES = {
   /** Working Hours Act: break after at most 5 h, 11 h daily rest. */
   maxMinutesWithoutBreak: 300,
   minDailyRestMinutes: 660,
+  /** §4.4 skiftformstillägg per worked (non-overtime) hour, share of the hourly wage. */
+  shiftFormPercent: { none: 0, 'two-shift': 0.053, continuous: 0.111 },
+  /** A shift starting this far from the schedule may have been moved (förskjuten tid). */
+  movedShiftHintMinutes: 30,
 } as const;
 
 /** Youth and trainee pay as a share of minimum wage and OB (Bageri §1–2). */

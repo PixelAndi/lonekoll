@@ -430,6 +430,76 @@ input[type='checkbox'] {
   width: auto;
 }
 
+.wage-row {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr 1fr 44px;
+  gap: 8px;
+  align-items: end;
+}
+
+.wage-row .field {
+  margin: 4px 0;
+}
+
+.radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 4px 0 8px;
+}
+
+.radio,
+.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+}
+
+.radio input,
+.checkbox input {
+  width: 20px;
+  height: 20px;
+  min-height: 0;
+  flex: none;
+}
+
+.schedule-week h3 {
+  margin: 12px 0 4px;
+}
+
+.schedule-day {
+  display: grid;
+  grid-template-columns: 5.5em 1fr 1fr 4.5em;
+  gap: 6px;
+  align-items: end;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.schedule-day-name {
+  align-self: center;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.schedule-day label,
+.stamp-row-3 label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.stamp-row.stamp-row-3 {
+  grid-template-columns: 1fr 1fr 5em;
+}
+
+.kv-strong {
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
 .stamp-rows {
   display: flex;
   flex-direction: column;

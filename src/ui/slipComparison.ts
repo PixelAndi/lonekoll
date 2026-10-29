@@ -4,10 +4,12 @@ import { useApp } from '../app-context.ts';
 import { db, type SlipRecord } from '../db.ts';
 import { agreementFor } from '../domain/agreement.ts';
 import { calculatePeriod, type PeriodResult } from '../domain/calc.ts';
-import { comparePeriod, type Comparison, type ComparisonRow, type Note } from '../domain/compare.ts';
+import { comparePeriod, type Comparison, type ComparisonRow, type Note, type TaxContext } from '../domain/compare.ts';
 import type { Settings } from '../domain/model.ts';
 import type { PaySlip, SlipCategory } from '../domain/payslip.ts';
+import { taxBasis, taxColumn } from '../domain/tax.ts';
 import { formatDuration, monthEnd, monthStart, todayLocal } from '../domain/time.ts';
+import { useTaxData } from '../taxData.ts';
 import type { Formatter } from '../format.ts';
 import type { TextKey, Translate } from '../i18n.ts';
 import { shiftMonth } from './DaysView.tsx';
@@ -19,6 +21,9 @@ export interface SlipComparison {
   end: string;
   period: PeriodResult;
   comparison: Comparison;
+  tax: TaxContext;
+  /** The year whose tax tables apply (the year the pay is paid out). */
+  taxYear: number;
 }
 
 export function applyOverrides(slip: PaySlip, overrides: Record<string, string>): PaySlip {
@@ -37,18 +42,22 @@ export function slipPeriod(slip: PaySlip, importedAt: number): { start: string; 
 export function useSlipComparison(id: string): SlipComparison | null | undefined {
   const { days, settings } = useApp();
   const record = useLiveQuery(() => db.slips.get(id).then((r) => r ?? null), [id]);
+  const taxYear = Number((record?.slip.payDate ?? record?.slip.periodEnd ?? todayLocal()).slice(0, 4));
+  const taxData = useTaxData(taxYear);
   return useMemo(() => {
-    if (record === undefined) return undefined;
+    if (record === undefined || taxData.loading) return undefined;
     if (record === null) return null;
     const slip = applyOverrides(record.slip, settings.codeOverrides);
     const { start, end } = slipPeriod(slip, record.importedAt);
     const period = calculatePeriod(days, settings, start, end);
-    return { record, slip, start, end, period, comparison: comparePeriod(period, slip, days, settings) };
-  }, [record, days, settings]);
+    const tax: TaxContext = { basis: taxBasis(settings.tax, taxData.rates), tables: taxData.tables, column: taxColumn(settings.birthDate, taxYear) };
+    return { record, slip, start, end, period, tax, taxYear, comparison: comparePeriod(period, slip, days, settings, tax) };
+  }, [record, days, settings, taxData, taxYear]);
 }
 
+/** Rows worth a look; gross and net only repeat the other rows' differences. */
 export function countFindings(c: Comparison): number {
-  return c.rows.filter((r) => r.key !== 'gross' && ['diff', 'check', 'missing', 'extra'].includes(r.status)).length;
+  return c.rows.filter((r) => r.key !== 'gross' && r.key !== 'net' && ['diff', 'check', 'missing', 'extra'].includes(r.status)).length;
 }
 
 const REF: Partial<Record<ComparisonRow['key'], TextKey>> = {
@@ -70,13 +79,24 @@ const REF: Partial<Record<ComparisonRow['key'], TextKey>> = {
   timebankHours: 'ref.timebank',
   timebankPay: 'ref.timebank',
   gross: 'ref.gross',
+  shiftedTime: 'ref.shiftedTime',
+  shiftForm: 'ref.shiftForm',
+  taxTable: 'ref.tax',
+  tax: 'ref.tax',
+  net: 'ref.net',
 };
 
-export function rowReference(row: ComparisonRow, t: Translate, settings: Settings, periodEnd: string): string {
+export function rowReference(row: ComparisonRow, t: Translate, settings: Settings, periodEnd: string, taxYear: number, fmt: Formatter): string {
   const key = REF[row.key];
   if (!key) return '';
-  const minimum = agreementFor(periodEnd)?.vacationPayPerDayMin ?? 0;
-  return t(key, { limit: formatDuration(settings.ordinaryShiftMinutes), minimum: String(minimum) });
+  const agreement = agreementFor(periodEnd);
+  return t(key, {
+    limit: formatDuration(settings.ordinaryShiftMinutes),
+    minimum: String(agreement?.vacationPayPerDayMin ?? 0),
+    rate: fmt.number(agreement?.shiftedTime ?? 0),
+    year: taxYear,
+    column: taxColumn(settings.birthDate, taxYear),
+  });
 }
 
 export function noteText(note: Note, t: Translate, fmt: Formatter): string {
@@ -93,6 +113,12 @@ export function noteText(note: Note, t: Translate, fmt: Formatter): string {
       return t('note.gross-includes-unchecked', { amount: fmt.money(v.amount as number) });
     case 'sick-estimate':
       return t('note.sick-estimate', { weeks: String(v.weeks ?? '') });
+    case 'tax-table-differs':
+      return t('note.tax-table-differs', { slip: String(v.slip), expected: String(v.expected) });
+    case 'tax-percent':
+      return t('note.tax-percent', { percent: num('percent') });
+    case 'net-other-deductions':
+      return t('note.net-other-deductions', { amount: fmt.money(v.amount as number) });
     default:
       return t(`note.${note.code}`, { price: num('price'), minimum: num('minimum') });
   }
@@ -104,7 +130,7 @@ export function rowLabel(row: ComparisonRow, t: Translate): string {
 
 /** "121,90 h · 22 901,35 kr", "2 dagar" etc. */
 export function sideText(side: { hours?: number; amount?: number; count?: number }, key: ComparisonRow['key'], fmt: Formatter): string {
-  if (key === 'vacationDays') return side.count === undefined ? '–' : fmt.number(side.count, 0);
+  if (key === 'vacationDays' || key === 'taxTable') return side.count === undefined ? '–' : fmt.number(side.count, 0);
   if (key === 'timebankHours') return fmt.hours(side.hours);
   const parts: string[] = [];
   if (side.hours !== undefined && side.hours !== 0 && key !== 'karens') parts.push(fmt.hours(side.hours));

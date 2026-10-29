@@ -42,7 +42,8 @@ export function totalText(c: Comparison, t: Translate, fmt: Formatter): { text: 
   if (c.totalDifference === undefined) return { text: t('compare.noGross'), kind: 'warn' };
   if (Math.abs(c.totalDifference) <= 1) return { text: t('compare.match'), kind: 'ok' };
   const amount = fmt.money(Math.abs(c.totalDifference));
-  return { text: t(c.totalDifference < 0 ? 'compare.underpaid' : 'compare.overpaid', { amount }), kind: 'warn' };
+  const net = c.netDifference !== undefined ? ` ${t('compare.netDiff', { amount: fmt.signedMoney(c.netDifference) })}` : '';
+  return { text: t(c.totalDifference < 0 ? 'compare.underpaid' : 'compare.overpaid', { amount }) + net, kind: 'warn' };
 }
 
 export function CompareView({ id }: { id: string }) {
@@ -50,7 +51,7 @@ export function CompareView({ id }: { id: string }) {
   const data = useSlipComparison(id);
   if (data === undefined) return <Spinner />;
   if (data === null) return <SlipNotFound />;
-  const { slip, comparison, period, start, end } = data;
+  const { slip, comparison, period, start, end, taxYear } = data;
   const total = totalText(comparison, t, fmt);
 
   const setCategory = (code: string, category: string) =>
@@ -104,7 +105,7 @@ export function CompareView({ id }: { id: string }) {
                 {noteText(n, t, fmt)}
               </p>
             ))}
-            <p className="muted small">{rowReference(row, t, settings, end)}</p>
+            <p className="muted small">{rowReference(row, t, settings, end, taxYear, fmt)}</p>
           </Card>
         ))}
       </div>

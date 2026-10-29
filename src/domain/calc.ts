@@ -1,6 +1,7 @@
 import { agreementFor, payShare, RULES, type ObLevel } from './agreement.ts';
 import { isHoliday, specialDay } from './holidays.ts';
-import { ageOn, hourlyRateOn, type DayRecord, type Settings } from './model.ts';
+import { ageOn, hourlyRateOn, supplementOn, type DayRecord, type ScheduledShift, type Settings } from './model.ts';
+import { rotationShifts, scheduledIntervals, scheduledMinutes, scheduledShift, scheduledWindow } from './schedule.ts';
 import { buildShifts, type Shift, type StampIssue } from './shifts.ts';
 import {
   addDays,
@@ -25,6 +26,8 @@ export type PayCategory =
   | 'ob4'
   | 'ot50'
   | 'ot100'
+  | 'shiftedTime'
+  | 'shiftForm'
   | 'sickPay'
   | 'karens'
   | 'holidayPay'
@@ -61,19 +64,34 @@ export function inFullOvertimeWindow(date: LocalDate, minute: number, ordinarySt
   return minute < ordinaryStart && isHoliday(addDays(date, -1));
 }
 
-export type ShiftWarningCode = 'no-break' | 'short-rest' | 'extra-shift' | 'no-rate' | 'no-agreement';
+export type ShiftWarningCode =
+  | 'no-break'
+  | 'short-rest'
+  | 'extra-shift'
+  | 'unscheduled-shift'
+  | 'holiday-worked'
+  | 'possible-moved-shift'
+  | 'no-rate'
+  | 'no-agreement';
+
+/** Why the overtime minutes of a shift are overtime. */
+export type OvertimeReason = 'long-shift' | 'extra-shift' | 'unscheduled' | 'holiday';
 
 export interface ShiftResult {
   shift: Shift;
   startTime: string;
   endTime: string;
+  /** The scheduled shift this shift was matched with (schedule mode). */
+  scheduled?: { date: LocalDate; shift: ScheduledShift };
   obMinutes: Record<ObLevel, number>;
   overtime50: number;
   overtime100: number;
-  overtimeReason: 'long-shift' | 'extra-shift' | null;
+  overtimeReason: OvertimeReason | null;
+  /** Minutes paid as förskjuten tid. */
+  shiftedMinutes: number;
   /** Per-minute results keyed by the local date of the minute. */
   byDate: Map<LocalDate, Bucket[]>;
-  /** Wage + OB + overtime, unrounded (used for averages). */
+  /** Everything the shift earns, unrounded (used for averages). */
   earnings: number;
   warnings: ShiftWarningCode[];
 }
@@ -87,19 +105,24 @@ function addToBucket(list: Bucket[], category: PayCategory, rate: number, minute
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
 interface ClassifyOptions {
-  extraShift: boolean;
-  /** Holiday pay: OB as if the day were an ordinary weekday, no overtime. */
+  /** Worked minutes of the shift that are ordinary time; the rest is overtime. */
+  ordinaryMinutes: number;
+  /** The scheduled window of a moved shift: ordinary minutes outside it are förskjuten tid. */
+  shiftedFrom?: { start: number; end: number };
+  /** Holiday pay: OB as if the day were an ordinary weekday. */
   asOrdinaryDay?: boolean;
 }
 
 /** Classifies every minute of a set of work intervals. */
 function classify(intervals: { start: number; end: number }[], settings: Settings, opts: ClassifyOptions) {
   const ordinaryStart = toMinutes(settings.ordinaryStart);
+  const shiftFormPercent = RULES.shiftFormPercent[settings.shiftForm] ?? 0;
   const byDate = new Map<LocalDate, Bucket[]>();
   const obMinutes: Record<ObLevel, number> = { 1: 0, 2: 0, 3: 0, 4: 0 };
   let worked = 0;
   let overtime50 = 0;
   let overtime100 = 0;
+  let shifted = 0;
   let earnings = 0;
   let missingRate = false;
   let missingAgreement = false;
@@ -116,10 +139,9 @@ function classify(intervals: { start: number; end: number }[], settings: Setting
       addToBucket(list, 'wage', hourly);
       earnings += hourly / 60;
 
-      const overtime =
-        !opts.asOrdinaryDay && (opts.extraShift || worked >= settings.ordinaryShiftMinutes);
-      let level = obLevelAt(date, minute, opts.asOrdinaryDay);
-      if (overtime) {
+      const ordinary = worked < opts.ordinaryMinutes;
+      let level = settings.supplements.ob ? obLevelAt(date, minute, opts.asOrdinaryDay) : 0;
+      if (!ordinary && settings.supplements.overtime) {
         const full =
           overtime50 + overtime100 >= RULES.overtimeFirstTierMinutes || inFullOvertimeWindow(date, minute, ordinaryStart);
         const pct = full ? RULES.overtimeHighPercent : RULES.overtimeLowPercent;
@@ -138,44 +160,111 @@ function classify(intervals: { start: number; end: number }[], settings: Setting
         obMinutes[level]++;
         earnings += obRate / 60;
       }
+      if (ordinary && opts.shiftedFrom && settings.supplements.shiftedTime && period && (t < opts.shiftedFrom.start || t >= opts.shiftedFrom.end)) {
+        addToBucket(list, 'shiftedTime', period.shiftedTime);
+        earnings += period.shiftedTime / 60;
+        shifted++;
+      }
+      // §4.4: not paid for hours that got overtime pay.
+      if (shiftFormPercent > 0 && (ordinary || !settings.supplements.overtime)) {
+        const shiftRate = round2(hourly * shiftFormPercent);
+        addToBucket(list, 'shiftForm', shiftRate);
+        earnings += shiftRate / 60;
+      }
       worked++;
     }
   }
-  return { byDate, obMinutes, overtime50, overtime100, earnings, missingRate, missingAgreement };
+  return { byDate, obMinutes, overtime50, overtime100, shifted, earnings, missingRate, missingAgreement };
 }
+
+/** The scheduled shift an actual shift belongs to: most overlap, else the same day's. */
+function matchSchedule(shift: Shift, settings: Settings, byDate: Map<LocalDate, DayRecord>) {
+  let best: { date: LocalDate; shift: ScheduledShift; overlap: number } | null = null;
+  for (const date of [addDays(shift.date, -1), shift.date, addDays(shift.date, 1)]) {
+    const s = scheduledShift(settings, date, byDate.get(date));
+    if (!s) continue;
+    const w = scheduledWindow(date, s);
+    const overlap = Math.max(0, Math.min(shift.end, w.end) - Math.max(shift.start, w.start));
+    if (overlap > 0 && (!best || overlap > best.overlap)) best = { date, shift: s, overlap };
+  }
+  if (best) return { date: best.date, shift: best.shift };
+  const sameDay = scheduledShift(settings, shift.date, byDate.get(shift.date));
+  return sameDay ? { date: shift.date, shift: sameDay } : null;
+}
+
+const hhmm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 
 export function calculateShifts(days: DayRecord[], settings: Settings): { results: ShiftResult[]; issues: StampIssue[] } {
   const sorted = [...days].sort((a, b) => a.date.localeCompare(b.date));
+  const byDate = new Map(sorted.map((d) => [d.date, d]));
   const { shifts, issues } = buildShifts(sorted);
+  const fixed = settings.scheduleMode === 'fixed';
   const perWeek = new Map<LocalDate, number>();
+  const ordinaryLeft = new Map<LocalDate, number>();
   const results: ShiftResult[] = [];
   let previousEnd: number | null = null;
-  for (const shift of shifts) {
-    const week = weekStart(shift.date);
-    const index = (perWeek.get(week) ?? 0) + 1;
-    perWeek.set(week, index);
-    const extraShift = settings.maxShiftsPerWeek > 0 && index > settings.maxShiftsPerWeek;
-    const c = classify(shift.intervals, settings, { extraShift });
 
+  for (const shift of shifts) {
     const warnings: ShiftWarningCode[] = [];
+    let ordinaryMinutes = settings.ordinaryShiftMinutes;
+    let reason: OvertimeReason = 'long-shift';
+    let shiftedFrom: { start: number; end: number } | undefined;
+    let scheduled: ShiftResult['scheduled'];
+
+    if (fixed) {
+      scheduled = matchSchedule(shift, settings, byDate) ?? undefined;
+      if (!scheduled) {
+        // Work on a day off is overtime from the first minute.
+        ordinaryMinutes = 0;
+        reason = 'unscheduled';
+        warnings.push('unscheduled-shift');
+      } else if (isHoliday(scheduled.date) && settings.supplements.holidayPay) {
+        // §5.1: working time is reduced on a holiday; work done anyway is overtime
+        // (and holiday pay is paid for the scheduled hours).
+        ordinaryMinutes = 0;
+        reason = 'holiday';
+        warnings.push('holiday-worked');
+      } else {
+        const left = ordinaryLeft.get(scheduled.date) ?? scheduledMinutes(scheduled.date, scheduled.shift);
+        ordinaryMinutes = left;
+        ordinaryLeft.set(scheduled.date, Math.max(0, left - shift.workedMinutes));
+        const window = scheduledWindow(scheduled.date, scheduled.shift);
+        const moved = byDate.get(shift.date)?.shiftMoved || byDate.get(scheduled.date)?.shiftMoved;
+        if (moved) shiftedFrom = window;
+        else if (settings.supplements.shiftedTime && Math.abs(shift.start - window.start) >= RULES.movedShiftHintMinutes * MINUTE_MS) {
+          warnings.push('possible-moved-shift');
+        }
+      }
+    } else {
+      const week = weekStart(shift.date);
+      const index = (perWeek.get(week) ?? 0) + 1;
+      perWeek.set(week, index);
+      if (settings.maxShiftsPerWeek > 0 && index > settings.maxShiftsPerWeek) {
+        ordinaryMinutes = 0;
+        reason = 'extra-shift';
+        warnings.push('extra-shift');
+      }
+    }
+
+    // A few minutes over the schedule is not overtime where a minimum applies.
+    if (reason === 'long-shift' && shift.workedMinutes - ordinaryMinutes < settings.minOvertimeMinutes) ordinaryMinutes = Infinity;
+    const c = classify(shift.intervals, settings, { ordinaryMinutes, shiftedFrom });
     if (shift.intervals.some((iv) => iv.end - iv.start > RULES.maxMinutesWithoutBreak * MINUTE_MS)) warnings.push('no-break');
     if (previousEnd !== null && shift.start - previousEnd < RULES.minDailyRestMinutes * MINUTE_MS) warnings.push('short-rest');
-    if (extraShift) warnings.push('extra-shift');
     if (c.missingRate) warnings.push('no-rate');
     if (c.missingAgreement) warnings.push('no-agreement');
     previousEnd = shift.end;
 
-    const startLocal = utcToLocal(shift.start);
-    const endLocal = utcToLocal(shift.end);
-    const hhmm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
     results.push({
       shift,
-      startTime: hhmm(startLocal.minute),
-      endTime: hhmm(endLocal.minute),
+      startTime: hhmm(utcToLocal(shift.start).minute),
+      endTime: hhmm(utcToLocal(shift.end).minute),
+      scheduled,
       obMinutes: c.obMinutes,
       overtime50: c.overtime50,
       overtime100: c.overtime100,
-      overtimeReason: c.overtime50 + c.overtime100 === 0 ? null : extraShift ? 'extra-shift' : 'long-shift',
+      overtimeReason: c.overtime50 + c.overtime100 === 0 ? null : reason,
+      shiftedMinutes: c.shifted,
       byDate: c.byDate,
       earnings: c.earnings,
       warnings,
@@ -197,7 +286,8 @@ export interface CategoryTotal {
 export interface SickDayResult {
   date: LocalDate;
   dayInSpell: number;
-  basis: 'booked' | 'average' | 'none';
+  /** booked: the shift entered on the day · schedule: from the schedule · average: recent shifts · not-scheduled: no lost pay. */
+  basis: 'booked' | 'schedule' | 'average' | 'not-scheduled' | 'holiday' | 'none';
   lostMinutes: number;
   lostPay: number;
   sickPay: number;
@@ -207,12 +297,18 @@ export interface SickResult {
   days: SickDayResult[];
   sickPay: number;
   waitingDeduction: number;
-  /** Weeks of logged work the averages are based on. */
+  /** Weeks of logged work the averages are based on (0 when the schedule is used). */
   weeksUsed: number;
   averageWeekPay: number | null;
 }
 
-export type PeriodWarningCode = 'below-minimum-wage' | 'sick-beyond-14' | 'sick-no-history';
+export type PeriodWarningCode =
+  | 'below-minimum-wage'
+  | 'below-minimum-wage-base'
+  | 'sick-beyond-14'
+  | 'sick-no-history'
+  | 'scheduled-no-stamps'
+  | 'holiday-pay-lost';
 
 export interface PeriodWarning {
   code: PeriodWarningCode;
@@ -229,6 +325,8 @@ export interface PeriodResult {
   totals: Partial<Record<PayCategory, CategoryTotal>>;
   workedMinutes: number;
   sick: SickResult | null;
+  /** Public holidays in the period that pay holiday pay. */
+  holidays: { date: LocalDate; minutes: number; pay: number }[];
   vacationDays: number;
   timebankHours: number;
   warnings: PeriodWarning[];
@@ -254,6 +352,26 @@ function sumBuckets(byDate: Map<LocalDate, Bucket[]>): number {
   return total;
 }
 
+/** Pay for a shift you would have worked (sick pay, holiday pay). */
+function wouldHaveEarned(intervals: { start: number; end: number }[], settings: Settings, ordinaryMinutes: number, asOrdinaryDay = false) {
+  const c = classify(intervals, settings, { ordinaryMinutes, asOrdinaryDay });
+  const minutes = intervals.reduce((s, iv) => s + Math.round((iv.end - iv.start) / MINUTE_MS), 0);
+  return { pay: sumBuckets(c.byDate), minutes };
+}
+
+/** The first `minutes` of a set of intervals. */
+function capIntervals(intervals: { start: number; end: number }[], minutes: number) {
+  const out: { start: number; end: number }[] = [];
+  let left = minutes * MINUTE_MS;
+  for (const iv of intervals) {
+    if (left <= 0) break;
+    const end = Math.min(iv.end, iv.start + left);
+    out.push({ start: iv.start, end });
+    left -= end - iv.start;
+  }
+  return out;
+}
+
 /** Average earnings per shift and per week over the weeks before `before`. */
 function averages(results: ShiftResult[], before: LocalDate) {
   const from = addDays(before, -7 * RULES.averageWeeks);
@@ -270,9 +388,23 @@ function averages(results: ShiftResult[], before: LocalDate) {
   };
 }
 
+/** An average week's pay from the schedule (holidays ignored). */
+function scheduleWeekPay(settings: Settings): number | null {
+  const shifts = rotationShifts(settings.schedule);
+  const weeks = settings.schedule.weeks.length;
+  if (shifts.length === 0 || weeks === 0) return null;
+  const total = shifts.reduce(
+    (s, { date, shift }) => s + wouldHaveEarned(scheduledIntervals(date, shift), settings, scheduledMinutes(date, shift), true).pay,
+    0,
+  );
+  return total / weeks;
+}
+
 function calculateSick(days: DayRecord[], results: ShiftResult[], settings: Settings, start: LocalDate, end: LocalDate, warnings: PeriodWarning[]): SickResult | null {
   const sickDates = days.filter((d) => d.absence?.type === 'sick').map((d) => d.date).sort();
   if (!sickDates.some((d) => d >= start && d <= end)) return null;
+  const byDate = new Map(days.map((d) => [d.date, d]));
+  const fixed = settings.scheduleMode === 'fixed';
 
   // Group sick days into spells; a relapse within 5 days continues the spell.
   const spells: LocalDate[][] = [];
@@ -285,11 +417,10 @@ function calculateSick(days: DayRecord[], results: ShiftResult[], settings: Sett
   const out: SickResult = { days: [], sickPay: 0, waitingDeduction: 0, weeksUsed: 0, averageWeekPay: null };
   for (const spell of spells) {
     if (!spell.some((d) => d >= start && d <= end)) continue;
-    const avg = averages(results, spell[0]);
-    if (avg) {
-      out.weeksUsed = avg.weeks;
-      out.averageWeekPay = round2(avg.perWeek);
-    }
+    const avg = fixed ? null : averages(results, spell[0]);
+    const weekPay = fixed ? scheduleWeekPay(settings) : (avg?.perWeek ?? null);
+    if (avg) out.weeksUsed = avg.weeks;
+    if (weekPay !== null) out.averageWeekPay = round2(weekPay);
     let spellPay = 0;
     for (const date of spell) {
       const dayInSpell = daysBetween(spell[0], date) + 1;
@@ -297,15 +428,23 @@ function calculateSick(days: DayRecord[], results: ShiftResult[], settings: Sett
         warnings.push({ code: 'sick-beyond-14', date });
         continue;
       }
-      const absence = days.find((d) => d.date === date)?.absence;
+      const absence = byDate.get(date)?.absence;
+      const scheduled = scheduledShift(settings, date, byDate.get(date));
       let basis: SickDayResult['basis'] = 'none';
       let lostPay = 0;
       let lostMinutes = 0;
       if (absence?.bookedStart && absence.bookedEnd) {
         const iv = bookedInterval(date, absence.bookedStart, absence.bookedEnd);
-        lostPay = sumBuckets(classify([iv], settings, { extraShift: false }).byDate);
-        lostMinutes = Math.round((iv.end - iv.start) / MINUTE_MS);
+        ({ pay: lostPay, minutes: lostMinutes } = wouldHaveEarned([iv], settings, fixed ? Infinity : settings.ordinaryShiftMinutes));
         basis = 'booked';
+      } else if (fixed && scheduled && isHoliday(date) && settings.supplements.holidayPay) {
+        basis = 'holiday'; // paid as holiday pay instead (§5.1.3)
+      } else if (fixed && scheduled) {
+        const intervals = scheduledIntervals(date, scheduled);
+        ({ pay: lostPay, minutes: lostMinutes } = wouldHaveEarned(intervals, settings, scheduledMinutes(date, scheduled)));
+        basis = 'schedule';
+      } else if (fixed) {
+        basis = 'not-scheduled';
       } else if (avg) {
         lostPay = avg.perShift;
         lostMinutes = Math.round(avg.minutesPerShift);
@@ -321,9 +460,8 @@ function calculateSick(days: DayRecord[], results: ShiftResult[], settings: Sett
       }
     }
     // The waiting-day deduction belongs to the period where the spell starts.
-    if (spell[0] >= start && spell[0] <= end && avg) {
-      const deduction = Math.min(avg.perWeek * RULES.sickPayPercent * RULES.waitingDayPercent, spellPay);
-      out.waitingDeduction += deduction;
+    if (spell[0] >= start && spell[0] <= end && weekPay !== null) {
+      out.waitingDeduction += Math.min(weekPay * RULES.sickPayPercent * RULES.waitingDayPercent, spellPay);
     }
   }
   out.sickPay = round2(out.sickPay);
@@ -346,16 +484,28 @@ function minimumWageWarnings(settings: Settings, start: LocalDate, end: LocalDat
       oneYear = date >= addYears(countFrom, 1);
     }
     const minimum = round2((oneYear ? period.minimumWage.adultAfterOneYear : period.minimumWage.adult) * share);
+    const supplement = supplementOn(settings, date);
     if (rate < minimum) {
       warnings.push({ code: 'below-minimum-wage', date, values: { rate, minimum } });
+      return;
+    }
+    if (supplement > 0 && rate - supplement < minimum) {
+      warnings.push({ code: 'below-minimum-wage-base', date, values: { rate, base: round2(rate - supplement), supplement, minimum } });
       return;
     }
   }
 }
 
-export function calculatePeriod(days: DayRecord[], settings: Settings, start: LocalDate, end: LocalDate): PeriodResult {
+export interface PeriodOptions {
+  /** Days after this aren't checked for missing stamps. */
+  today?: LocalDate;
+}
+
+export function calculatePeriod(days: DayRecord[], settings: Settings, start: LocalDate, end: LocalDate, options: PeriodOptions = {}): PeriodResult {
   const { results, issues } = calculateShifts(days, settings);
   const warnings: PeriodWarning[] = [];
+  const byDate = new Map(days.map((d) => [d.date, d]));
+  const fixed = settings.scheduleMode === 'fixed';
 
   // Collect minute buckets that fall inside the period.
   const merged: Bucket[] = [];
@@ -376,7 +526,6 @@ export function calculatePeriod(days: DayRecord[], settings: Settings, start: Lo
     });
   const workedMinutes = merged.filter((b) => b.category === 'wage').reduce((s, b) => s + b.minutes, 0);
 
-  const inPeriod = days.filter((d) => d.date >= start && d.date <= end);
   const sick = calculateSick(days, results, settings, start, end, warnings);
   if (sick) {
     const lostHours = toHours(sick.days.reduce((s, d) => s + d.lostMinutes, 0));
@@ -384,11 +533,35 @@ export function calculatePeriod(days: DayRecord[], settings: Settings, start: Lo
     if (sick.waitingDeduction) addTotal(totals, 'karens', 0, -sick.waitingDeduction);
   }
 
+  // Holiday pay (§5.1): from the schedule, or for a holiday you mark as "would have worked".
+  const holidays: PeriodResult['holidays'] = [];
+  const workedDates = new Set(results.flatMap((r) => r.shift.dates));
+  for (let date = start; date <= end; date = addDays(date, 1)) {
+    if (!settings.supplements.holidayPay || !isHoliday(date)) continue;
+    const day = byDate.get(date);
+    let shift: ScheduledShift | null = null;
+    if (fixed) shift = scheduledShift(settings, date, day);
+    else if (day?.absence?.type === 'holiday' && day.absence.bookedStart && day.absence.bookedEnd) {
+      shift = { start: day.absence.bookedStart, end: day.absence.bookedEnd, breakMinutes: 0 };
+    }
+    if (!shift) continue;
+    // No holiday pay after unexcused absence the working day before or after (§5.1.3).
+    if ([addDays(date, -1), addDays(date, 1)].some((d) => byDate.get(d)?.absence?.type === 'unpaid')) {
+      warnings.push({ code: 'holiday-pay-lost', date });
+      continue;
+    }
+    // Ordinary hours only (no overtime), with the OB of an ordinary weekday.
+    const minutes = Math.min(scheduledMinutes(date, shift), fixed ? Infinity : settings.ordinaryShiftMinutes);
+    const { pay } = wouldHaveEarned(capIntervals(scheduledIntervals(date, shift), minutes), settings, Infinity, true);
+    holidays.push({ date, minutes, pay: round2(pay) });
+    addTotal(totals, 'holidayPay', toHours(minutes), round2(pay));
+  }
+
   let vacationDays = 0;
   let timebankHours = 0;
-  for (const d of inPeriod) {
+  for (const d of days) {
+    if (d.date < start || d.date > end || !d.absence) continue;
     const a = d.absence;
-    if (!a) continue;
     const rate = hourlyRateOn(settings, d.date) ?? 0;
     if (a.type === 'vacation') vacationDays++;
     if (a.type === 'timebank' && a.hours) {
@@ -396,12 +569,16 @@ export function calculatePeriod(days: DayRecord[], settings: Settings, start: Lo
       if (settings.timeBankRate) addTotal(totals, 'timebankPay', a.hours, round2(a.hours * settings.timeBankRate), settings.timeBankRate);
     }
     if (a.type === 'permission' && a.hours) addTotal(totals, 'permission', a.hours, round2(a.hours * rate), rate);
-    if (a.type === 'holiday' && a.bookedStart && a.bookedEnd) {
-      // §5.1: the hours you would have worked, with the OB the day would have had as a normal weekday.
-      const iv = bookedInterval(d.date, a.bookedStart, a.bookedEnd);
-      const capped = { start: iv.start, end: Math.min(iv.end, iv.start + settings.ordinaryShiftMinutes * MINUTE_MS) };
-      const pay = sumBuckets(classify([capped], settings, { extraShift: false, asOrdinaryDay: true }).byDate);
-      addTotal(totals, 'holidayPay', toHours((capped.end - capped.start) / MINUTE_MS), round2(pay));
+  }
+
+  // Scheduled days with neither stamps nor an absence: probably a missed photo.
+  if (fixed && options.today) {
+    const last = end < options.today ? end : addDays(options.today, -1);
+    for (let date = start; date <= last; date = addDays(date, 1)) {
+      const day = byDate.get(date);
+      if (scheduledShift(settings, date, day) && !workedDates.has(date) && !day?.absence && !isHoliday(date)) {
+        warnings.push({ code: 'scheduled-no-stamps', date });
+      }
     }
   }
 
@@ -417,6 +594,7 @@ export function calculatePeriod(days: DayRecord[], settings: Settings, start: Lo
     totals,
     workedMinutes,
     sick,
+    holidays,
     vacationDays,
     timebankHours,
     warnings,
