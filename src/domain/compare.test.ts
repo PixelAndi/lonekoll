@@ -97,3 +97,21 @@ describe('comparePeriod', () => {
     expect(later.coverage).toEqual([{ code: 'log-starts-late', date: '2026-09-11' }]);
   });
 });
+
+describe('hourly price on the slip', () => {
+  const minimumSettings: Settings = {
+    ...settings,
+    birthDate: '1990-01-01',
+    employedSince: '2020-01-01',
+    wages: [{ from: '2025-04-01', basis: 'minimum', hourly: 0, supplement: 12.5 }],
+  };
+  // 4 hours: the amount is within tolerance, but the price is wrong.
+  const p = { ...period, totals: { wage: { hours: 4, amount: 757.32, rates: [189.33] } }, sick: null, vacationDays: 0, timebankHours: 0, expectedGross: 757.32 } as unknown as PeriodResult;
+  const s: PaySlip = { periodStart: '2026-09-01', periodEnd: '2026-09-30', gross: 746, balances: {}, lines: [line('wage', 4, 'Timmar', 186.5, 746)] };
+
+  it('flags a different price and explains a wage tied to the minimum', () => {
+    const wage = comparePeriod(p, s, days, minimumSettings).rows.find((r) => r.key === 'wage')!;
+    expect(wage.status).toBe('diff');
+    expect(wage.notes).toEqual([{ code: 'wage-rate-differs-minimum', values: { slip: '186.5', expected: '189.33', minimum: 176.83, supplement: 12.5 } }]);
+  });
+});

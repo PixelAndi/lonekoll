@@ -1,4 +1,5 @@
-import type { LocalDate, LocalTime } from './time.ts';
+import { AGREEMENT_PERIODS, agreementFor, payShare, type AgreementPeriod } from './agreement.ts';
+import { addYears, type LocalDate, type LocalTime } from './time.ts';
 
 // What the app stores. Everything lives in the browser on the user's device.
 
@@ -54,9 +55,17 @@ export interface DayRecord {
 
 export interface WagePeriod {
   from: LocalDate;
-  /** Everything you get per hour, including personal supplements. */
+  /**
+   * fixed (default): `hourly` as entered · minimum: the agreement's minimum
+   * wage on each date plus `supplement`, so it follows every new minimum.
+   */
+  basis?: 'fixed' | 'minimum';
+  /** Everything you get per hour, including personal supplements (fixed basis). */
   hourly: number;
-  /** Part of `hourly` that is a personal supplement (kr/h), e.g. a deal instead of förskjuten tid. */
+  /**
+   * Personal supplement (kr/h), e.g. a deal instead of förskjuten tid: part of
+   * `hourly` (fixed basis) or on top of the minimum wage (minimum basis).
+   */
   supplement?: number;
 }
 
@@ -133,21 +142,61 @@ export const DEFAULT_SETTINGS: Settings = {
   tax: { mode: 'municipality', churchMember: false },
 };
 
-export function hourlyRateOn(settings: Settings, date: LocalDate): number | null {
-  let rate: number | null = null;
+const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+
+/** The wage row in force on a date. */
+export function wagePeriodOn(settings: Settings, date: LocalDate): WagePeriod | undefined {
+  let found: WagePeriod | undefined;
   for (const w of [...settings.wages].sort((a, b) => a.from.localeCompare(b.from))) {
-    if (w.from <= date) rate = w.hourly;
+    if (w.from <= date) found = w;
   }
-  return rate;
+  return found;
+}
+
+export interface MinimumWage {
+  /** kr/h, after any youth or trainee share. */
+  minimum: number;
+  /** The higher minimum (a year's employment after turning 18) applies. */
+  afterOneYear: boolean;
+  period: AgreementPeriod;
+  /** False after the last agreement in the app: the last known minimum is used. */
+  known: boolean;
+}
+
+/** The agreement's minimum hourly wage for this person on a date (Bageri §1). */
+export function minimumWageOn(settings: Settings, date: LocalDate): MinimumWage | null {
+  const last = AGREEMENT_PERIODS[AGREEMENT_PERIODS.length - 1];
+  let period = agreementFor(date);
+  let known = true;
+  if (!period) {
+    // The old terms apply until a new agreement is signed.
+    if (date <= last.to) return null;
+    period = last;
+    known = false;
+  }
+  const age = ageOn(settings, date);
+  // The higher minimum needs a year of employment after turning 18.
+  let afterOneYear = false;
+  if (settings.employedSince && (age === null || age >= 18)) {
+    const adultFrom = settings.birthDate ? addYears(settings.birthDate, 18) : settings.employedSince;
+    const countFrom = adultFrom > settings.employedSince ? adultFrom : settings.employedSince;
+    afterOneYear = date >= addYears(countFrom, 1);
+  }
+  const base = afterOneYear ? period.minimumWage.adultAfterOneYear : period.minimumWage.adult;
+  return { minimum: round2(base * payShare(age, settings.traineeYear)), afterOneYear, period, known };
+}
+
+export function hourlyRateOn(settings: Settings, date: LocalDate): number | null {
+  const w = wagePeriodOn(settings, date);
+  if (!w) return null;
+  if (w.basis !== 'minimum') return w.hourly;
+  const m = minimumWageOn(settings, date);
+  return m ? round2(m.minimum + (w.supplement ?? 0)) : null;
 }
 
 /** The personal-supplement part of the hourly wage on a date. */
 export function supplementOn(settings: Settings, date: LocalDate): number {
-  let supplement = 0;
-  for (const w of [...settings.wages].sort((a, b) => a.from.localeCompare(b.from))) {
-    if (w.from <= date) supplement = w.supplement ?? 0;
-  }
-  return supplement;
+  return wagePeriodOn(settings, date)?.supplement ?? 0;
 }
 
 export function ageOn(settings: Settings, date: LocalDate): number | null {

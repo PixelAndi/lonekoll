@@ -1,11 +1,10 @@
 import { agreementFor, payShare, RULES, type ObLevel } from './agreement.ts';
 import { isHoliday, specialDay } from './holidays.ts';
-import { ageOn, hourlyRateOn, supplementOn, type DayRecord, type ScheduledShift, type Settings } from './model.ts';
+import { ageOn, hourlyRateOn, minimumWageOn, supplementOn, wagePeriodOn, type DayRecord, type ScheduledShift, type Settings } from './model.ts';
 import { rotationShifts, scheduledIntervals, scheduledMinutes, scheduledShift, scheduledWindow } from './schedule.ts';
 import { buildShifts, type Shift, type StampIssue } from './shifts.ts';
 import {
   addDays,
-  addYears,
   daysBetween,
   isoWeekday,
   localToUtc,
@@ -126,12 +125,17 @@ function classify(intervals: { start: number; end: number }[], settings: Setting
   let earnings = 0;
   let missingRate = false;
   let missingAgreement = false;
+  let rateDate = '';
+  let rate: number | null = null;
   for (const iv of intervals) {
     for (let t = iv.start; t < iv.end; t += MINUTE_MS) {
       const { date, minute } = utcToLocal(t);
       const list = byDate.get(date) ?? [];
       byDate.set(date, list);
-      const rate = hourlyRateOn(settings, date);
+      if (date !== rateDate) {
+        rate = hourlyRateOn(settings, date);
+        rateDate = date;
+      }
       const period = agreementFor(date);
       if (rate === null) missingRate = true;
       if (!period) missingAgreement = true;
@@ -305,6 +309,7 @@ export interface SickResult {
 export type PeriodWarningCode =
   | 'below-minimum-wage'
   | 'below-minimum-wage-base'
+  | 'minimum-wage-unknown'
   | 'sick-beyond-14'
   | 'sick-no-history'
   | 'scheduled-no-stamps'
@@ -470,28 +475,29 @@ function calculateSick(days: DayRecord[], results: ShiftResult[], settings: Sett
 }
 
 function minimumWageWarnings(settings: Settings, start: LocalDate, end: LocalDate, warnings: PeriodWarning[]) {
+  let checked = false;
+  let unknownWarned = false;
   for (let date = start; date <= end; date = addDays(date, 1)) {
     const rate = hourlyRateOn(settings, date);
-    const period = agreementFor(date);
-    if (rate === null || !period) continue;
-    const age = ageOn(settings, date);
-    const share = payShare(age, settings.traineeYear);
-    // The higher minimum needs a year of employment after turning 18.
-    let oneYear = false;
-    if (settings.employedSince && (age === null || age >= 18)) {
-      const adultFrom = settings.birthDate ? addYears(settings.birthDate, 18) : settings.employedSince;
-      const countFrom = adultFrom > settings.employedSince ? adultFrom : settings.employedSince;
-      oneYear = date >= addYears(countFrom, 1);
+    const m = minimumWageOn(settings, date);
+    if (rate === null || !m) continue;
+    if (!m.known) {
+      // A wage tied to the minimum needs the new agreement's figures.
+      if (!unknownWarned && wagePeriodOn(settings, date)?.basis === 'minimum') {
+        warnings.push({ code: 'minimum-wage-unknown', date, values: { minimum: m.minimum } });
+        unknownWarned = true;
+      }
+      continue;
     }
-    const minimum = round2((oneYear ? period.minimumWage.adultAfterOneYear : period.minimumWage.adult) * share);
+    if (checked) continue;
+    const minimum = m.minimum;
     const supplement = supplementOn(settings, date);
     if (rate < minimum) {
       warnings.push({ code: 'below-minimum-wage', date, values: { rate, minimum } });
-      return;
-    }
-    if (supplement > 0 && rate - supplement < minimum) {
+      checked = true;
+    } else if (supplement > 0 && rate - supplement < minimum) {
       warnings.push({ code: 'below-minimum-wage-base', date, values: { rate, base: round2(rate - supplement), supplement, minimum } });
-      return;
+      checked = true;
     }
   }
 }

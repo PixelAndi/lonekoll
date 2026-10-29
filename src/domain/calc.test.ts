@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { calculatePeriod, calculateShifts } from './calc.ts';
-import { DEFAULT_SETTINGS, type DayRecord, type Settings, type StampPair } from './model.ts';
+import { DEFAULT_SETTINGS, hourlyRateOn, minimumWageOn, type DayRecord, type Settings, type StampPair } from './model.ts';
 import { buildShifts } from './shifts.ts';
 import { addDays, isoWeekday } from './time.ts';
 
@@ -155,5 +155,42 @@ describe('minimum wage', () => {
     expect(p.warnings).toContainEqual({ code: 'below-minimum-wage', date: '2026-09-01', values: { rate: 175, minimum: 176.83 } });
     const ok = calculatePeriod([], { ...s, wages: [{ from: '2025-01-01', hourly: HOURLY }] }, '2026-09-01', '2026-09-30');
     expect(ok.warnings).toEqual([]);
+  });
+});
+
+describe('wage tied to the minimum wage', () => {
+  // Made-up person: turned 18 long ago, employed 2025-06-15, 12.50 kr above the minimum.
+  const s: Settings = {
+    ...settings,
+    birthDate: '1990-01-01',
+    employedSince: '2025-06-15',
+    wages: [{ from: '2025-04-01', basis: 'minimum', hourly: 0, supplement: 12.5 }],
+  };
+
+  it('follows each new minimum and the one-year step by itself', () => {
+    expect(hourlyRateOn(s, '2026-03-31')).toBe(164.34 + 12.5);
+    expect(hourlyRateOn(s, '2026-04-01')).toBe(169.92 + 12.5);
+    expect(hourlyRateOn(s, '2026-06-15')).toBe(176.83 + 12.5);
+    expect(minimumWageOn(s, '2026-06-14')).toMatchObject({ minimum: 169.92, afterOneYear: false, known: true });
+  });
+
+  it('pays the wage on the minimum basis and raises no minimum-wage warning', () => {
+    const p = calculatePeriod([day('2026-09-07', [['07:00', '15:00']])], s, '2026-09-01', '2026-09-30');
+    expect(p.totals.wage).toMatchObject({ hours: 8, amount: 8 * 189.33, rates: [189.33] });
+    expect(p.warnings).toEqual([]);
+  });
+
+  it('keeps the last known minimum after the agreement ends, with a warning', () => {
+    expect(hourlyRateOn(s, '2027-04-01')).toBe(189.33);
+    const p = calculatePeriod([], s, '2027-04-01', '2027-04-30');
+    expect(p.warnings).toEqual([{ code: 'minimum-wage-unknown', date: '2027-04-01', values: { minimum: 176.83 } }]);
+    // A fixed wage is not affected.
+    expect(calculatePeriod([], settings, '2027-04-01', '2027-04-30').warnings).toEqual([]);
+  });
+
+  it('applies the youth share to the minimum', () => {
+    const young: Settings = { ...s, birthDate: '2009-06-01', employedSince: '2025-06-01' };
+    // 16 years old: 63 % of 169.92 = 107.05.
+    expect(hourlyRateOn(young, '2026-05-01')).toBe(119.55);
   });
 });

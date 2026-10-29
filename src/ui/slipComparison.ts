@@ -109,6 +109,11 @@ export function noteText(note: Note, t: Translate, fmt: Formatter): string {
         amount: fmt.money(v.amount as number),
         date: String(v.date ?? ''),
       });
+    case 'wage-rate-differs':
+    case 'wage-rate-differs-minimum': {
+      const list = (k: string) => String(v[k] ?? '').split(' / ').map((x) => fmt.number(Number(x))).join(' / ');
+      return t(`note.${note.code}`, { slip: list('slip'), expected: list('expected'), minimum: num('minimum'), supplement: num('supplement') });
+    }
     case 'gross-includes-unchecked':
       return t('note.gross-includes-unchecked', { amount: fmt.money(v.amount as number) });
     case 'sick-estimate':

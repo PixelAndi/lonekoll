@@ -30,6 +30,10 @@ report you can go through with your employer.
   can be switched off (e.g. when a personal supplement replaces förskjuten
   tid), skiftformstillägg can be switched on, and a personal supplement in the
   hourly wage is kept apart when checking the minimum wage.
+- **Wage tied to the minimum.** A wage of "minimum wage + X kr" follows every
+  new minimum (each 1 April, and the higher minimum after a year's employment
+  from age 18) without new rows, and the slip's hourly price is checked
+  against it.
 - **Calculation per month.** Hourly wage, OB in four levels, overtime +50 % /
   +100 %, förskjuten tid, skiftformstillägg, sick pay and waiting-day
   deduction, holiday pay, time-bank payout, and estimated tax and net pay,
@@ -73,7 +77,8 @@ report you can go through with your employer.
 
 Amounts change every 1 April; both agreement years are in
 `src/domain/agreement.ts`. Add a new period there when a new agreement is
-signed.
+signed. Until then, a wage tied to the minimum keeps the last known minimum
+and the app warns about it.
 
 ### Not covered
 
@@ -87,8 +92,10 @@ shifts. This is a calculation aid, not a legal assessment.
 ## Using it
 
 1. Open the app on your phone and choose **Add to Home Screen**.
-2. **Settings:** enter your full hourly wage and the date it applies from (add
-   a row when it changes; put any personal supplement under "varav tillägg"),
+2. **Settings:** enter your hourly wage and the date it applies from: either
+   "the minimum wage + a supplement" (follows the agreement by itself; enter
+   "Employed since") or a fixed amount (add a row when it changes; put any
+   personal supplement under "varav tillägg"),
    choose your schedule (or none), switch off supplements that don't apply to
    you, and choose your municipality under Tax.
 3. After each shift, **Days → Photograph the time clock**. Missed a day? Page

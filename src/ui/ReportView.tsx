@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useApp } from '../app-context.ts';
 import { calculateShifts } from '../domain/calc.ts';
-import { hourlyRateOn } from '../domain/model.ts';
+import { hourlyRateOn, minimumWageOn, wagePeriodOn } from '../domain/model.ts';
 import { datesInRange, formatDuration, todayLocal } from '../domain/time.ts';
 import { formatter } from '../format.ts';
 import { translator, type Language } from '../i18n.ts';
@@ -34,7 +34,20 @@ export function ReportView({ id }: { id: string }) {
     settings.scheduleMode === 'fixed' && !settings.supplements.shiftedTime && t('cat.shiftedTime'),
     !settings.supplements.holidayPay && t('settings.supp.holidayPay'),
   ].filter((x): x is string => !!x);
-  const rates = [...new Set(datesInRange(start, end).map((d) => hourlyRateOn(settings, d)).filter((r): r is number => r !== null))];
+  // "189,33 kr" or, for a wage tied to the minimum, how it is made up.
+  const rates = [
+    ...new Set(
+      datesInRange(start, end).flatMap((d) => {
+        const rate = hourlyRateOn(settings, d);
+        if (rate === null) return [];
+        const w = wagePeriodOn(settings, d);
+        const m = w?.basis === 'minimum' ? minimumWageOn(settings, d) : null;
+        return m
+          ? [t('report.hourlyMinimum', { hourly: fmt.number(rate), minimum: fmt.number(m.minimum), supplement: fmt.number(w?.supplement ?? 0) })]
+          : [`${fmt.number(rate)} kr`];
+      }),
+    ),
+  ];
   const byDate = new Map(app.days.map((d) => [d.date, d]));
   const logDates = datesInRange(start, end).filter((d) => byDate.has(d));
   const photoIds = logDates.flatMap((d) => byDate.get(d)!.photoIds.map((pid) => ({ date: d, id: pid })));
@@ -90,7 +103,7 @@ export function ReportView({ id }: { id: string }) {
               )}
               <tr>
                 <th>{t('report.hourly')}</th>
-                <td>{rates.map((r) => `${fmt.number(r)} kr`).join(', ') || '–'}</td>
+                <td>{rates.join(', ') || '–'}</td>
               </tr>
               <tr>
                 <th>{t('report.created')}</th>

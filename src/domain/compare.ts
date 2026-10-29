@@ -1,6 +1,6 @@
 import { agreementFor, RULES } from './agreement.ts';
 import type { PayCategory, PeriodResult } from './calc.ts';
-import { hourlyRateOn, type DayRecord, type Settings } from './model.ts';
+import { hourlyRateOn, minimumWageOn, wagePeriodOn, type DayRecord, type Settings } from './model.ts';
 import type { PaySlip, SlipCategory, SlipLine } from './payslip.ts';
 import { taxFor, type TaxBasis, type TaxColumn, type TaxTables } from './tax.ts';
 import type { LocalDate } from './time.ts';
@@ -22,6 +22,8 @@ export type RowKey =
 
 export type NoteCode =
   | 'wage-deductions'
+  | 'wage-rate-differs'
+  | 'wage-rate-differs-minimum'
   | 'sick-base-only'
   | 'sick-estimate'
   | 'vacation-below-min'
@@ -143,6 +145,18 @@ export function comparePeriod(period: PeriodResult, slip: PaySlip, days: DayReco
         code: 'wage-deductions',
         values: { hours: -(d.quantity ?? 0), amount: -(d.amount ?? 0), date: d.from ?? '', absence: day?.absence?.type ?? '' },
       });
+    }
+    // A wrong hourly price is worth flagging even when few hours keep the amount small.
+    const expectedRates = t.wage?.rates ?? [];
+    const wrong = wage.slip.prices.filter((p) => expectedRates.length > 0 && !expectedRates.some((r) => Math.abs(r - p) < 0.005));
+    if (wrong.length > 0) {
+      const w = wagePeriodOn(settings, period.end);
+      const m = w?.basis === 'minimum' ? minimumWageOn(settings, period.end) : null;
+      wage.notes.push({
+        code: m ? 'wage-rate-differs-minimum' : 'wage-rate-differs',
+        values: { slip: wrong.join(' / '), expected: expectedRates.join(' / '), minimum: m?.minimum ?? 0, supplement: w?.supplement ?? 0 },
+      });
+      if (wage.status === 'ok') wage.status = 'diff';
     }
     push(wage);
   }

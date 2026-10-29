@@ -430,9 +430,21 @@ input[type='checkbox'] {
   width: auto;
 }
 
+.wage-period {
+  padding: 4px 0 8px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
+}
+
+.wage-steps {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
 .wage-row {
   display: grid;
-  grid-template-columns: 1.3fr 1fr 1fr 44px;
+  grid-template-columns: minmax(0, 12rem) 44px;
+  justify-content: space-between;
   gap: 8px;
   align-items: end;
 }
