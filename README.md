@@ -141,7 +141,6 @@ node scripts/fetch-tax-data.mjs 2027
 ## Development
 
 ```sh
-cd lonekoll
 npm install
 npm run dev        # copies the OCR files to public/ocr, starts Vite
 npm test           # unit tests (rules, pay slip parser, OCR parsing)
@@ -173,6 +172,7 @@ Code layout:
 
 ## Deploying
 
-`.github/workflows/lonekoll.yml` tests and builds on every pull request and
-deploys `dist/` to GitHub Pages on pushes to `main`. Enable it once under
+`.github/workflows/deploy.yml` tests and builds on every pull request and
+deploys `dist/` to GitHub Pages on pushes to `main`
+(https://pixelandi.github.io/lonekoll/). Enable it once under
 **Settings → Pages → Source: GitHub Actions**.
