@@ -1,131 +1,68 @@
-import type { TableLocation } from './image.ts';
 import { checkOrder, checkPlausible, type StampRow } from './parse.ts';
-import type { ClockReading, QuickReading } from './pipeline.ts';
+import type { FoundTable } from './pipeline.ts';
 
-// The live scanner: the user lines the clock's table up with a guide drawn
-// on the camera view, the area inside the guide is read over and over with a
-// fast single pass, and hints are worked out from what was read. The data
-// counts as grabbed when two independent checks agree on every value: the
-// fast readings of the last few frames (by majority), and the full reading
-// (three passes) of the current frame.
+// The live scanner. The user points the camera roughly at the clock's table;
+// each frame's search area is read in one pass, the table is found from the
+// words on its date bar (see findTableByText), and hints come from where it
+// was found. The data counts as grabbed when the readings of the latest
+// frames agree.
 
-/**
- * The guide, shaped like the clock's table: the date bar along the top
- * (BAR_SHARE of the height), the column header and up to four stamp rows below.
- */
-const ASPECT = 4.3;
-const BAR_SHARE = 0.18;
-
-export interface Guide {
-  left: number;
-  top: number;
-  width: number;
-  height: number;
-  /** Bottom of the date bar strip. */
-  barBottom: number;
-}
-
-/** The guide in frame pixels: as wide as fits, a little above the middle. */
-export function guideBox(frameWidth: number, frameHeight: number): Guide {
-  const width = Math.min(frameWidth * 0.92, frameHeight * 0.7 * ASPECT);
-  const height = width / ASPECT;
-  const left = (frameWidth - width) / 2;
-  const top = frameHeight * 0.45 - height / 2;
-  return { left, top, width, height, barBottom: top + height * BAR_SHARE };
-}
-
-/** Where the table is when it fills the guide, in the coordinates of a crop that starts at (originX, originY) and is scaled by `scale`. */
-export function guideLocation(guide: Guide, originX = 0, originY = 0, scale = 1): TableLocation {
-  const x = (v: number) => (v - originX) * scale;
-  const y = (v: number) => (v - originY) * scale;
-  const barHeight = guide.barBottom - guide.top;
-  return {
-    left: x(guide.left),
-    right: x(guide.left + guide.width),
-    barTop: y(guide.top),
-    barBottom: y(guide.barBottom),
-    headerBottom: y(guide.barBottom + barHeight * 0.9),
-    angle: 0,
-  };
-}
-
-/** The part of the frame to read: the guide with a margin, clamped to the frame. */
-export function readRegion(guide: Guide, frameWidth: number, frameHeight: number) {
-  const marginX = guide.width * 0.04;
-  const marginY = guide.height * 0.12;
-  const left = Math.max(0, guide.left - marginX);
-  const top = Math.max(0, guide.top - marginY);
-  return {
-    left,
-    top,
-    width: Math.min(frameWidth, guide.left + guide.width + marginX) - left,
-    height: Math.min(frameHeight, guide.top + guide.height + marginY * 2) - top,
-  };
+/** The search area in frame pixels: generous, so the table only has to be roughly inside. */
+export function searchArea(frameWidth: number, frameHeight: number) {
+  const width = Math.min(frameWidth * 0.92, frameHeight * 0.95 * 1.6);
+  const height = Math.min(frameHeight * 0.6, width * 0.62);
+  return { left: (frameWidth - width) / 2, top: frameHeight * 0.45 - height / 2, width, height };
 }
 
 export type Hint =
-  /** Nothing readable yet: line the table up with the guide. */
+  /** No table found: point the camera at it. */
   | 'place'
-  /** Times read but no date: the date bar should be in the top strip. */
-  | 'needDate'
-  /** Date read but no times: the rows should be inside the guide. */
-  | 'needRows'
-  /** The times are small: the table is smaller than the guide. */
+  /** The table is small in the search area: move closer. */
   | 'closer'
-  /** The times are large or the bar runs past the guide: the table is bigger than the guide. */
+  /** The table is wider than the search area: move back. */
   | 'further'
-  /** The table is off to one side of the guide. */
-  | 'center'
-  /** The rows slope: hold the phone level with the screen. */
+  /** Tilted a lot. */
   | 'straighten'
-  /** Date and times read: hold still while they are confirmed. */
+  /** Date found but no stamp rows: get the rows into view too. */
+  | 'needRows'
+  /** Read; hold still while it is confirmed. */
   | 'steady';
 
-/**
- * When the table fills the guide, the text on the date bar ("‹‹ Föreg Dag" to
- * "Nästa Dag ››") spans about 0.81–0.90 of the guide's width, centred; at 87 %
- * of the guide's size it spans about 0.71. The digit sizes are a rougher
- * fallback for when the bar's ends weren't read: the date's digits measure
- * about 0.6 of the date strip's height and the stamp times 0.5–1.1.
- */
-const MIN_BAR_SPAN = 0.76;
-const MAX_BAR_OFFSET = 0.08;
-const MIN_DATE_SIZE = 0.55;
-const MIN_TIME_SIZE = 0.45;
-const MAX_TIME_SIZE = 1.6;
-const MAX_SLOPE = 0.06;
+/** Below this share of the search area's width, or this bar height in pixels, the text is too small to read reliably. */
+const MIN_WIDTH = 0.45;
+const MIN_BAR_HEIGHT = 24;
+/** Wider than the search area is fine while both ends of the bar can still be read. */
+const MAX_WIDTH = 1.04;
+const MAX_WIDTH_BOTH_ENDS = 1.2;
+const MAX_ANGLE = 0.14;
 
-export function hintFor(q: QuickReading): Hint {
-  // A table that doesn't fill the guide is read at the wrong places: rows get missed.
-  const { left, right } = q.barText;
-  if (left !== null && right !== null) {
-    if (left < -0.02 || right > 1.02) return 'further';
-    if (right - left < MIN_BAR_SPAN) return 'closer';
-    if (Math.abs((left + right) / 2 - 0.51) > MAX_BAR_OFFSET) return 'center';
-  } else if ((left !== null && left > 0.15) || (right !== null && right < 0.85)) {
-    // One end read and away from its edge, the other not read: the table is shifted and runs past the other side.
-    return 'center';
-  } else if ((q.dateSize !== null && q.dateSize < MIN_DATE_SIZE) || (q.timeSize !== null && q.timeSize < MIN_TIME_SIZE)) {
-    return 'closer';
-  }
-  if (q.timeSize !== null && q.timeSize > MAX_TIME_SIZE) return 'further';
-  if (q.slope !== null && Math.abs(q.slope) > MAX_SLOPE) return 'straighten';
-  if (q.date !== null && q.rows.length > 0) return 'steady';
-  if (q.date === null && q.rows.length === 0) return 'place';
-  if (q.date === null) return 'needDate';
-  if (q.rows.length === 0) return 'needRows';
+export function hintFor(found: FoundTable | null): Hint {
+  if (!found) return 'place';
+  if (found.width < MIN_WIDTH || found.barHeight < MIN_BAR_HEIGHT || !found.date) return 'closer';
+  if (found.width > (found.bothEnds ? MAX_WIDTH_BOTH_ENDS : MAX_WIDTH)) return 'further';
+  if (Math.abs(found.loc.angle) > MAX_ANGLE) return 'straighten';
+  if (found.rows.length === 0) return 'needRows';
   return 'steady';
 }
-
-/** Fast readings that must agree before the full reading is asked. */
-export const CONSENSUS_FRAMES = 3;
-/** Fast readings kept for the majority. */
-export const HISTORY = 5;
 
 export interface Stamps {
   date: string;
   rows: StampRow[];
 }
+
+/** One frame's reading, kept for the agreement check. */
+export interface FrameReading {
+  date: string | null;
+  rows: StampRow[];
+}
+
+/** Readings kept for the majority. */
+export const HISTORY = 5;
+/** Readings that must agree on every value when they aren't simply the last two. */
+export const MAJORITY = 3;
+
+const usable = (r: FrameReading) => r.date !== null && r.rows.length > 0 && checkOrder(r.rows) && checkPlausible(r.rows);
+const key = (r: FrameReading) => JSON.stringify([r.date, r.rows.map((x) => [x.in, x.out])]);
 
 /** Most common value and how many had it. */
 function majority<T>(values: T[]): { value: T; votes: number } {
@@ -140,23 +77,26 @@ function majority<T>(values: T[]): { value: T; votes: number } {
 }
 
 /**
- * What the recent fast readings agree on: the date, the number of rows and
- * every time each read the same by at least CONSENSUS_FRAMES of them, and
- * the result in order and plausible. Null while they don't agree yet.
+ * What the latest frames agree on: the last two read exactly the same, or
+ * every value (date, number of rows, each time) read the same by at least
+ * MAJORITY of the recent readings. The result must be in order and
+ * plausible. Null while they don't agree yet.
  */
-export function consensus(history: QuickReading[]): Stamps | null {
-  const read = history.filter((q) => q.date !== null && q.rows.length > 0);
-  if (read.length < CONSENSUS_FRAMES) return null;
-  const date = majority(read.map((q) => q.date!));
-  const count = majority(read.map((q) => q.rows.length));
-  if (date.votes < CONSENSUS_FRAMES || count.votes < CONSENSUS_FRAMES) return null;
-  const same = read.filter((q) => q.rows.length === count.value);
+export function agreement(history: FrameReading[]): Stamps | null {
+  const [a, b] = history.slice(-2);
+  if (a && b && usable(b) && key(a) === key(b)) return { date: b.date!, rows: b.rows.map((r) => ({ in: r.in, out: r.out })) };
+  const read = history.filter((r) => r.date !== null && r.rows.length > 0);
+  if (read.length < MAJORITY) return null;
+  const date = majority(read.map((r) => r.date!));
+  const count = majority(read.map((r) => r.rows.length));
+  if (date.votes < MAJORITY || count.votes < MAJORITY) return null;
+  const same = read.filter((r) => r.rows.length === count.value);
   const rows: StampRow[] = [];
   for (let i = 0; i < count.value; i++) {
     const row: StampRow = { in: null, out: null };
     for (const field of ['in', 'out'] as const) {
-      const m = majority(same.map((q) => q.rows[i][field]));
-      if (m.votes < CONSENSUS_FRAMES) return null;
+      const m = majority(same.map((r) => r.rows[i][field]));
+      if (m.votes < MAJORITY) return null;
       row[field] = m.value;
     }
     rows.push(row);
@@ -164,11 +104,10 @@ export function consensus(history: QuickReading[]): Stamps | null {
   return checkOrder(rows) && checkPlausible(rows) ? { date: date.value, rows } : null;
 }
 
-/** The full reading of a frame says the same as the fast readings agreed on. */
-export function confirms(full: ClockReading, agreed: Stamps): boolean {
-  return (
-    full.date === agreed.date &&
-    full.rows.length === agreed.rows.length &&
-    full.rows.every((r, i) => r.in === agreed.rows[i].in && r.out === agreed.rows[i].out)
-  );
+/** How far the agreement has come, 0–3, for the progress dots. */
+export function progress(history: FrameReading[]): number {
+  const last = history[history.length - 1];
+  if (!last || !usable(last)) return history.length && history[history.length - 1].date ? 1 : 0;
+  const same = history.filter((r) => key(r) === key(last)).length;
+  return Math.min(3, 1 + same);
 }

@@ -23,6 +23,8 @@ export interface TableLocation {
   headerBottom: number;
   /** Bar tilt in radians (positive = right side lower). */
   angle: number;
+  /** The bar's own height, when it is known (else worked out from the bounds and the tilt). */
+  thickness?: number;
 }
 
 // The date bar is light cyan (~135,240,250) and the header row lavender

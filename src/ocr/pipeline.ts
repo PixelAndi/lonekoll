@@ -16,14 +16,13 @@ import {
   checkPlausible,
   parseDate,
   parseRows,
-  readTimeToken,
   type OcrWord,
   type ReadingIssue,
   type ReadRow,
   type StampRow,
 } from './parse.ts';
 
-export type OcrMode = 'date' | 'dateLine' | 'dateSparse' | 'rows';
+export type OcrMode = 'date' | 'dateSparse' | 'rows' | 'find';
 
 /** Wraps the OCR library; implemented with Tesseract in ./tesseract.ts. */
 export interface OcrEngine {
@@ -50,10 +49,6 @@ export interface ClockReading {
 export interface PreparedCrops {
   date: GrayImage;
   rows: GrayImage;
-  /** Height of the date bar in the crops' pixels. */
-  barHeight: number;
-  /** Turns an x in the date crop into a share of the table's width (0 = its left end). */
-  dateX: (x: number) => number;
   table: NonNullable<ClockReading['table']>;
 }
 
@@ -65,8 +60,6 @@ export interface CropOptions {
   rowsOffset?: number;
   /** Bar height in pixels to scale to before OCR. */
   targetHeight?: number;
-  /** Cut out the whole date bar, not just its middle (to see where its ends are). */
-  wholeBar?: boolean;
 }
 
 /** White border; Tesseract reads text touching the image edge poorly. */
@@ -112,18 +105,18 @@ export function prepareCrops(photo: RGBAImage, options: CropOptions = {}): Prepa
  * scale, to report the table's box in the original photo.
  */
 export function cropsAt(img: RGBAImage, loc: TableLocation, options: CropOptions = {}, turned = 0, toPhoto = 1): PreparedCrops {
-  const { bias = 20, grayscale = false, rowsOffset = 0.75, targetHeight = 70, wholeBar = false } = options;
+  const { bias = 20, grayscale = false, rowsOffset = 0.75, targetHeight = 70 } = options;
   const width = loc.right - loc.left + 1;
   const tilt = Math.abs(Math.tan(loc.angle)) * width;
-  const thickness = Math.max(loc.barBottom - loc.barTop + 1 - tilt, (loc.barBottom - loc.barTop + 1) * 0.6);
+  const thickness = loc.thickness ?? Math.max(loc.barBottom - loc.barTop + 1 - tilt, (loc.barBottom - loc.barTop + 1) * 0.6);
   const pivot = { x: (loc.left + loc.right) / 2, y: (loc.barTop + loc.barBottom) / 2 };
   const scale = Math.min(5, Math.max(1, targetHeight / thickness));
 
   // The date sits mid-bar; when the bar runs off the photo's edge, look further towards that edge.
   const cutLeft = loc.left <= 2;
   const cutRight = loc.right >= img.width - 3;
-  const dateFrom = wholeBar ? -0.03 : cutLeft ? 0.03 : 0.28;
-  const dateTo = wholeBar ? 1.03 : cutRight ? 0.97 : 0.72;
+  const dateFrom = cutLeft ? 0.03 : 0.28;
+  const dateTo = cutRight ? 0.97 : 0.72;
   const dateGray = extractRegion(
     img,
     { left: loc.left + width * dateFrom, top: pivot.y - thickness * 0.6, width: width * (dateTo - dateFrom), height: thickness * 1.2 },
@@ -165,22 +158,17 @@ export function cropsAt(img: RGBAImage, loc: TableLocation, options: CropOptions
     height: Math.round((Math.max(...ys) - Math.max(0, Math.min(...ys))) * toPhoto),
   };
   const margin = Math.round(thickness * scale * 0.3);
-  const dateX = (x: number) => dateFrom + (x - margin) / scale / width;
   const window = Math.round(thickness * scale) | 1;
   if (grayscale) {
     return {
       date: pad(dateGray, margin, 230),
       rows: pad({ ...rowsGray, data: rowsGray.data.map((v) => 255 - v) }, margin),
-      barHeight: thickness * scale,
-      dateX,
       table,
     };
   }
   return {
     date: pad(binarize(dateGray, false, window, bias), margin),
     rows: pad(binarize(rowsGray, true, window, bias), margin),
-    barHeight: thickness * scale,
-    dateX,
     table,
   };
 }
@@ -196,11 +184,9 @@ const VARIANTS: CropOptions[] = [
 ];
 
 /**
- * Where the rows start below the date bar when the table is lined up in the
- * scanner's guide: just below the column header, whose labels ("In" right
- * above the first In time) otherwise get mixed into the first row. A table
- * smaller than the guide would lose its first row this way, which is why the
- * scanner asks to come closer until the table fills the guide.
+ * Where the rows start below the date bar when the table's place is known
+ * (found by the scanner): just below the column header, whose labels ("In"
+ * right above the first In time) otherwise get mixed into the first row.
  */
 const GUIDED_ROWS_OFFSET = 0.95;
 
@@ -276,58 +262,158 @@ export async function readClockPhoto(photo: RGBAImage, engine: OcrEngine, at?: T
   return { ...voted, issues, confidence, table };
 }
 
-/** What one fast pass over a camera frame found, for the live scanner. */
-export interface QuickReading {
+/** Width the camera's search area is read at when looking for the table, so the date bar's text is readable. */
+const FIND_WIDTH = 1200;
+/**
+ * Where the words on the clock's date bar start, as shares of the table's
+ * width ("Nästa" is often read only in part, so starts are used, not ends);
+ * the date's digits are about 0.69 of the bar's height, and the table is about
+ * 23.5 bar heights wide.
+ */
+const FOREG_AT = 0.101;
+const NASTA_AT = 0.751;
+const DATE_CENTRE_AT = 0.55;
+const DATE_HEIGHT_SHARE = 0.69;
+const TABLE_WIDTH_IN_BARS = 23.5;
+
+export interface FoundTable {
+  /** The table's place in the image. */
+  loc: TableLocation;
   date: string | null;
+  /** The stamp rows, read again on their own (digits only) where the table was found. */
   rows: ReadRow[];
-  /** Height of the date's digits as a share of the date bar's height. */
-  dateSize: number | null;
-  /**
-   * Where the text on the date bar ("‹‹ Föreg Dag … Nästa Dag ››") starts and
-   * ends, as shares of the guide's width; about 0.03 and 0.97 when the table
-   * fills the guide. Null where that end's words weren't read.
-   */
-  barText: { left: number | null; right: number | null };
-  /** Median height of the stamp times as a share of the date bar's height. */
-  timeSize: number | null;
-  /** Slope of the stamp rows (dy/dx), 0 when level. */
-  slope: number | null;
+  /** The search pass read the same rows: two independent readings agree. */
+  confirmed: boolean;
+  /** The table's width as a share of the image's width. */
+  width: number;
+  /** Both ends of the date bar were read (else the width is estimated from the date's size). */
+  bothEnds: boolean;
+  /** The date bar's height in the image's pixels: below about 24 the text is too small to read reliably. */
+  barHeight: number;
 }
 
 /**
- * Reads the table at a known place (the scanner's guide) with a single
- * preprocessing variant: fast enough to run on camera frames as they come.
+ * Finds the clock's table anywhere in an image from the words on its date
+ * bar: the date gives the bar's height and line, "Föreg Dag" and "Nästa Dag"
+ * its ends and tilt. No colours are involved, so the table only has to be
+ * roughly in view.
  */
-export async function quickRead(img: RGBAImage, loc: TableLocation, engine: OcrEngine): Promise<QuickReading> {
-  const crops = cropsAt(img, loc, { ...VARIANTS[0], rowsOffset: GUIDED_ROWS_OFFSET, wholeBar: true });
-  // The whole bar line as words: the date, and "Föreg Dag" / "Nästa Dag" at its ends.
-  const lineWords = await engine.recognize(crops.date, 'dateLine');
-  const left = lineWords.find((w) => /f.?reg/i.test(w.text));
-  const right = [...lineWords].reverse().find((w) => /n.?sta|dag/i.test(w.text) && (w.bbox.x0 + w.bbox.x1) / 2 > crops.date.width / 2);
-  const barText = { left: left ? crops.dateX(left.bbox.x0) : null, right: right ? crops.dateX(right.bbox.x1) : null };
-  let dateWords = lineWords;
-  if (!parseDate(dateWords).value) dateWords = await engine.recognize(crops.date, 'dateSparse');
-  const rowWords = await engine.recognize(crops.rows, 'rows');
-  const dateWord = dateWords.find((w) => /\d{4}-?\d{2}-?\d{2}/.test(w.text));
-  const dateSize = dateWord ? (dateWord.bbox.y1 - dateWord.bbox.y0) / crops.barHeight : null;
-  const timeHeights = rowWords.filter((w) => readTimeToken(w.text)).map((w) => w.bbox.y1 - w.bbox.y0).sort((a, b) => a - b);
-  const timeSize = timeHeights.length ? timeHeights[Math.floor(timeHeights.length / 2)] / crops.barHeight : null;
-  return { date: parseDate(dateWords).value, rows: parseRows(rowWords, crops.rows.width).value, dateSize, barText, timeSize, slope: rowSlope(rowWords) };
+export async function findTableByText(img: RGBAImage, engine: OcrEngine): Promise<FoundTable | null> {
+  // Small camera frames (under 800 pixels across) are enlarged so the bar's text is big enough for OCR.
+  const scale = img.width < 800 ? Math.min(2, 1000 / img.width) : Math.min(1, FIND_WIDTH / img.width);
+  const gray = extractRegion(img, { left: 0, top: 0, width: img.width, height: img.height }, 0, { x: 0, y: 0 }, scale, channels.luminance);
+  const words = (await engine.recognize(gray, 'find')).map((w) => ({
+    ...w,
+    bbox: { x0: w.bbox.x0 / scale, y0: w.bbox.y0 / scale, x1: w.bbox.x1 / scale, y1: w.bbox.y1 / scale },
+  }));
+  const dateWord = findDateWord(words);
+  const foreg = words.find((w) => /f.?reg/i.test(w.text));
+  if (!dateWord && !foreg) return null;
+  // The bar's line: through the date, or else through "Föreg".
+  const anchor = dateWord ?? foreg!;
+  const cx = (anchor.bbox.x0 + anchor.bbox.x1) / 2;
+  let cy = (anchor.bbox.y0 + anchor.bbox.y1) / 2;
+  let thickness = (anchor.bbox.y1 - anchor.bbox.y0) / DATE_HEIGHT_SHARE;
+  // Words on the same bar: close to that line (allowing for some tilt).
+  const onBar = (w: OcrWord) => Math.abs((w.bbox.y0 + w.bbox.y1) / 2 - cy) < thickness * 2.5;
+  const left = foreg && onBar(foreg) && (!dateWord || foreg.bbox.x1 < dateWord.bbox.x0) ? foreg : undefined;
+  // The first word after the date (or "Föreg Dag") that starts like "Nästa" (sometimes only "N" is read).
+  const after = dateWord ? dateWord.bbox.x1 : anchor.bbox.x1 + thickness * 3;
+  const right = words
+    .filter((w) => /^n/i.test(w.text.trim()) && w.bbox.x0 > after && onBar(w))
+    .sort((a, b) => a.bbox.x0 - b.bbox.x0)[0];
+  // Without the date the table can only be placed from both ends of the bar.
+  if (!dateWord && !right) return null;
+  let tableLeft: number;
+  let width: number;
+  let angle = 0;
+  if (left && right) {
+    width = (right.bbox.x0 - left.bbox.x0) / (NASTA_AT - FOREG_AT);
+    // The width is measured more reliably than the date's height.
+    thickness = width / TABLE_WIDTH_IN_BARS;
+    tableLeft = left.bbox.x0 - width * FOREG_AT;
+    // The bar's line through the middles of "Föreg" and "Nästa" (the date's box sometimes reaches into the header).
+    const ly = (left.bbox.y0 + left.bbox.y1) / 2;
+    const ry = (right.bbox.y0 + right.bbox.y1) / 2;
+    angle = Math.atan2(ry - ly, right.bbox.x0 - left.bbox.x0);
+    cy = ly + ((tableLeft + width / 2 - left.bbox.x0) / (right.bbox.x0 - left.bbox.x0)) * (ry - ly);
+  } else {
+    width = thickness * TABLE_WIDTH_IN_BARS;
+    tableLeft = left ? left.bbox.x0 - width * FOREG_AT : right ? right.bbox.x0 - width * NASTA_AT : cx - width * DATE_CENTRE_AT;
+  }
+  // cropsAt takes the bar's upright bounds, which grow with the tilt.
+  const reach = thickness / 2 + (Math.abs(Math.tan(angle)) * width) / 2;
+  const loc: TableLocation = {
+    left: tableLeft,
+    right: tableLeft + width,
+    barTop: cy - reach,
+    barBottom: cy + reach,
+    headerBottom: cy + reach + thickness * 0.9,
+    angle,
+    thickness,
+  };
+  // The times, in the table's own frame: tilt undone, x as a share of the table's width.
+  const cos = Math.cos(-angle);
+  const sin = Math.sin(-angle);
+  const px = tableLeft + width / 2;
+  const toTable = (x: number, y: number) => ({ x: px + (x - px) * cos - (y - cy) * sin - tableLeft, y: cy + (x - px) * sin + (y - cy) * cos });
+  const below = words
+    .map((w) => {
+      const a = toTable(w.bbox.x0, w.bbox.y0);
+      const b = toTable(w.bbox.x1, w.bbox.y1);
+      return { ...w, text: timeLike(w.text), bbox: { x0: a.x, y0: a.y, x1: b.x, y1: b.y } };
+    })
+    // Below the column header, and not further down than a few rows.
+    .filter((w) => w.bbox.y0 > cy + thickness * 1.2 && w.bbox.y0 < cy + thickness * 8 && w.bbox.x0 > -width * 0.02 && w.bbox.x1 < width * 1.02);
+  if (!dateWord) {
+    // Found from the bar's ends only: the text is there but too small or blurred to read the date.
+    return { loc, date: null, rows: [], confirmed: false, width: width / img.width, bothEnds: true, barHeight: thickness };
+  }
+  const passRows = parseRows(below, width).value;
+  // The rows once more, cut out where the table is and read as digits only.
+  const crops = cropsAt(img, loc, { ...VARIANTS[0], rowsOffset: GUIDED_ROWS_OFFSET });
+  const rows = parseRows(await engine.recognize(crops.rows, 'rows'), crops.rows.width).value;
+  const same = (a: ReadRow[], b: ReadRow[]) => a.length === b.length && a.every((r, i) => r.in === b[i].in && r.out === b[i].out);
+  return {
+    loc,
+    date: parseDate([dateWord]).value,
+    rows,
+    confirmed: same(rows, passRows),
+    width: width / img.width,
+    bothEnds: !!(left && right),
+    barHeight: thickness,
+  };
 }
 
-/** Median slope between time stamps on the same line, far enough apart to tell. */
-function rowSlope(words: OcrWord[]): number | null {
-  const times = words
-    .filter((w) => readTimeToken(w.text))
-    .map((w) => ({ x: (w.bbox.x0 + w.bbox.x1) / 2, y: (w.bbox.y0 + w.bbox.y1) / 2, h: w.bbox.y1 - w.bbox.y0 }));
-  const slopes: number[] = [];
-  for (const a of times) {
-    for (const b of times) {
-      const dx = b.x - a.x;
-      if (dx > a.h * 4 && Math.abs(b.y - a.y) < a.h * 0.8) slopes.push((b.y - a.y) / dx);
+/** The date on the bar, also when it was read as two or three pieces ("2026-1", "0-29"). */
+function findDateWord(words: OcrWord[]): OcrWord | null {
+  const pattern = /20\d{2}-?\d{2}-?\d{2}/;
+  for (let i = 0; i < words.length; i++) {
+    for (let n = 1; n <= 3 && i + n <= words.length; n++) {
+      const parts = words.slice(i, i + n);
+      // Pieces of one word sit side by side on the same line.
+      const sameLine = parts.every((p) => Math.abs(p.bbox.y0 - parts[0].bbox.y0) < (parts[0].bbox.y1 - parts[0].bbox.y0) * 0.5);
+      const text = parts.map((p) => p.text.trim()).join('');
+      if (sameLine && pattern.test(text)) {
+        return {
+          text: text.match(pattern)![0],
+          confidence: Math.min(...parts.map((p) => p.confidence)),
+          bbox: {
+            x0: Math.min(...parts.map((p) => p.bbox.x0)),
+            y0: Math.min(...parts.map((p) => p.bbox.y0)),
+            x1: Math.max(...parts.map((p) => p.bbox.x1)),
+            y1: Math.max(...parts.map((p) => p.bbox.y1)),
+          },
+        };
+      }
     }
   }
-  if (slopes.length === 0) return null;
-  slopes.sort((p, q) => p - q);
-  return slopes[Math.floor(slopes.length / 2)];
+  return null;
+}
+
+/** Letters the search pass sometimes reads for digits in a time ("l4:3O" → "14:30"). */
+function timeLike(text: string): string {
+  const t = text.trim();
+  if (!/^[0-9OoIl|SB:.;xX×]{3,5}$/.test(t) || /^[xX×:.;]+$/.test(t)) return t;
+  return t.replace(/[Oo]/g, '0').replace(/[Il|]/g, '1').replace(/S/g, '5').replace(/B/g, '8');
 }

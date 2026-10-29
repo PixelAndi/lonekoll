@@ -13,27 +13,25 @@ report you can go through with your employer.
 ## What it does
 
 - **Scan → times.** After clocking out, scan the clock's day screen with the
-  camera. The camera view shows a frame shaped like the clock's table, with
-  the date bar along the top; you line the table up with it. The area inside
-  the frame is read over and over, and hints come from what was read: the
-  words at the ends of the date bar ("Föreg Dag", "Nästa Dag") show whether
-  the table fills the frame (move closer, back, or sideways), and missing
-  date or times say what isn't in the frame yet. The data counts as grabbed
-  when the readings of several frames and a full reading (three passes voted
-  per time) agree on every value; the scanner then says so ("Done! Tue 27
-  Oct · 2 rows read") and opens the usual check. Nothing depends on the
+  camera. Point it roughly at the clock's table: it only has to be inside a
+  large frame, a bit off-centre or tilted is fine. Each frame is read in one
+  pass; the table is found from the words on its date bar (the date, "Föreg
+  Dag" and "Nästa Dag" give its place, size and tilt), and the stamp rows are
+  read twice, once in that pass and once on their own as digits. A frame
+  counts only when both readings agree, and the data is grabbed when the last
+  two such frames agree (or three of the last five): the scanner confirms
+  with a check mark and the times, then opens the usual check. Short hints
+  ("Gå närmare", "Håll stilla") say what to change. Nothing depends on the
   screen's colours. If a stamp is missing (the clock shows "xx:xx") and it
   isn't a shift that crosses midnight, the scanner says which one looks
   forgotten and asks whether to fill it in by hand or scan again. A shift
   that ends after midnight has its In on the previous day's screen: when a
   scan shows a morning Ut without In and that day isn't logged, the scanner
   asks to press "Föreg Dag" on the clock and scan it too ("Nästa Dag" the
-  other way round), checks that the clock shows the right day, and saves
-  both days together. An animated sketch of the clock shows which button to
-  tap and how the date changes. Days can always be typed in by hand instead (from the
-  scanner or the Days screen).
-  Saved photos can be chosen instead; those are read by
-  finding the table's coloured bars. Times are read on the device
+  other way round), shows how with an animated sketch, checks that the clock
+  shows the right day, and saves both days together. Days can always be typed
+  in by hand instead, and saved photos can be chosen (those are read by
+  finding the table's coloured bars). Times are read on the device
   (Tesseract OCR) and shown next to the picture for you to confirm.
 - **Absences.** Sick (optionally the shift you were booked for), vacation,
   time off from the working-time account, a public holiday you would have
