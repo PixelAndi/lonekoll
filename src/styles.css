@@ -1241,3 +1241,48 @@ input[type='checkbox'] {
   border-top-color: #fff;
   animation: spin 0.8s linear infinite;
 }
+
+.scanner-alternatives {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  padding: 10px 16px 0;
+  background: #000;
+}
+
+.link-button {
+  background: none;
+  border: none;
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  padding: 8px 4px;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.link-button:disabled {
+  opacity: 0.4;
+}
+
+.scanner-question {
+  padding: 12px 16px 16px;
+  background: #000;
+  text-align: center;
+}
+
+.scanner-question p {
+  margin: 0 0 12px;
+}
+
+.scanner-question-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.scanner-chip-warn {
+  border-color: #ffd54f;
+  background: rgb(107 74 0 / 0.85);
+}

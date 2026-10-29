@@ -22,7 +22,11 @@ report you can go through with your employer.
   when the readings of several frames and a full reading (three passes voted
   per time) agree on every value; the scanner then says so ("Done! Tue 27
   Oct · 2 rows read") and opens the usual check. Nothing depends on the
-  screen's colours. Saved photos can be chosen instead; those are read by
+  screen's colours. If a stamp is missing (the clock shows "xx:xx") and it
+  isn't a shift that crosses midnight, the scanner says which one looks
+  forgotten and asks whether to fill it in by hand or scan again. Days can
+  always be typed in by hand instead (from the scanner or the Days screen).
+  Saved photos can be chosen instead; those are read by
   finding the table's coloured bars. Times are read on the device
   (Tesseract OCR) and shown next to the picture for you to confirm.
 - **Absences.** Sick (optionally the shift you were booked for), vacation,

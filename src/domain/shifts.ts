@@ -1,4 +1,4 @@
-import type { DayRecord } from './model.ts';
+import type { DayRecord, StampPair } from './model.ts';
 import { localToUtc, toMinutes, utcToLocal, addDays, MINUTE_MS, type LocalDate } from './time.ts';
 
 // Turns the clock's per-day stamps into work intervals and shifts.
@@ -103,4 +103,49 @@ export function buildShifts(days: DayRecord[]): { shifts: Shift[]; issues: Stamp
     }
   }
   return { shifts, issues };
+}
+
+/** A stamp that was most likely forgotten (not a shift that crosses midnight). */
+export interface ForgottenStamp {
+  /** Index of the row on the day. */
+  row: number;
+  field: 'in' | 'out';
+  /** The other stamp on that row, for telling the user which one is meant. */
+  other: string | null;
+}
+
+/** A shift that ends after midnight can't start this early (or start this late and end in the morning). */
+const NIGHT_SHIFT_EARLIEST_IN = 14 * 60;
+const NIGHT_SHIFT_LATEST_OUT = 12 * 60;
+
+/**
+ * Stamps missing from a day's rows (the clock shows "xx:xx") that were most
+ * likely forgotten. A missing In on the first row is a shift that started the
+ * day before when that day ends with an open In (or, not logged, when the Ut is
+ * in the morning); a missing Ut on the last row likewise when the next day
+ * starts with an Ut (or, not logged, when the In is late enough for a night shift).
+ */
+export function forgottenStamps(date: LocalDate, rows: StampPair[], days: DayRecord[]): ForgottenStamp[] {
+  const byDate = new Map(days.map((d) => [d.date, d]));
+  const before = byDate.get(addDays(date, -1))?.rows.filter((r) => r.in || r.out);
+  const after = byDate.get(addDays(date, 1))?.rows.filter((r) => r.in || r.out);
+  const found: ForgottenStamp[] = [];
+  rows.forEach((r, i) => {
+    if (!r.in && !r.out) return;
+    if (!r.in) {
+      const startedBefore =
+        i === 0 &&
+        (before?.length
+          ? before[before.length - 1].in !== null && before[before.length - 1].out === null
+          : r.out !== null && toMinutes(r.out) < NIGHT_SHIFT_LATEST_OUT);
+      if (!startedBefore) found.push({ row: i, field: 'in', other: r.out });
+    }
+    if (!r.out) {
+      const endsAfter =
+        i === rows.length - 1 &&
+        (after?.length ? after[0].in === null && after[0].out !== null : r.in !== null && toMinutes(r.in) >= NIGHT_SHIFT_EARLIEST_IN);
+      if (!endsAfter) found.push({ row: i, field: 'out', other: r.in });
+    }
+  });
+  return found;
 }

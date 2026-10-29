@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../app-context.ts';
 import { quickReadImage, readPhoto, warmUp } from '../ocr/browser.ts';
 import { confirms, consensus, guideBox, guideLocation, hintFor, HISTORY, readRegion, type Hint } from '../ocr/live.ts';
+import { forgottenStamps, type ForgottenStamp } from '../domain/shifts.ts';
 import type { ClockReading, QuickReading } from '../ocr/pipeline.ts';
 
 // Live camera scanner for the clock screen. The user lines the clock's table
@@ -26,6 +27,8 @@ type Phase =
   | { kind: 'aiming'; hint: Hint | 'loading' | 'stuck'; latest: QuickReading | null }
   | { kind: 'reading' }
   | { kind: 'done'; scan: Scan; complete: boolean }
+  /** Read, but a stamp looks forgotten: fill it in by hand or scan again? */
+  | { kind: 'missing'; scan: Scan; forgotten: ForgottenStamp[] }
   | { kind: 'error'; reason: 'denied' | 'unavailable' };
 
 const HINT_TEXT = {
@@ -62,8 +65,21 @@ const toFile = (canvas: HTMLCanvasElement) =>
     canvas.toBlob((b) => (b ? resolve(new File([b], `klocka-${Date.now()}.jpg`, { type: 'image/jpeg' })) : reject(new Error('capture failed'))), 'image/jpeg', 0.92),
   );
 
-export function Scanner({ onScanned, onClose, onPickFiles }: { onScanned: (scan: Scan) => void; onClose: () => void; onPickFiles: () => void }) {
-  const { t, fmt } = useApp();
+export function Scanner({
+  onScanned,
+  onClose,
+  onPickFiles,
+  onManual,
+}: {
+  onScanned: (scan: Scan) => void;
+  onClose: () => void;
+  onPickFiles: () => void;
+  /** Type the day in by hand instead. */
+  onManual: () => void;
+}) {
+  const { t, fmt, days } = useApp();
+  const daysRef = useRef(days);
+  daysRef.current = days;
   const video = useRef<HTMLVideoElement>(null);
   const [phase, setPhase] = useState<Phase>({ kind: 'starting' });
   const [frame, setFrame] = useState({ width: 16, height: 9 });
@@ -104,6 +120,8 @@ export function Scanner({ onScanned, onClose, onPickFiles }: { onScanned: (scan:
   useEffect(() => {
     if (!aiming) return;
     let alive = true;
+    // Scanning again after a question: the video was paused on the read frame.
+    if (video.current?.paused) void video.current.play();
     const canvas = document.createElement('canvas');
     (async () => {
       let history: QuickReading[] = [];
@@ -143,7 +161,8 @@ export function Scanner({ onScanned, onClose, onPickFiles }: { onScanned: (scan:
           navigator.vibrate?.(80);
           // Several frames and the full reading agree, so nothing is left in doubt.
           const reading: ClockReading = { ...full, dateUncertain: false, rows: agreed.rows };
-          setPhase({ kind: 'done', scan: { file, reading }, complete: true });
+          const forgotten = forgottenStamps(agreed.date, agreed.rows, daysRef.current);
+          setPhase(forgotten.length ? { kind: 'missing', scan: { file, reading }, forgotten } : { kind: 'done', scan: { file, reading }, complete: true });
           return;
         }
         failedConfirms++;
@@ -165,8 +184,8 @@ export function Scanner({ onScanned, onClose, onPickFiles }: { onScanned: (scan:
   const guide = guideBox(frame.width, frame.height);
   const barHeight = guide.barBottom - guide.top;
   const done = phase.kind === 'done' ? phase : null;
-  const shown = done ? done.scan.reading : phase.kind === 'aiming' ? phase.latest : null;
-  const rowsText = (shown?.rows ?? []).map((r) => `${r.in ?? '–'}–${r.out ?? '–'}`).join(', ');
+  const shown = phase.kind === 'done' || phase.kind === 'missing' ? phase.scan.reading : phase.kind === 'aiming' ? phase.latest : null;
+  const rowsText = (shown?.rows ?? []).map((r) => `${r.in ?? '?'}–${r.out ?? '?'}`).join(', ');
 
   let message: string;
   let tone: 'info' | 'ok' | 'warn' = 'info';
@@ -175,6 +194,11 @@ export function Scanner({ onScanned, onClose, onPickFiles }: { onScanned: (scan:
   else if (phase.kind === 'error') {
     message = t(phase.reason === 'denied' ? 'scan.denied' : 'scan.unavailable');
     tone = 'warn';
+  } else if (phase.kind === 'missing') {
+    tone = 'warn';
+    message = phase.forgotten
+      .map((f) => t(f.field === 'in' ? 'scan.forgotIn' : 'scan.forgotOut', { other: f.other ?? '' }))
+      .join(' ');
   } else if (phase.kind === 'done') {
     tone = phase.complete ? 'ok' : 'info';
     const r = phase.scan.reading;
@@ -233,14 +257,19 @@ export function Scanner({ onScanned, onClose, onPickFiles }: { onScanned: (scan:
             )}
           </svg>
         )}
-        {(phase.kind === 'aiming' || phase.kind === 'done') && (
+        {(phase.kind === 'aiming' || phase.kind === 'done' || phase.kind === 'missing') && (
           // While aiming only what was found; the times themselves once they are confirmed.
           <div className="scanner-readout">
             <span className={done ? 'scanner-chip scanner-chip-ok' : 'scanner-chip'}>
               {t('scan.dateChip')}: {shown?.date ? fmt.date(shown.date) : '…'}
             </span>
-            <span className={done ? 'scanner-chip scanner-chip-ok' : 'scanner-chip'}>
-              {t('scan.timesChip')}: {done ? rowsText || '–' : shown?.rows.length ? t(shown.rows.length === 1 ? 'scan.rowFound' : 'scan.rowsFound', { n: shown.rows.length }) : '…'}
+            <span className={done ? 'scanner-chip scanner-chip-ok' : phase.kind === 'missing' ? 'scanner-chip scanner-chip-warn' : 'scanner-chip'}>
+              {t('scan.timesChip')}:{' '}
+              {done || phase.kind === 'missing'
+                ? rowsText || '–'
+                : shown?.rows.length
+                  ? t(shown.rows.length === 1 ? 'scan.rowFound' : 'scan.rowsFound', { n: shown.rows.length })
+                  : '…'}
             </span>
           </div>
         )}
@@ -251,27 +280,59 @@ export function Scanner({ onScanned, onClose, onPickFiles }: { onScanned: (scan:
         {message}
       </div>
 
-      <div className="scanner-controls">
-        <button type="button" className="button" onClick={onClose}>
-          {t('common.close')}
-        </button>
-        {phase.kind === 'error' ? (
-          <button type="button" className="button button-primary" onClick={onPickFiles}>
-            {t('scan.pickInstead')}
-          </button>
-        ) : (
-          <button
-            type="button"
-            className="scanner-shutter"
-            aria-label={t('scan.takeNow')}
-            disabled={phase.kind !== 'aiming'}
-            onClick={() => (manual.current = true)}
-          />
-        )}
-        <button type="button" className="button" onClick={onPickFiles} disabled={phase.kind === 'reading'}>
-          {t('scan.pick')}
-        </button>
-      </div>
+      {phase.kind === 'missing' ? (
+        <div className="scanner-question">
+          <p>{t('scan.forgotQuestion')}</p>
+          <div className="scanner-question-buttons">
+            <button type="button" className="button" onClick={() => setPhase({ kind: 'aiming', hint: 'place', latest: null })}>
+              {t('scan.again')}
+            </button>
+            <button type="button" className="button button-primary" onClick={() => onScanned(markForgotten(phase.scan, phase.forgotten))}>
+              {t('scan.fillIn')}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="scanner-alternatives">
+            <button type="button" className="link-button" onClick={onManual} disabled={phase.kind === 'reading'}>
+              {t('scan.manual')}
+            </button>
+            <button type="button" className="link-button" onClick={onPickFiles} disabled={phase.kind === 'reading'}>
+              {t('scan.pick')}
+            </button>
+          </div>
+          <div className="scanner-controls">
+            <button type="button" className="button" onClick={onClose}>
+              {t('common.close')}
+            </button>
+            {phase.kind === 'error' ? (
+              <button type="button" className="button button-primary" onClick={onManual}>
+                {t('scan.manual')}
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="scanner-shutter"
+                aria-label={t('scan.takeNow')}
+                disabled={phase.kind !== 'aiming'}
+                onClick={() => (manual.current = true)}
+              />
+            )}
+            <span />
+          </div>
+        </>
+      )}
     </div>
   );
+}
+
+/** The scan with the forgotten stamps marked, so the review points them out. */
+function markForgotten(scan: Scan, forgotten: ForgottenStamp[]): Scan {
+  const rows = scan.reading.rows.map((r, i) => ({
+    ...r,
+    inUncertain: r.inUncertain || forgotten.some((f) => f.row === i && f.field === 'in'),
+    outUncertain: r.outUncertain || forgotten.some((f) => f.row === i && f.field === 'out'),
+  }));
+  return { ...scan, reading: { ...scan.reading, rows } };
 }

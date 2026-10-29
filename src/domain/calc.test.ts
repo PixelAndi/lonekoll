@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { calculatePeriod, calculateShifts } from './calc.ts';
 import { DEFAULT_SETTINGS, hourlyRateOn, minimumWageOn, type DayRecord, type Settings, type StampPair } from './model.ts';
-import { buildShifts } from './shifts.ts';
+import { buildShifts, forgottenStamps } from './shifts.ts';
 import { addDays, isoWeekday } from './time.ts';
 
 const HOURLY = 180;
@@ -206,5 +206,35 @@ describe('supplement per month', () => {
     // 2 000 / 174 = 11.494… → 176.83 + 11.49 = 188.32.
     expect(hourlyRateOn(s, '2026-09-01')).toBe(188.32);
     expect(calculatePeriod([], s, '2026-09-01', '2026-09-30').warnings).toEqual([]);
+  });
+});
+
+describe('forgotten stamps', () => {
+  const rows = (pairs: [string | null, string | null][]) => pairs.map(([i, o]) => ({ in: i, out: o }));
+
+  it('finds a missing stamp in the middle of the day', () => {
+    expect(forgottenStamps('2026-10-27', rows([['14:05', null], ['17:10', '23:20']]), [])).toEqual([{ row: 0, field: 'out', other: '14:05' }]);
+    expect(forgottenStamps('2026-10-27', rows([['14:05', '16:40'], [null, '23:20']]), [])).toEqual([{ row: 1, field: 'in', other: '23:20' }]);
+  });
+
+  it('accepts a shift that crosses midnight', () => {
+    // Evening In without Ut, next day not logged yet.
+    expect(forgottenStamps('2026-10-28', rows([['14:10', '18:00'], ['18:30', null]]), [])).toEqual([]);
+    // Morning Ut without In, after a day that ended with an open In.
+    const before = day('2026-10-28', [['14:10', '18:00'], ['18:30', null]]);
+    expect(forgottenStamps('2026-10-29', rows([[null, '02:15']]), [before])).toEqual([]);
+  });
+
+  it('flags what can’t be a night shift', () => {
+    // A day shift without Ut.
+    expect(forgottenStamps('2026-10-27', rows([['06:00', null]]), [])).toEqual([{ row: 0, field: 'out', other: '06:00' }]);
+    // An afternoon Ut without In.
+    expect(forgottenStamps('2026-10-27', rows([[null, '14:30']]), [])).toEqual([{ row: 0, field: 'in', other: '14:30' }]);
+    // The day before is logged and its shift was closed.
+    const closed = day('2026-10-28', [['06:00', '14:30']]);
+    expect(forgottenStamps('2026-10-29', rows([[null, '02:15']]), [closed])).toEqual([{ row: 0, field: 'in', other: '02:15' }]);
+    // The next day is logged and doesn't start with an Ut.
+    const next = day('2026-10-29', [['14:00', '22:00']]);
+    expect(forgottenStamps('2026-10-28', rows([['18:30', null]]), [next])).toEqual([{ row: 0, field: 'out', other: '18:30' }]);
   });
 });

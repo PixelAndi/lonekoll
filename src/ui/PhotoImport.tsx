@@ -2,7 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useApp } from '../app-context.ts';
 import { db, newId, saveDay } from '../db.ts';
 import type { DayRecord, StampPair } from '../domain/model.ts';
+import { forgottenStamps } from '../domain/shifts.ts';
 import { todayLocal } from '../domain/time.ts';
+import { navigate } from '../router.ts';
 import { loadPhoto, readPhoto, tableCrop } from '../ocr/browser.ts';
 import type { ClockReading } from '../ocr/pipeline.ts';
 import { Icon, Modal, Notice, Spinner } from './common.tsx';
@@ -59,6 +61,10 @@ export function PhotoImportButton() {
           onPickFiles={() => {
             setScanning(false);
             input.current?.click();
+          }}
+          onManual={() => {
+            setScanning(false);
+            navigate({ name: 'day', date: todayLocal() });
           }}
         />
       )}
@@ -162,7 +168,12 @@ function PhotoReview({
 
   const title = total > 1 ? `${t('photo.title')} (${position}/${total})` : t('photo.title');
   const reading = state.reading;
-  const uncertain = reading?.rows.map((r) => ({ in: r.inUncertain, out: r.outUncertain })) ?? [];
+  // Stamps that look forgotten (not a shift over midnight) are pointed out too.
+  const forgotten = date ? forgottenStamps(date, rows, days) : [];
+  const uncertain = rows.map((_, i) => ({
+    in: reading?.rows[i]?.inUncertain || forgotten.some((f) => f.row === i && f.field === 'in'),
+    out: reading?.rows[i]?.outUncertain || forgotten.some((f) => f.row === i && f.field === 'out'),
+  }));
   const anyUncertain = uncertain.some((u) => u.in || u.out);
   return (
     <Modal
@@ -200,7 +211,12 @@ function PhotoReview({
                 {t(`photo.${i}`)}
               </Notice>
             ))}
-          {anyUncertain && <Notice kind="warn">{t('photo.uncertain')}</Notice>}
+          {forgotten.map((f) => (
+            <Notice key={`${f.row}${f.field}`} kind="warn">
+              {t(f.field === 'in' ? 'scan.forgotIn' : 'scan.forgotOut', { other: f.other ?? '' })} {t('photo.forgotHint')}
+            </Notice>
+          ))}
+          {anyUncertain && !forgotten.length && <Notice kind="warn">{t('photo.uncertain')}</Notice>}
           {date > todayLocal() && <Notice kind="warn">{t('photo.futureDate')}</Notice>}
           <p className="muted small">{t('photo.checkHint')}</p>
           <label className="field">
