@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { calculatePeriod, calculateShifts } from './calc.ts';
 import { DEFAULT_SETTINGS, hourlyRateOn, minimumWageOn, type DayRecord, type Settings, type StampPair } from './model.ts';
-import { buildShifts, forgottenStamps } from './shifts.ts';
+import { buildShifts, forgottenStamps, otherDayNeeded } from './shifts.ts';
 import { addDays, isoWeekday } from './time.ts';
 
 const HOURLY = 180;
@@ -236,5 +236,28 @@ describe('forgotten stamps', () => {
     // The next day is logged and doesn't start with an Ut.
     const next = day('2026-10-29', [['14:00', '22:00']]);
     expect(forgottenStamps('2026-10-28', rows([['18:30', null]]), [next])).toEqual([{ row: 0, field: 'out', other: '18:30' }]);
+  });
+});
+
+describe('a shift on two clock screens', () => {
+  const rows = (pairs: [string | null, string | null][]) => pairs.map(([i, o]) => ({ in: i, out: o }));
+
+  it('asks for the day before when the morning Ut has its In there', () => {
+    expect(otherDayNeeded('2026-10-29', rows([[null, '02:15']]), [], '2026-10-29')).toBe('previous');
+    // Already logged: the shift can be joined.
+    const before = day('2026-10-28', [['14:10', '18:00'], ['18:30', null]]);
+    expect(otherDayNeeded('2026-10-29', rows([[null, '02:15']]), [before], '2026-10-29')).toBeNull();
+  });
+
+  it('asks for the day after when an evening In has its Ut there', () => {
+    expect(otherDayNeeded('2026-10-28', rows([['14:10', '18:00'], ['18:30', null]]), [], '2026-10-29')).toBe('next');
+    // Still the same day: the shift is going on.
+    expect(otherDayNeeded('2026-10-28', rows([['18:30', null]]), [], '2026-10-28')).toBeNull();
+    const after = day('2026-10-29', [[null, '02:15']]);
+    expect(otherDayNeeded('2026-10-28', rows([['18:30', null]]), [after], '2026-10-29')).toBeNull();
+  });
+
+  it('leaves ordinary days alone', () => {
+    expect(otherDayNeeded('2026-10-27', rows([['14:05', '16:40'], ['17:10', '23:20']]), [], '2026-10-29')).toBeNull();
   });
 });

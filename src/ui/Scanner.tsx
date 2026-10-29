@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../app-context.ts';
 import { quickReadImage, readPhoto, warmUp } from '../ocr/browser.ts';
 import { confirms, consensus, guideBox, guideLocation, hintFor, HISTORY, readRegion, type Hint } from '../ocr/live.ts';
-import { forgottenStamps, type ForgottenStamp } from '../domain/shifts.ts';
+import type { DayRecord } from '../domain/model.ts';
+import { forgottenStamps, otherDayNeeded, type ForgottenStamp } from '../domain/shifts.ts';
+import { addDays, todayLocal } from '../domain/time.ts';
 import type { ClockReading, QuickReading } from '../ocr/pipeline.ts';
 
 // Live camera scanner for the clock screen. The user lines the clock's table
@@ -24,11 +26,13 @@ export interface Scan {
 
 type Phase =
   | { kind: 'starting' }
-  | { kind: 'aiming'; hint: Hint | 'loading' | 'stuck'; latest: QuickReading | null }
+  | { kind: 'aiming'; hint: Hint | 'loading' | 'stuck' | 'wrongDay'; latest: QuickReading | null }
   | { kind: 'reading' }
   | { kind: 'done'; scan: Scan; complete: boolean }
   /** Read, but a stamp looks forgotten: fill it in by hand or scan again? */
   | { kind: 'missing'; scan: Scan; forgotten: ForgottenStamp[] }
+  /** Read; the shift crosses midnight and its other half is on another day's screen: scan that day too? */
+  | { kind: 'otherDay'; scan: Scan; date: string; direction: 'previous' | 'next' }
   | { kind: 'error'; reason: 'denied' | 'unavailable' };
 
 const HINT_TEXT = {
@@ -42,7 +46,11 @@ const HINT_TEXT = {
   straighten: 'scan.straighten',
   steady: 'scan.steady',
   stuck: 'scan.stuck',
+  wrongDay: 'scan.wrongDay',
 } as const;
+
+/** A scan as the day it will be saved as, to check it together with the logged days. */
+const asDay = (scan: Scan): DayRecord => ({ date: scan.reading.date ?? '', rows: scan.reading.rows, photoIds: [], updatedAt: 0 });
 
 /** The guide area of the current video frame, drawn onto a canvas. */
 function grab(video: HTMLVideoElement, canvas: HTMLCanvasElement) {
@@ -71,7 +79,8 @@ export function Scanner({
   onPickFiles,
   onManual,
 }: {
-  onScanned: (scan: Scan) => void;
+  /** One scan, or several when a shift's halves were scanned from two days' screens. */
+  onScanned: (scans: Scan[]) => void;
   onClose: () => void;
   onPickFiles: () => void;
   /** Type the day in by hand instead. */
@@ -84,6 +93,12 @@ export function Scanner({
   const [phase, setPhase] = useState<Phase>({ kind: 'starting' });
   const [frame, setFrame] = useState({ width: 16, height: 9 });
   const manual = useRef(false);
+  /** Scans waiting for the other day of a shift over midnight. */
+  const pending = useRef<Scan[]>([]);
+  /** The day the user was asked to scan next, if any. */
+  const [target, setTarget] = useState<{ date: string; direction: 'previous' | 'next' } | null>(null);
+  const targetRef = useRef(target);
+  targetRef.current = target;
 
   // Camera on while the scanner is open; text recognition loads meanwhile.
   useEffect(() => {
@@ -153,16 +168,31 @@ export function Scanner({
         const agreed = consensus(history);
         if (!agreed) continue;
         // Keep this frame while the full reading runs on it.
+        console.info('T consensus', Date.now() % 100000, JSON.stringify(agreed));
         const file = await toFile(canvas);
+        console.info('T file', Date.now() % 100000);
         const full = await readPhoto(image, loc);
+        console.info('T full', Date.now() % 100000, JSON.stringify(full.rows), full.date);
         if (!alive) return;
         if (confirms(full, agreed)) {
+          // Asked for another day but the clock still shows a different one: keep going.
+          if (targetRef.current && agreed.date !== targetRef.current.date) {
+            setPhase({ kind: 'aiming', hint: 'wrongDay', latest: q });
+            history = [];
+            continue;
+          }
           v.pause();
           navigator.vibrate?.(80);
           // Several frames and the full reading agree, so nothing is left in doubt.
-          const reading: ClockReading = { ...full, dateUncertain: false, rows: agreed.rows };
-          const forgotten = forgottenStamps(agreed.date, agreed.rows, daysRef.current);
-          setPhase(forgotten.length ? { kind: 'missing', scan: { file, reading }, forgotten } : { kind: 'done', scan: { file, reading }, complete: true });
+          const scan = { file, reading: { ...full, dateUncertain: false, rows: agreed.rows } as ClockReading };
+          // The logged days plus what was scanned just now.
+          const known = [...daysRef.current, ...pending.current.map(asDay)];
+          const forgotten = forgottenStamps(agreed.date, agreed.rows, known);
+          const other = forgotten.length ? null : otherDayNeeded(agreed.date, agreed.rows, known, todayLocal());
+          console.info('T decide', Date.now() % 100000, forgotten.length, other);
+          if (forgotten.length) setPhase({ kind: 'missing', scan, forgotten });
+          else if (other) setPhase({ kind: 'otherDay', scan, direction: other, date: addDays(agreed.date, other === 'previous' ? -1 : 1) });
+          else setPhase({ kind: 'done', scan, complete: true });
           return;
         }
         failedConfirms++;
@@ -177,14 +207,16 @@ export function Scanner({
   // Show the result for a moment, then go on to checking the times.
   useEffect(() => {
     if (phase.kind !== 'done') return;
-    const timer = setTimeout(() => onScanned(phase.scan), phase.complete ? 1500 : 300);
+    console.info('T done-phase', Date.now() % 100000);
+    const timer = setTimeout(() => { console.info('T onScanned', Date.now() % 100000); onScanned([...pending.current, phase.scan]); }, phase.complete ? 1500 : 300);
     return () => clearTimeout(timer);
   }, [phase, onScanned]);
 
   const guide = guideBox(frame.width, frame.height);
   const barHeight = guide.barBottom - guide.top;
   const done = phase.kind === 'done' ? phase : null;
-  const shown = phase.kind === 'done' || phase.kind === 'missing' ? phase.scan.reading : phase.kind === 'aiming' ? phase.latest : null;
+  const shown =
+    phase.kind === 'done' || phase.kind === 'missing' || phase.kind === 'otherDay' ? phase.scan.reading : phase.kind === 'aiming' ? phase.latest : null;
   const rowsText = (shown?.rows ?? []).map((r) => `${r.in ?? '?'}–${r.out ?? '?'}`).join(', ');
 
   let message: string;
@@ -199,6 +231,9 @@ export function Scanner({
     message = phase.forgotten
       .map((f) => t(f.field === 'in' ? 'scan.forgotIn' : 'scan.forgotOut', { other: f.other ?? '' }))
       .join(' ');
+  } else if (phase.kind === 'otherDay') {
+    tone = 'ok';
+    message = t(phase.direction === 'previous' ? 'scan.startedBefore' : 'scan.endedAfter', { date: fmt.date(phase.date) });
   } else if (phase.kind === 'done') {
     tone = phase.complete ? 'ok' : 'info';
     const r = phase.scan.reading;
@@ -206,8 +241,9 @@ export function Scanner({
       ? t(r.rows.length === 1 ? 'scan.doneOne' : 'scan.done', { date: r.date ? fmt.date(r.date) : '', n: r.rows.length })
       : t('scan.check');
   } else {
-    message = t(HINT_TEXT[phase.hint]);
+    message = t(HINT_TEXT[phase.hint], { date: target ? fmt.date(target.date) : '', shown: phase.latest?.date ? fmt.date(phase.latest.date) : '' });
     if (phase.hint === 'steady') tone = 'ok';
+    if (phase.hint === 'wrongDay') tone = 'warn';
   }
 
   return (
@@ -257,7 +293,12 @@ export function Scanner({
             )}
           </svg>
         )}
-        {(phase.kind === 'aiming' || phase.kind === 'done' || phase.kind === 'missing') && (
+        {target && phase.kind === 'aiming' && (
+          <div className="scanner-target">
+            {t(target.direction === 'previous' ? 'scan.targetPrevious' : 'scan.targetNext', { date: fmt.date(target.date) })}
+          </div>
+        )}
+        {(phase.kind === 'aiming' || phase.kind === 'done' || phase.kind === 'missing' || phase.kind === 'otherDay') && (
           // While aiming only what was found; the times themselves once they are confirmed.
           <div className="scanner-readout">
             <span className={done ? 'scanner-chip scanner-chip-ok' : 'scanner-chip'}>
@@ -265,7 +306,7 @@ export function Scanner({
             </span>
             <span className={done ? 'scanner-chip scanner-chip-ok' : phase.kind === 'missing' ? 'scanner-chip scanner-chip-warn' : 'scanner-chip'}>
               {t('scan.timesChip')}:{' '}
-              {done || phase.kind === 'missing'
+              {done || phase.kind === 'missing' || phase.kind === 'otherDay'
                 ? rowsText || '–'
                 : shown?.rows.length
                   ? t(shown.rows.length === 1 ? 'scan.rowFound' : 'scan.rowsFound', { n: shown.rows.length })
@@ -280,14 +321,33 @@ export function Scanner({
         {message}
       </div>
 
-      {phase.kind === 'missing' ? (
+      {phase.kind === 'otherDay' ? (
+        <div className="scanner-question">
+          <div className="scanner-question-buttons">
+            <button type="button" className="button" onClick={() => onScanned([...pending.current, phase.scan])}>
+              {t('scan.skipOtherDay')}
+            </button>
+            <button
+              type="button"
+              className="button button-primary"
+              onClick={() => {
+                pending.current = [...pending.current, phase.scan];
+                setTarget({ date: phase.date, direction: phase.direction });
+                setPhase({ kind: 'aiming', hint: 'place', latest: null });
+              }}
+            >
+              {t('scan.scanDay', { date: fmt.date(phase.date) })}
+            </button>
+          </div>
+        </div>
+      ) : phase.kind === 'missing' ? (
         <div className="scanner-question">
           <p>{t('scan.forgotQuestion')}</p>
           <div className="scanner-question-buttons">
             <button type="button" className="button" onClick={() => setPhase({ kind: 'aiming', hint: 'place', latest: null })}>
               {t('scan.again')}
             </button>
-            <button type="button" className="button button-primary" onClick={() => onScanned(markForgotten(phase.scan, phase.forgotten))}>
+            <button type="button" className="button button-primary" onClick={() => onScanned([...pending.current, markForgotten(phase.scan, phase.forgotten)])}>
               {t('scan.fillIn')}
             </button>
           </div>

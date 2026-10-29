@@ -149,3 +149,21 @@ export function forgottenStamps(date: LocalDate, rows: StampPair[], days: DayRec
   });
   return found;
 }
+
+/**
+ * The day's stamps lack the other half of a shift that crosses midnight, and
+ * the clock shows that half on another day's screen that isn't logged yet:
+ * 'previous' when the first row has only an Ut in the morning (the In is on
+ * the day before), 'next' when the last row has only an In late enough for a
+ * night shift and the next day has begun (the Ut is on the day after).
+ */
+export function otherDayNeeded(date: LocalDate, rows: StampPair[], days: DayRecord[], today: LocalDate): 'previous' | 'next' | null {
+  const logged = (d: LocalDate) => days.some((x) => x.date === d && x.rows.some((r) => r.in || r.out));
+  const filled = rows.filter((r) => r.in || r.out);
+  const first = filled[0];
+  const last = filled[filled.length - 1];
+  if (first && !first.in && first.out && toMinutes(first.out) < NIGHT_SHIFT_LATEST_OUT && !logged(addDays(date, -1))) return 'previous';
+  const next = addDays(date, 1);
+  if (last && last.in && !last.out && toMinutes(last.in) >= NIGHT_SHIFT_EARLIEST_IN && next <= today && !logged(next)) return 'next';
+  return null;
+}

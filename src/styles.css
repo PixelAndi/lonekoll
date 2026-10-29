@@ -1286,3 +1286,16 @@ input[type='checkbox'] {
   border-color: #ffd54f;
   background: rgb(107 74 0 / 0.85);
 }
+
+.scanner-target {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgb(0 0 0 / 0.7);
+  border: 1px solid #ffd54f;
+  text-align: center;
+  font-weight: 600;
+}

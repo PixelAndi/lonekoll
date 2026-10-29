@@ -39,10 +39,11 @@ export function PhotoImportButton() {
     setTotal(files.length);
     if (input.current) input.current.value = '';
   };
-  const onScanned = useCallback((scan: Scan) => {
+  const onScanned = useCallback((scans: Scan[]) => {
     setScanning(false);
-    setQueue([scan]);
-    setTotal(1);
+    // Earliest day first, so a shift over midnight is checked in order.
+    setQueue([...scans].sort((a, b) => (a.reading.date ?? '').localeCompare(b.reading.date ?? '')));
+    setTotal(scans.length);
   }, []);
 
   return (
