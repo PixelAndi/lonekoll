@@ -495,7 +495,7 @@ function minimumWageWarnings(settings: Settings, start: LocalDate, end: LocalDat
     if (rate < minimum) {
       warnings.push({ code: 'below-minimum-wage', date, values: { rate, minimum } });
       checked = true;
-    } else if (supplement > 0 && rate - supplement < minimum) {
+    } else if (supplement > 0 && round2(rate - supplement) < minimum) {
       warnings.push({ code: 'below-minimum-wage-base', date, values: { rate, base: round2(rate - supplement), supplement, minimum } });
       checked = true;
     }

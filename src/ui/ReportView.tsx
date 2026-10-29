@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useApp } from '../app-context.ts';
 import { calculateShifts } from '../domain/calc.ts';
-import { hourlyRateOn, minimumWageOn, wagePeriodOn } from '../domain/model.ts';
+import { hourlyRateOn, hourlySupplement, minimumWageOn, wagePeriodOn } from '../domain/model.ts';
 import { datesInRange, formatDuration, todayLocal } from '../domain/time.ts';
 import { formatter } from '../format.ts';
 import { translator, type Language } from '../i18n.ts';
@@ -43,7 +43,7 @@ export function ReportView({ id }: { id: string }) {
         const w = wagePeriodOn(settings, d);
         const m = w?.basis === 'minimum' ? minimumWageOn(settings, d) : null;
         return m
-          ? [t('report.hourlyMinimum', { hourly: fmt.number(rate), minimum: fmt.number(m.minimum), supplement: fmt.number(w?.supplement ?? 0) })]
+          ? [t('report.hourlyMinimum', { hourly: fmt.number(rate), minimum: fmt.number(m.minimum), supplement: fmt.number(w ? hourlySupplement(w) : 0) })]
           : [`${fmt.number(rate)} kr`];
       }),
     ),

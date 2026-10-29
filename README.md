@@ -33,7 +33,8 @@ report you can go through with your employer.
 - **Wage tied to the minimum.** A wage of "minimum wage + X kr" follows every
   new minimum (each 1 April, and the higher minimum after a year's employment
   from age 18) without new rows, and the slip's hourly price is checked
-  against it.
+  against it. A supplement can be entered per month; it is converted with the
+  agreement's 174 hours a month (Bilaga F §12).
 - **Calculation per month.** Hourly wage, OB in four levels, overtime +50 % /
   +100 %, förskjuten tid, skiftformstillägg, sick pay and waiting-day
   deduction, holiday pay, time-bank payout, and estimated tax and net pay,

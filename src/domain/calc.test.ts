@@ -194,3 +194,17 @@ describe('wage tied to the minimum wage', () => {
     expect(hourlyRateOn(young, '2026-05-01')).toBe(119.55);
   });
 });
+
+describe('supplement per month', () => {
+  it('converts a monthly supplement with the agreement’s 174 hours', () => {
+    const s: Settings = {
+      ...settings,
+      birthDate: '1990-01-01',
+      employedSince: '2020-01-01',
+      wages: [{ from: '2025-04-01', basis: 'minimum', hourly: 0, supplement: 2000, supplementPer: 'month' }],
+    };
+    // 2 000 / 174 = 11.494… → 176.83 + 11.49 = 188.32.
+    expect(hourlyRateOn(s, '2026-09-01')).toBe(188.32);
+    expect(calculatePeriod([], s, '2026-09-01', '2026-09-30').warnings).toEqual([]);
+  });
+});

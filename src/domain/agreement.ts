@@ -82,6 +82,8 @@ export const RULES = {
   minDailyRestMinutes: 660,
   /** §4.4 skiftformstillägg per worked (non-overtime) hour, share of the hourly wage. */
   shiftFormPercent: { none: 0, 'two-shift': 0.053, continuous: 0.111 },
+  /** Hours in a full-time month when converting between monthly and hourly pay (Bilaga F §12, Bilaga J). */
+  hoursPerMonth: 174,
   /** A shift starting this far from the schedule may have been moved (förskjuten tid). */
   movedShiftHintMinutes: 30,
 } as const;

@@ -1,6 +1,6 @@
 import { agreementFor, RULES } from './agreement.ts';
 import type { PayCategory, PeriodResult } from './calc.ts';
-import { hourlyRateOn, minimumWageOn, wagePeriodOn, type DayRecord, type Settings } from './model.ts';
+import { hourlyRateOn, hourlySupplement, minimumWageOn, wagePeriodOn, type DayRecord, type Settings } from './model.ts';
 import type { PaySlip, SlipCategory, SlipLine } from './payslip.ts';
 import { taxFor, type TaxBasis, type TaxColumn, type TaxTables } from './tax.ts';
 import type { LocalDate } from './time.ts';
@@ -154,7 +154,7 @@ export function comparePeriod(period: PeriodResult, slip: PaySlip, days: DayReco
       const m = w?.basis === 'minimum' ? minimumWageOn(settings, period.end) : null;
       wage.notes.push({
         code: m ? 'wage-rate-differs-minimum' : 'wage-rate-differs',
-        values: { slip: wrong.join(' / '), expected: expectedRates.join(' / '), minimum: m?.minimum ?? 0, supplement: w?.supplement ?? 0 },
+        values: { slip: wrong.join(' / '), expected: expectedRates.join(' / '), minimum: m?.minimum ?? 0, supplement: w ? hourlySupplement(w) : 0 },
       });
       if (wage.status === 'ok') wage.status = 'diff';
     }

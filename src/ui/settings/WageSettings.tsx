@@ -1,7 +1,8 @@
 import { useApp } from '../../app-context.ts';
 import { saveSettings } from '../../db.ts';
 import { AGREEMENT_PERIODS } from '../../domain/agreement.ts';
-import { minimumWageOn, type Settings, type WagePeriod } from '../../domain/model.ts';
+import { RULES } from '../../domain/agreement.ts';
+import { hourlySupplement, minimumWageOn, type Settings, type WagePeriod } from '../../domain/model.ts';
 import { addDays, todayLocal, type LocalDate } from '../../domain/time.ts';
 import { Card, Field } from '../common.tsx';
 import { decimalText, LazyInput, numberOrUndefined } from './inputs.tsx';
@@ -36,7 +37,8 @@ export function WageSettings() {
       <p className="muted small">{t('settings.wagesHint')}</p>
       {settings.wages.map((w, i) => {
         const minimum = w.basis === 'minimum';
-        const supplement = w.supplement ?? 0;
+        const supplement = hourlySupplement(w);
+        const perMonth = w.supplementPer === 'month';
         return (
           <div className="wage-period" key={`${w.from}-${i}`}>
             <div className="wage-row">
@@ -76,7 +78,18 @@ export function WageSettings() {
                   onCommit={(v) => patch(i, { supplement: numberOrUndefined(v) })}
                 />
               </Field>
+              <Field label={t('settings.wagePer')}>
+                <select value={w.supplementPer ?? 'hour'} onChange={(e) => patch(i, { supplementPer: e.target.value as WagePeriod['supplementPer'] })}>
+                  <option value="hour">{t('wagePer.hour')}</option>
+                  <option value="month">{t('wagePer.month')}</option>
+                </select>
+              </Field>
             </div>
+            {perMonth && !!w.supplement && (
+              <p className="muted small">
+                {t('settings.wagePerMonthHint', { amount: fmt.number(w.supplement, 0), hours: RULES.hoursPerMonth, hourly: fmt.number(supplement) })}
+              </p>
+            )}
             {minimum && (
               <ul className="wage-steps muted small">
                 {minimumSteps(settings, w.from, settings.wages[i + 1]?.from).map((s) => {

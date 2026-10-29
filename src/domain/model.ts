@@ -1,4 +1,4 @@
-import { AGREEMENT_PERIODS, agreementFor, payShare, type AgreementPeriod } from './agreement.ts';
+import { AGREEMENT_PERIODS, agreementFor, payShare, RULES, type AgreementPeriod } from './agreement.ts';
 import { addYears, type LocalDate, type LocalTime } from './time.ts';
 
 // What the app stores. Everything lives in the browser on the user's device.
@@ -67,6 +67,8 @@ export interface WagePeriod {
    * `hourly` (fixed basis) or on top of the minimum wage (minimum basis).
    */
   supplement?: number;
+  /** The supplement is entered per hour (default) or per month, e.g. "2 000 kr more a month". */
+  supplementPer?: 'hour' | 'month';
 }
 
 /** Which agreement supplements apply to this person. */
@@ -186,17 +188,24 @@ export function minimumWageOn(settings: Settings, date: LocalDate): MinimumWage 
   return { minimum: round2(base * payShare(age, settings.traineeYear)), afterOneYear, period, known };
 }
 
+/** The supplement in kr/h; a monthly amount is divided by the agreement's 174 hours. */
+export function hourlySupplement(w: WagePeriod): number {
+  const amount = w.supplement ?? 0;
+  return w.supplementPer === 'month' ? round2(amount / RULES.hoursPerMonth) : amount;
+}
+
 export function hourlyRateOn(settings: Settings, date: LocalDate): number | null {
   const w = wagePeriodOn(settings, date);
   if (!w) return null;
   if (w.basis !== 'minimum') return w.hourly;
   const m = minimumWageOn(settings, date);
-  return m ? round2(m.minimum + (w.supplement ?? 0)) : null;
+  return m ? round2(m.minimum + hourlySupplement(w)) : null;
 }
 
 /** The personal-supplement part of the hourly wage on a date. */
 export function supplementOn(settings: Settings, date: LocalDate): number {
-  return wagePeriodOn(settings, date)?.supplement ?? 0;
+  const w = wagePeriodOn(settings, date);
+  return w ? hourlySupplement(w) : 0;
 }
 
 export function ageOn(settings: Settings, date: LocalDate): number | null {
