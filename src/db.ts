@@ -53,8 +53,9 @@ export async function loadSettings(): Promise<Settings> {
   const record = await db.settings.get('settings');
   if (!record) {
     // First start: follow the phone's language.
-    const sv = (navigator.language ?? '').toLowerCase().startsWith('sv');
-    return { ...DEFAULT_SETTINGS, language: sv ? 'sv' : 'en' };
+    const phone = (navigator.language ?? '').toLowerCase();
+    const language = phone.startsWith('sv') ? 'sv' : phone.startsWith('pl') ? 'pl' : 'en';
+    return { ...DEFAULT_SETTINGS, language };
   }
   // Nested settings are merged too, so fields added in later versions get defaults.
   const value = record.value;

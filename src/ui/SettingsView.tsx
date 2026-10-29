@@ -4,6 +4,7 @@ import { deleteEverything, downloadBlob, exportBackup, importBackup } from '../b
 import { isPersisted, requestPersistence, saveSettings } from '../db.ts';
 import type { Settings } from '../domain/model.ts';
 import { formatDuration, todayLocal, toMinutes } from '../domain/time.ts';
+import { LANGUAGE_NAMES } from '../i18n.ts';
 import { Card, Field, Notice, Page } from './common.tsx';
 import { decimalText, LazyInput, numberOrUndefined } from './settings/inputs.tsx';
 import { TimeField } from './StampRowsEditor.tsx';
@@ -50,8 +51,11 @@ export function SettingsView() {
       <Card title={t('settings.you')}>
         <Field label={t('settings.language')}>
           <select value={settings.language} onChange={(e) => save({ language: e.target.value as Settings['language'] })}>
-            <option value="sv">Svenska</option>
-            <option value="en">English</option>
+            {Object.entries(LANGUAGE_NAMES).map(([code, name]) => (
+              <option key={code} value={code}>
+                {name}
+              </option>
+            ))}
           </select>
         </Field>
         <Field label={t('settings.name')}>

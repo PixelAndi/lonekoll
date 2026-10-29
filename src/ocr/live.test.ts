@@ -1,88 +1,90 @@
 import { describe, expect, it } from 'vitest';
-import type { RGBAImage } from './image.ts';
-import { checkFrame, isSteady, readingComplete } from './live.ts';
+import { confirms, consensus, guideBox, guideLocation, hintFor, readRegion } from './live.ts';
+import type { QuickReading } from './pipeline.ts';
 
-type Color = [number, number, number];
-const BLUE: Color = [10, 40, 90];
-const CYAN: Color = [140, 245, 250];
-const LAVENDER: Color = [165, 155, 255];
-const YELLOW: Color = [215, 245, 150];
-const PINK: Color = [205, 150, 195];
+const reading = (q: Partial<QuickReading> = {}): QuickReading => ({
+  date: '2026-10-29',
+  rows: [{ in: '14:30', out: '18:20' }],
+  dateSize: 0.62,
+  barText: { left: 0.07, right: 0.94 },
+  timeSize: 0.8,
+  slope: 0,
+  ...q,
+});
 
-/** A 640×480 dark-blue "screen" with a date bar and header row at the given place. */
-function frame(bar: { left: number; right: number; top: number }, colors: [Color, Color] = [CYAN, LAVENDER]): RGBAImage {
-  const width = 640;
-  const height = 480;
-  const data = new Uint8ClampedArray(width * height * 4);
-  const paint = (x0: number, x1: number, y0: number, y1: number, c: Color) => {
-    for (let y = Math.max(0, y0); y < Math.min(height, y1); y++)
-      for (let x = Math.max(0, x0); x < Math.min(width, x1); x++) data.set([...c, 255], (y * width + x) * 4);
-  };
-  paint(0, width, 0, height, BLUE);
-  paint(bar.left, bar.right, bar.top, bar.top + 20, colors[0]);
-  paint(bar.left, bar.right, bar.top + 21, bar.top + 38, colors[1]);
-  // Dark "text" in the bar.
-  for (let x = bar.left + 40; x < bar.right - 40; x += 24) paint(x, x + 10, bar.top + 5, bar.top + 15, [30, 30, 30]);
-  return { width, height, data };
-}
-
-describe('checkFrame', () => {
-  it('accepts a table in the guide, in either colour scheme', () => {
-    expect(checkFrame(frame({ left: 40, right: 600, top: 148 })).status).toBe('ok');
-    expect(checkFrame(frame({ left: 40, right: 600, top: 148 }, [YELLOW, PINK])).status).toBe('ok');
+describe('hintFor', () => {
+  it('asks to hold still once date and times are read', () => {
+    expect(hintFor(reading())).toBe('steady');
   });
 
-  it('says what to fix', () => {
-    expect(checkFrame(frame({ left: 150, right: 490, top: 140 })).status).toBe('closer');
-    expect(checkFrame(frame({ left: 0, right: 640, top: 140 })).status).toBe('further');
-    expect(checkFrame(frame({ left: 40, right: 600, top: 260 })).status).toBe('center');
-    const empty = frame({ left: 0, right: 0, top: 0 });
-    expect(checkFrame(empty).status).toBe('searching');
+  it('says what to fix from what was read', () => {
+    expect(hintFor(reading({ date: null, rows: [], timeSize: null, slope: null }))).toBe('place');
+    expect(hintFor(reading({ date: null }))).toBe('needDate');
+    expect(hintFor(reading({ rows: [], timeSize: null }))).toBe('needRows');
+    expect(hintFor(reading({ barText: { left: 0.19, right: 0.82 } }))).toBe('closer');
+    expect(hintFor(reading({ barText: { left: 0.2, right: 1 } }))).toBe('center');
+    expect(hintFor(reading({ barText: { left: -0.03, right: 0.9 } }))).toBe('further');
+    // One end of the bar missing: the table runs past that side.
+    expect(hintFor(reading({ barText: { left: null, right: 0.75 } }))).toBe('center');
+    // …but an end that simply wasn't read doesn't matter when the other is where it should be.
+    expect(hintFor(reading({ barText: { left: null, right: 0.93 } }))).toBe('steady');
+    // Without the bar's ends, the digit sizes decide.
+    expect(hintFor(reading({ barText: { left: null, right: null }, dateSize: 0.45 }))).toBe('closer');
+    expect(hintFor(reading({ barText: { left: null, right: null }, timeSize: 2 }))).toBe('further');
+    expect(hintFor(reading({ date: null, slope: 0.08 }))).toBe('straighten');
+    // Even a complete reading doesn't count from a table smaller than the guide.
+    expect(hintFor(reading({ barText: { left: 0.15, right: 0.86 } }))).toBe('closer');
   });
 });
 
-describe('isSteady', () => {
-  const bar = { left: 60, right: 580, top: 140, bottom: 160, angle: 0 };
-  it('allows a few pixels of movement, not more', () => {
-    expect(isSteady(bar, { ...bar, left: 63, top: 142 })).toBe(true);
-    expect(isSteady(bar, { ...bar, left: 80 })).toBe(false);
-    expect(isSteady(undefined, bar)).toBe(false);
+describe('guide', () => {
+  it('fits a table-shaped box in portrait and landscape frames', () => {
+    for (const [w, h] of [
+      [1080, 1920],
+      [1920, 1080],
+    ]) {
+      const g = guideBox(w, h);
+      expect(g.left).toBeGreaterThanOrEqual(0);
+      expect(g.top).toBeGreaterThanOrEqual(0);
+      expect(g.left + g.width).toBeLessThanOrEqual(w);
+      expect(g.top + g.height).toBeLessThanOrEqual(h);
+      expect(g.width / g.height).toBeCloseTo(4.3);
+    }
+  });
+
+  it('maps the guide into the read region', () => {
+    const g = guideBox(1080, 1920);
+    const r = readRegion(g, 1080, 1920);
+    const loc = guideLocation(g, r.left, r.top, 0.5);
+    expect(loc.left).toBeCloseTo((g.left - r.left) * 0.5);
+    expect(loc.barTop).toBeCloseTo((g.top - r.top) * 0.5);
+    expect(loc.barBottom - loc.barTop).toBeCloseTo((g.barBottom - g.top) * 0.5);
   });
 });
 
-describe('readingComplete', () => {
-  const reading = { date: '2026-10-29', dateUncertain: false, rows: [{ in: '14:30', out: '18:20' }], issues: [], confidence: 90 };
-  it('needs a date, times, no issues and no doubtful times', () => {
-    expect(readingComplete(reading)).toBe(true);
-    expect(readingComplete({ ...reading, date: null })).toBe(false);
-    expect(readingComplete({ ...reading, rows: [{ in: '14:30', out: '18:20', outUncertain: true }] })).toBe(false);
-    expect(readingComplete({ ...reading, issues: ['out-of-order'] })).toBe(false);
+describe('consensus and confirmation', () => {
+  const ok = reading();
+  it('needs three fast readings agreeing on every value', () => {
+    expect(consensus([ok, ok])).toBeNull();
+    expect(consensus([ok, ok, ok])).toEqual({ date: '2026-10-29', rows: [{ in: '14:30', out: '18:20' }] });
+    // A misread digit in a minority of frames is outvoted.
+    const misread = reading({ rows: [{ in: '04:30', out: '18:20' }] });
+    expect(consensus([ok, misread, ok, ok])).toEqual({ date: '2026-10-29', rows: [{ in: '14:30', out: '18:20' }] });
+    expect(consensus([ok, misread, misread, ok])).toBeNull();
   });
-});
 
-describe('a tilted table', () => {
-  it('asks to hold the phone straight', () => {
-    // The bar from frame() turned by about 8°.
-    const flat = frame({ left: 60, right: 580, top: 200 });
-    const { width, height } = flat;
-    const data = new Uint8ClampedArray(flat.data.length);
-    const a = 0.14;
-    for (let y = 0; y < height; y++)
-      for (let x = 0; x < width; x++) {
-        const sx = Math.round(width / 2 + (x - width / 2) * Math.cos(a) + (y - height / 2) * Math.sin(a));
-        const sy = Math.round(height / 2 - (x - width / 2) * Math.sin(a) + (y - height / 2) * Math.cos(a));
-        const o = (y * width + x) * 4;
-        const i = (Math.min(height - 1, Math.max(0, sy)) * width + Math.min(width - 1, Math.max(0, sx))) * 4;
-        data.set(flat.data.subarray(i, i + 4), o);
-      }
-    expect(checkFrame({ width, height, data }).status).toBe('straighten');
+  it('ignores readings without data and refuses implausible results', () => {
+    const empty = reading({ date: null, rows: [] });
+    expect(consensus([ok, empty, ok, empty])).toBeNull();
+    const odd = reading({ rows: [{ in: '04:30', out: '18:20' }] });
+    expect(consensus([odd, odd, odd])).toBeNull();
   });
-});
 
-describe('a table far away', () => {
-  it('asks to come closer when only a little of the bar colour shows', () => {
-    // A bar too thin to find as a table, but its colour is there.
-    const img = frame({ left: 280, right: 360, top: 200 });
-    expect(checkFrame(img).status).toBe('closer');
+  it('accepts only when the full reading says the same', () => {
+    const agreed = consensus([ok, ok, ok])!;
+    const full = { date: '2026-10-29', dateUncertain: false, rows: [{ in: '14:30', out: '18:20', inUncertain: true }], issues: [], confidence: 80 };
+    expect(confirms(full, agreed)).toBe(true);
+    expect(confirms({ ...full, rows: [{ in: '14:30', out: null }] }, agreed)).toBe(false);
+    expect(confirms({ ...full, date: '2026-10-28' }, agreed)).toBe(false);
   });
 });

@@ -3,7 +3,8 @@ import { formatDuration, parseDate, type LocalDate } from './domain/time.ts';
 
 // Number and date formatting for the two languages.
 
-const locale = (lang: Language) => (lang === 'sv' ? 'sv-SE' : 'en-GB');
+const LOCALES: Record<Language, string> = { sv: 'sv-SE', en: 'en-GB', pl: 'pl-PL' };
+const locale = (lang: Language) => LOCALES[lang];
 
 /** "ons 28 okt." → "Ons 28 okt." (only the first letter; Swedish months stay lower case). */
 const capitalizeFirst = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);

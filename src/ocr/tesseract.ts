@@ -15,6 +15,7 @@ export interface TesseractPaths {
 
 const PARAMS: Record<OcrMode, Record<string, string>> = {
   date: { tessedit_pageseg_mode: PSM.SINGLE_LINE, tessedit_char_whitelist: '0123456789-' },
+  dateLine: { tessedit_pageseg_mode: PSM.SINGLE_LINE, tessedit_char_whitelist: '' },
   dateSparse: { tessedit_pageseg_mode: PSM.SPARSE_TEXT, tessedit_char_whitelist: '0123456789-' },
   rows: { tessedit_pageseg_mode: PSM.SPARSE_TEXT, tessedit_char_whitelist: '0123456789:x' },
 };

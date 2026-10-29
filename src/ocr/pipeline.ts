@@ -9,19 +9,21 @@ import {
   straighten,
   type GrayImage,
   type RGBAImage,
+  type TableLocation,
 } from './image.ts';
 import {
   checkOrder,
   checkPlausible,
   parseDate,
   parseRows,
+  readTimeToken,
   type OcrWord,
   type ReadingIssue,
   type ReadRow,
   type StampRow,
 } from './parse.ts';
 
-export type OcrMode = 'date' | 'dateSparse' | 'rows';
+export type OcrMode = 'date' | 'dateLine' | 'dateSparse' | 'rows';
 
 /** Wraps the OCR library; implemented with Tesseract in ./tesseract.ts. */
 export interface OcrEngine {
@@ -48,6 +50,10 @@ export interface ClockReading {
 export interface PreparedCrops {
   date: GrayImage;
   rows: GrayImage;
+  /** Height of the date bar in the crops' pixels. */
+  barHeight: number;
+  /** Turns an x in the date crop into a share of the table's width (0 = its left end). */
+  dateX: (x: number) => number;
   table: NonNullable<ClockReading['table']>;
 }
 
@@ -59,6 +65,8 @@ export interface CropOptions {
   rowsOffset?: number;
   /** Bar height in pixels to scale to before OCR. */
   targetHeight?: number;
+  /** Cut out the whole date bar, not just its middle (to see where its ends are). */
+  wholeBar?: boolean;
 }
 
 /** White border; Tesseract reads text touching the image edge poorly. */
@@ -70,8 +78,8 @@ function pad(img: GrayImage, size: number, value = 255): GrayImage {
   return { width: w, height: h, data };
 }
 
-export function prepareCrops(photo: RGBAImage, options: CropOptions = {}): PreparedCrops | null {
-  const { bias = 20, grayscale = false, rowsOffset = 0.75, targetHeight = 70 } = options;
+/** Finds the table in a photo by the colours of its date bar and header. */
+export function findTable(photo: RGBAImage): { img: RGBAImage; loc: TableLocation; turned: number } | null {
   let img = downscale(photo, 2000);
   // The usual colours first, then the looser ones (another angle or light),
   // then the photo straightened when it was taken at a steep angle.
@@ -90,6 +98,21 @@ export function prepareCrops(photo: RGBAImage, options: CropOptions = {}): Prepa
     } else turned = 0;
     if (!loc) return null;
   }
+  return { img, loc, turned };
+}
+
+export function prepareCrops(photo: RGBAImage, options: CropOptions = {}): PreparedCrops | null {
+  const found = findTable(photo);
+  return found ? cropsAt(found.img, found.loc, options, found.turned, photo.width / found.img.width) : null;
+}
+
+/**
+ * Cuts the date and the stamp rows out of an image where the table's place is
+ * known. `turned` is how much the image was straightened and `toPhoto` its
+ * scale, to report the table's box in the original photo.
+ */
+export function cropsAt(img: RGBAImage, loc: TableLocation, options: CropOptions = {}, turned = 0, toPhoto = 1): PreparedCrops {
+  const { bias = 20, grayscale = false, rowsOffset = 0.75, targetHeight = 70, wholeBar = false } = options;
   const width = loc.right - loc.left + 1;
   const tilt = Math.abs(Math.tan(loc.angle)) * width;
   const thickness = Math.max(loc.barBottom - loc.barTop + 1 - tilt, (loc.barBottom - loc.barTop + 1) * 0.6);
@@ -99,8 +122,8 @@ export function prepareCrops(photo: RGBAImage, options: CropOptions = {}): Prepa
   // The date sits mid-bar; when the bar runs off the photo's edge, look further towards that edge.
   const cutLeft = loc.left <= 2;
   const cutRight = loc.right >= img.width - 3;
-  const dateFrom = cutLeft ? 0.03 : 0.28;
-  const dateTo = cutRight ? 0.97 : 0.72;
+  const dateFrom = wholeBar ? -0.03 : cutLeft ? 0.03 : 0.28;
+  const dateTo = wholeBar ? 1.03 : cutRight ? 0.97 : 0.72;
   const dateGray = extractRegion(
     img,
     { left: loc.left + width * dateFrom, top: pivot.y - thickness * 0.6, width: width * (dateTo - dateFrom), height: thickness * 1.2 },
@@ -119,7 +142,6 @@ export function prepareCrops(photo: RGBAImage, options: CropOptions = {}): Prepa
   const rowsGray = extractRegion(img, { left: loc.left, top: rowsTop, width, height: rowsHeight }, loc.angle, pivot, scale, rowsChannel);
 
   // The table's box in the photo; when the photo was straightened, the box around the turned corners.
-  const toPhoto = photo.width / img.width;
   const top = loc.barTop - thickness * 0.3;
   const bottom = rowsTop + rowsHeight;
   const cos = Math.cos(turned);
@@ -143,17 +165,22 @@ export function prepareCrops(photo: RGBAImage, options: CropOptions = {}): Prepa
     height: Math.round((Math.max(...ys) - Math.max(0, Math.min(...ys))) * toPhoto),
   };
   const margin = Math.round(thickness * scale * 0.3);
+  const dateX = (x: number) => dateFrom + (x - margin) / scale / width;
   const window = Math.round(thickness * scale) | 1;
   if (grayscale) {
     return {
       date: pad(dateGray, margin, 230),
       rows: pad({ ...rowsGray, data: rowsGray.data.map((v) => 255 - v) }, margin),
+      barHeight: thickness * scale,
+      dateX,
       table,
     };
   }
   return {
     date: pad(binarize(dateGray, false, window, bias), margin),
     rows: pad(binarize(rowsGray, true, window, bias), margin),
+    barHeight: thickness * scale,
+    dateX,
     table,
   };
 }
@@ -167,6 +194,15 @@ const VARIANTS: CropOptions[] = [
   { grayscale: true, rowsOffset: 0.6, targetHeight: 90 },
   { bias: 20, rowsOffset: 0.6 },
 ];
+
+/**
+ * Where the rows start below the date bar when the table is lined up in the
+ * scanner's guide: just below the column header, whose labels ("In" right
+ * above the first In time) otherwise get mixed into the first row. A table
+ * smaller than the guide would lose its first row this way, which is why the
+ * scanner asks to come closer until the table fills the guide.
+ */
+const GUIDED_ROWS_OFFSET = 0.95;
 
 interface VariantReading {
   date: string | null;
@@ -212,12 +248,13 @@ export function vote(readings: VariantReading[]): { date: string | null; dateUnc
   return { date: date.value, dateUncertain: !date.unanimous || dates.length < readings.length, rows };
 }
 
-export async function readClockPhoto(photo: RGBAImage, engine: OcrEngine): Promise<ClockReading> {
+/** Reads a photo of the clock; `at` gives the table's place when it is known (the scanner's guide). */
+export async function readClockPhoto(photo: RGBAImage, engine: OcrEngine, at?: TableLocation): Promise<ClockReading> {
   const readings: VariantReading[] = [];
   let table: ClockReading['table'];
   let confidence = 100;
   for (const variant of VARIANTS) {
-    const crops = prepareCrops(photo, variant);
+    const crops = at ? cropsAt(photo, at, { ...variant, rowsOffset: GUIDED_ROWS_OFFSET }) : prepareCrops(photo, variant);
     if (!crops) return { date: null, dateUncertain: true, rows: [], issues: ['no-table'], confidence: 0 };
     table ??= crops.table;
     let dateWords = await engine.recognize(crops.date, 'date');
@@ -237,4 +274,60 @@ export async function readClockPhoto(photo: RGBAImage, engine: OcrEngine): Promi
   if (!checkOrder(voted.rows)) issues.push('out-of-order');
   if (!checkPlausible(voted.rows)) issues.push('implausible');
   return { ...voted, issues, confidence, table };
+}
+
+/** What one fast pass over a camera frame found, for the live scanner. */
+export interface QuickReading {
+  date: string | null;
+  rows: ReadRow[];
+  /** Height of the date's digits as a share of the date bar's height. */
+  dateSize: number | null;
+  /**
+   * Where the text on the date bar ("‹‹ Föreg Dag … Nästa Dag ››") starts and
+   * ends, as shares of the guide's width; about 0.03 and 0.97 when the table
+   * fills the guide. Null where that end's words weren't read.
+   */
+  barText: { left: number | null; right: number | null };
+  /** Median height of the stamp times as a share of the date bar's height. */
+  timeSize: number | null;
+  /** Slope of the stamp rows (dy/dx), 0 when level. */
+  slope: number | null;
+}
+
+/**
+ * Reads the table at a known place (the scanner's guide) with a single
+ * preprocessing variant: fast enough to run on camera frames as they come.
+ */
+export async function quickRead(img: RGBAImage, loc: TableLocation, engine: OcrEngine): Promise<QuickReading> {
+  const crops = cropsAt(img, loc, { ...VARIANTS[0], rowsOffset: GUIDED_ROWS_OFFSET, wholeBar: true });
+  // The whole bar line as words: the date, and "Föreg Dag" / "Nästa Dag" at its ends.
+  const lineWords = await engine.recognize(crops.date, 'dateLine');
+  const left = lineWords.find((w) => /f.?reg/i.test(w.text));
+  const right = [...lineWords].reverse().find((w) => /n.?sta|dag/i.test(w.text) && (w.bbox.x0 + w.bbox.x1) / 2 > crops.date.width / 2);
+  const barText = { left: left ? crops.dateX(left.bbox.x0) : null, right: right ? crops.dateX(right.bbox.x1) : null };
+  let dateWords = lineWords;
+  if (!parseDate(dateWords).value) dateWords = await engine.recognize(crops.date, 'dateSparse');
+  const rowWords = await engine.recognize(crops.rows, 'rows');
+  const dateWord = dateWords.find((w) => /\d{4}-?\d{2}-?\d{2}/.test(w.text));
+  const dateSize = dateWord ? (dateWord.bbox.y1 - dateWord.bbox.y0) / crops.barHeight : null;
+  const timeHeights = rowWords.filter((w) => readTimeToken(w.text)).map((w) => w.bbox.y1 - w.bbox.y0).sort((a, b) => a - b);
+  const timeSize = timeHeights.length ? timeHeights[Math.floor(timeHeights.length / 2)] / crops.barHeight : null;
+  return { date: parseDate(dateWords).value, rows: parseRows(rowWords, crops.rows.width).value, dateSize, barText, timeSize, slope: rowSlope(rowWords) };
+}
+
+/** Median slope between time stamps on the same line, far enough apart to tell. */
+function rowSlope(words: OcrWord[]): number | null {
+  const times = words
+    .filter((w) => readTimeToken(w.text))
+    .map((w) => ({ x: (w.bbox.x0 + w.bbox.x1) / 2, y: (w.bbox.y0 + w.bbox.y1) / 2, h: w.bbox.y1 - w.bbox.y0 }));
+  const slopes: number[] = [];
+  for (const a of times) {
+    for (const b of times) {
+      const dx = b.x - a.x;
+      if (dx > a.h * 4 && Math.abs(b.y - a.y) < a.h * 0.8) slopes.push((b.y - a.y) / dx);
+    }
+  }
+  if (slopes.length === 0) return null;
+  slopes.sort((p, q) => p - q);
+  return slopes[Math.floor(slopes.length / 2)];
 }

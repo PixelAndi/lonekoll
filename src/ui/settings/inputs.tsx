@@ -1,4 +1,5 @@
 import { useEffect, useState, type InputHTMLAttributes } from 'react';
+import type { Language } from '../../i18n.ts';
 
 /** Text/number input that saves when it loses focus (not on every keystroke). */
 export function LazyInput({ value, onCommit, ...rest }: { value: string; onCommit: (v: string) => void } & Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'>) {
@@ -13,5 +14,5 @@ export const numberOrUndefined = (v: string) => {
 };
 
 /** 187.5 → "187,5" in Swedish. */
-export const decimalText = (n: number | undefined, lang: 'sv' | 'en') =>
-  n === undefined ? '' : String(n).replace('.', lang === 'sv' ? ',' : '.');
+export const decimalText = (n: number | undefined, lang: Language) =>
+  n === undefined ? '' : String(n).replace('.', lang === 'en' ? '.' : ',');

@@ -13,18 +13,18 @@ report you can go through with your employer.
 ## What it does
 
 - **Scan → times.** After clocking out, scan the clock's day screen with the
-  camera. A guide shows where the table goes, and the scanner says what to fix
-  (move closer or back, hold straight, line the date bar up with the guide).
-  When the table is in place and steady it captures by itself, reads the
-  times and confirms ("Done! Thu 29 Oct · 2 rows read"), trying again if
-  something couldn't be read. Saved photos can be chosen instead. The times
-  are read on the device (Tesseract OCR, three readings voted per time) and
-  shown next to a zoomed crop of the clock for you to confirm. The table is
-  found by its coloured bars, which look cyan/lavender or yellow/pink
-  depending on the angle; tilted photos are straightened.
-  Times the readings disagree on are highlighted. Missing stamps can be typed
-  in and are marked as typed in. A shift over midnight (In on one day, Ut on
-  the next) becomes one shift.
+  camera. The camera view shows a frame shaped like the clock's table, with
+  the date bar along the top; you line the table up with it. The area inside
+  the frame is read over and over, and hints come from what was read: the
+  words at the ends of the date bar ("Föreg Dag", "Nästa Dag") show whether
+  the table fills the frame (move closer, back, or sideways), and missing
+  date or times say what isn't in the frame yet. The data counts as grabbed
+  when the readings of several frames and a full reading (three passes voted
+  per time) agree on every value; the scanner then says so ("Done! Tue 27
+  Oct · 2 rows read") and opens the usual check. Nothing depends on the
+  screen's colours. Saved photos can be chosen instead; those are read by
+  finding the table's coloured bars. Times are read on the device
+  (Tesseract OCR) and shown next to the picture for you to confirm.
 - **Absences.** Sick (optionally the shift you were booked for), vacation,
   time off from the working-time account, a public holiday you would have
   worked, permission, unpaid leave.
@@ -52,7 +52,9 @@ report you can go through with your employer.
   and checks the tax and net pay on the slip with Skatteverket's tables.
 - **Pay slip comparison.** Import the PDF; each line is matched against the
   calculation, with the difference and the agreement section that applies.
-- **Report.** A printable A4 report (Swedish or English) with the summary,
+- **Languages.** Swedish, English and Polish (chosen from the phone's
+  language at first start, changeable in Settings).
+- **Report.** A printable A4 report (Swedish, English or Polish) with the summary,
   explanations, assumptions, the day log and optionally the photos.
 - **Offline.** After the first visit the app, including photo reading,
   works without internet.
@@ -157,7 +159,7 @@ Code layout:
   wrapper, voting, and the live frame checks used by the scanner.
 - `src/pdf/`: pdf.js text extraction.
 - `src/ui/`: React screens; `src/db.ts` (Dexie/IndexedDB), `src/backup.ts`,
-  `src/i18n.ts` (Swedish and English).
+  `src/i18n.ts` (Swedish and English) and `src/i18n-pl.ts` (Polish).
 
 ## Deploying
 

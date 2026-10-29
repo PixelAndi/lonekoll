@@ -1113,47 +1113,40 @@ input[type='checkbox'] {
 }
 
 .scanner-dim {
-  fill: rgb(0 0 0 / 0.55);
+  fill: rgb(0 0 0 / 0.6);
 }
 
 .scanner-guide {
   fill: none;
   stroke: #fff;
-  stroke-width: 0.6%;
-  stroke-dasharray: 2% 1.2%;
-  vector-effect: non-scaling-stroke;
-  transition: stroke 0.2s;
-}
-
-.scanner-guide-ok,
-.scanner-guide-done {
-  stroke: #3ddc84;
-  stroke-dasharray: none;
-}
-
-.scanner-barline {
-  stroke: #ffd54f;
   stroke-width: 3px;
   vector-effect: non-scaling-stroke;
-  stroke-dasharray: 10 6;
 }
 
-.scanner-label {
-  fill: #fff;
-  text-anchor: middle;
+.scanner-bar {
+  fill: rgb(255 255 255 / 0.12);
+  stroke: #ffd54f;
+  stroke-width: 3px;
+  stroke-dasharray: 10 6;
+  vector-effect: non-scaling-stroke;
+}
+
+.scanner-rule {
+  stroke: rgb(255 255 255 / 0.6);
+  stroke-width: 2px;
+  stroke-dasharray: 6 6;
+  vector-effect: non-scaling-stroke;
+}
+
+.scanner-ghost {
+  fill: rgb(255 255 255 / 0.55);
   font-weight: 600;
 }
 
-.scanner-found {
-  fill: rgb(255 213 79 / 0.25);
-  stroke: #ffd54f;
-  stroke-width: 3px;
-  vector-effect: non-scaling-stroke;
-}
-
-.scanner-found-ok {
-  fill: rgb(61 220 132 / 0.25);
+.scanner-template-done .scanner-guide,
+.scanner-template-done .scanner-bar {
   stroke: #3ddc84;
+  stroke-dasharray: none;
 }
 
 .scanner-check circle {
@@ -1166,6 +1159,31 @@ input[type='checkbox'] {
   stroke-width: 7;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+.scanner-readout {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+
+.scanner-chip {
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 0.65);
+  border: 1px solid rgb(255 255 255 / 0.35);
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.scanner-chip-ok {
+  border-color: #3ddc84;
+  background: rgb(30 92 58 / 0.85);
 }
 
 .scanner-message {
@@ -1215,6 +1233,7 @@ input[type='checkbox'] {
 }
 
 .spinner-dot {
+  flex: none;
   width: 14px;
   height: 14px;
   border-radius: 50%;

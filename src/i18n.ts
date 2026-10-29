@@ -1,6 +1,8 @@
 // User-facing text in Swedish and English. Swedish is the source; the English
 // dictionary must have the same keys.
 
+import { pl } from './i18n-pl.ts';
+
 const sv = {
   'app.title': 'Lönekoll',
   'app.tagline': 'Kolla lönen mot stämpelklockan',
@@ -59,18 +61,25 @@ const sv = {
   'scan.pickPhotos': 'Välj sparade foton',
   'scan.title': 'Skanna stämpelklockan',
   'scan.starting': 'Startar kameran…',
-  'scan.searching': 'Rikta kameran mot klockans tabell, med den färgade datumraden längs ramens överkant.',
-  'scan.closer': 'Gå lite närmare – tabellen ska fylla ramen.',
-  'scan.further': 'Backa lite – hela tabellen ska synas.',
+  'scan.loading': 'Förbereder textigenkänningen…',
+  'scan.place': 'Lägg klockans tabell i ramen: den färgade datumraden i det översta fältet, ändarna mot ramens kanter.',
+  'scan.needDate': 'Tiderna syns – flytta så att datumraden hamnar i det översta fältet.',
+  'scan.needRows': 'Datumet syns – se till att stämplingsraderna också är inne i ramen.',
+  'scan.closer': 'Gå närmare – tabellen ska fylla ramen från kant till kant.',
+  'scan.further': 'Backa lite – hela tabellen ska rymmas i ramen.',
   'scan.straighten': 'Håll telefonen rakt framför skärmen, inte snett.',
-  'scan.center': 'Flytta så att datumraden ligger längs linjen i ramen.',
-  'scan.hold': 'Bra – håll stilla…',
+  'scan.center': 'Flytta telefonen åt sidan så att tabellens ändar ligger mot ramens kanter.',
+  'scan.steady': 'Läser – håll stilla…',
+  'scan.check': 'Kontrollera tiderna på nästa sida.',
+  'scan.stuck': 'Svårt att läsa alla tider. Håll stilla med tabellen i ramen, eller tryck på knappen för att ta bilden och rätta själv.',
+  'scan.dateHere': 'Datum',
+  'scan.dateChip': 'Datum',
+  'scan.timesChip': 'Tider',
+  'scan.rowsFound': '{n} rader hittade',
+  'scan.rowFound': '1 rad hittad',
   'scan.reading': 'Läser tiderna…',
-  'scan.retry': 'Kunde inte läsa allt – försöker igen.',
   'scan.done': 'Klart! {date} · {n} rader lästa',
   'scan.doneOne': 'Klart! {date} · 1 rad läst',
-  'scan.partial': 'Allt gick inte att läsa. Kontrollera och fyll i det som saknas.',
-  'scan.barHere': 'Datumraden här',
   'scan.takeNow': 'Ta bilden nu',
   'scan.pick': 'Välj foto',
   'scan.pickInstead': 'Välj ett foto i stället',
@@ -464,18 +473,25 @@ const en: Record<TextKey, string> = {
   'scan.pickPhotos': 'Choose saved photos',
   'scan.title': 'Scan the time clock',
   'scan.starting': 'Starting the camera…',
-  'scan.searching': 'Point the camera at the clock’s table, with the coloured date bar along the top of the frame.',
-  'scan.closer': 'Move a little closer – the table should fill the frame.',
-  'scan.further': 'Move back a little – the whole table should show.',
+  'scan.loading': 'Preparing text recognition…',
+  'scan.place': 'Put the clock’s table in the frame: the coloured date bar in the top strip, its ends at the frame’s edges.',
+  'scan.needDate': 'The times show – move so the date bar is in the top strip.',
+  'scan.needRows': 'The date shows – make sure the stamp rows are inside the frame too.',
+  'scan.closer': 'Move closer – the table should fill the frame from edge to edge.',
+  'scan.further': 'Move back a little – the whole table should fit in the frame.',
   'scan.straighten': 'Hold the phone straight in front of the screen, not at an angle.',
-  'scan.center': 'Move so the date bar lies along the line in the frame.',
-  'scan.hold': 'Good – hold still…',
+  'scan.center': 'Move the phone sideways so the table’s ends line up with the frame’s edges.',
+  'scan.steady': 'Reading – hold still…',
+  'scan.check': 'Check the times on the next page.',
+  'scan.stuck': 'Hard to read all the times. Hold still with the table in the frame, or press the button to take the photo and correct it yourself.',
+  'scan.dateHere': 'Date',
+  'scan.dateChip': 'Date',
+  'scan.timesChip': 'Times',
+  'scan.rowsFound': '{n} rows found',
+  'scan.rowFound': '1 row found',
   'scan.reading': 'Reading the times…',
-  'scan.retry': 'Couldn’t read everything – trying again.',
   'scan.done': 'Done! {date} · {n} rows read',
   'scan.doneOne': 'Done! {date} · 1 row read',
-  'scan.partial': 'Not everything could be read. Check and fill in what’s missing.',
-  'scan.barHere': 'Date bar here',
   'scan.takeNow': 'Take the photo now',
   'scan.pick': 'Choose photo',
   'scan.pickInstead': 'Choose a photo instead',
@@ -809,8 +825,11 @@ const en: Record<TextKey, string> = {
   'holiday.newYearsEve': 'New Year’s Eve',
 };
 
-export type Language = 'sv' | 'en';
-export const DICTIONARIES: Record<Language, Record<TextKey, string>> = { sv, en };
+export type Language = 'sv' | 'en' | 'pl';
+export const DICTIONARIES: Record<Language, Record<TextKey, string>> = { sv, en, pl };
+
+/** Language names, each in its own language. */
+export const LANGUAGE_NAMES: Record<Language, string> = { sv: 'Svenska', en: 'English', pl: 'Polski' };
 
 export type Translate = (key: TextKey, values?: Record<string, string | number>) => string;
 

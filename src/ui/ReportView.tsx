@@ -4,7 +4,7 @@ import { calculateShifts } from '../domain/calc.ts';
 import { hourlyRateOn, hourlySupplement, minimumWageOn, wagePeriodOn } from '../domain/model.ts';
 import { datesInRange, formatDuration, todayLocal } from '../domain/time.ts';
 import { formatter } from '../format.ts';
-import { translator, type Language } from '../i18n.ts';
+import { LANGUAGE_NAMES, translator, type Language } from '../i18n.ts';
 import { goBack } from '../router.ts';
 import { PhotoThumb, Spinner } from './common.tsx';
 import { coverageText, totalText } from './CompareView.tsx';
@@ -61,8 +61,11 @@ export function ReportView({ id }: { id: string }) {
         <label className="inline-field">
           {app.t('report.language')}
           <select value={lang} onChange={(e) => setLang(e.target.value as Language)}>
-            <option value="sv">Svenska</option>
-            <option value="en">English</option>
+            {Object.entries(LANGUAGE_NAMES).map(([code, name]) => (
+              <option key={code} value={code}>
+                {name}
+              </option>
+            ))}
           </select>
         </label>
         <label className="inline-field">

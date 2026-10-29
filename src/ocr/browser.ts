@@ -1,5 +1,5 @@
-import type { RGBAImage } from './image.ts';
-import type { ClockReading } from './pipeline.ts';
+import type { RGBAImage, TableLocation } from './image.ts';
+import type { ClockReading, QuickReading } from './pipeline.ts';
 import type { TesseractEngine } from './tesseract.ts';
 
 // Browser side of photo reading: decode the photo, keep a small JPEG copy as
@@ -51,9 +51,20 @@ export async function loadPhoto(file: Blob): Promise<LoadedPhoto> {
   }
 }
 
-export async function readPhoto(image: RGBAImage): Promise<ClockReading> {
+export async function readPhoto(image: RGBAImage, at?: TableLocation): Promise<ClockReading> {
   const [{ readClockPhoto }, ocr] = await Promise.all([import('./pipeline.ts'), getEngine()]);
-  return readClockPhoto(image, ocr);
+  return readClockPhoto(image, ocr, at);
+}
+
+/** Starts loading text recognition (about 7 MB the first time) so the scanner is ready sooner. */
+export function warmUp(): void {
+  void Promise.all([import('./pipeline.ts'), getEngine()]);
+}
+
+/** One fast read of the table at a known place in a camera frame. */
+export async function quickReadImage(image: RGBAImage, loc: TableLocation): Promise<QuickReading> {
+  const [{ quickRead }, ocr] = await Promise.all([import('./pipeline.ts'), getEngine()]);
+  return quickRead(image, loc, ocr);
 }
 
 /** The stamp table cut out of the photo, for checking the times side by side. */
