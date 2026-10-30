@@ -1,0 +1,86 @@
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import path from 'node:path';
+import { describe, expect, it } from 'vitest';
+
+// The app's promise: what a user enters never leaves their device, and nobody,
+// including whoever runs or develops the app, can see it. These checks fail
+// (and with them the build and the deploy) if a change could break that
+// promise: a connection to another server, a way of sending data out, or a
+// looser security policy. A deliberate exception must change this file, in
+// the open.
+
+const root = path.resolve(__dirname, '..');
+
+function sourceFiles(dir: string): string[] {
+  return readdirSync(dir).flatMap((name) => {
+    const full = path.join(dir, name);
+    if (statSync(full).isDirectory()) return sourceFiles(full);
+    return /\.(ts|tsx|js|mjs)$/.test(name) && !/\.test\.tsx?$/.test(name) ? [full] : [];
+  });
+}
+
+/** The Content Security Policy the built app ships with (vite.config.ts). */
+function csp(): Map<string, string[]> {
+  const config = readFileSync(path.join(root, 'vite.config.ts'), 'utf8');
+  const block = config.match(/const CSP = \[([\s\S]*?)\]\.join/);
+  if (!block) throw new Error('No CSP found in vite.config.ts');
+  const directives = [...block[1].matchAll(/"([^"]+)"/g)].map((m) => m[1].split(/\s+/));
+  return new Map(directives.map(([name, ...values]) => [name, values]));
+}
+
+describe('privacy: nothing leaves the device', () => {
+  it('the browser may only connect to the app itself', () => {
+    const policy = csp();
+    expect(policy.get('default-src')).toEqual(["'self'"]);
+    expect(policy.get('connect-src')).toEqual(["'self'", 'blob:', 'data:']);
+    expect(policy.get('form-action')).toEqual(["'none'"]);
+    expect(policy.get('object-src')).toEqual(["'none'"]);
+    // No other server, and no wildcard, anywhere in the policy.
+    for (const [name, values] of policy) {
+      for (const value of values) {
+        expect(value, `${name} ${value}`).not.toMatch(/^(https?:|wss?:|\*|[a-z0-9-]+\.[a-z])/i);
+      }
+    }
+  });
+
+  it('the app’s code has no way of sending data out', () => {
+    // Network calls, sending files to other apps, links that carry data
+    // elsewhere, and addresses of other servers.
+    const forbidden = [
+      /\bfetch\s*\(/,
+      /XMLHttpRequest/,
+      /sendBeacon/,
+      /\bWebSocket\b/,
+      /\bEventSource\b/,
+      /RTCPeerConnection/,
+      /navigator\.share\b/,
+      /window\.open\s*\(/,
+      /mailto:/,
+      /https?:\/\/(?!localhost)[a-z0-9-]+\.[a-z]/i,
+    ];
+    // The service worker only passes on the app's own requests for its own files (checked below).
+    const serviceWorker = path.join(root, 'src', 'sw-template.js');
+    const found: string[] = [];
+    for (const file of [...sourceFiles(path.join(root, 'src')), path.join(root, 'index.html')].filter((f) => f !== serviceWorker)) {
+      // Comments may mention addresses (e.g. sources of the rules); only code counts.
+      const code = readFileSync(file, 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/(^|[^:])\/\/.*$/gm, '$1');
+      for (const pattern of forbidden) {
+        if (pattern.test(code)) found.push(`${path.relative(root, file)}: ${pattern}`);
+      }
+    }
+    expect(found).toEqual([]);
+  });
+
+  it('the offline cache only passes on the app’s own requests for its own files', () => {
+    const code = readFileSync(path.join(root, 'src', 'sw-template.js'), 'utf8');
+    expect(code).toContain("if (request.method !== 'GET') return;");
+    expect(code).toContain('if (url.origin !== self.location.origin) return;');
+    // Every request it makes is the page's own, unchanged.
+    const calls = [...code.matchAll(/\bfetch\s*\(([^)]*)\)/g)].map((m) => m[1]);
+    expect(calls.length).toBeGreaterThan(0);
+    expect(calls.every((arg) => arg === 'request')).toBe(true);
+    expect(code).not.toMatch(/XMLHttpRequest|sendBeacon|WebSocket|EventSource|https?:\/\//);
+  });
+});

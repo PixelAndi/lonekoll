@@ -10,7 +10,6 @@ import { agreement, aim, HISTORY, progress, searchArea, type Aim, type FrameRead
 import type { ClockReading, FoundTable } from '../ocr/pipeline.ts';
 import { ClockHowTo } from './ClockHowTo.tsx';
 import { ltr } from '../format.ts';
-import { hasScanLog, logFrame, noteScanLog, shareScanLog, startScanLog } from './scanDiagnostics.ts';
 import { ScannerHud, type HudState } from './ScannerHud.tsx';
 
 // Live camera scanner for the clock screen. The user points the camera
@@ -103,11 +102,7 @@ export function Scanner({
   /** Type the day in by hand instead. */
   onManual: () => void;
 }) {
-  const { t, fmt, days, settings } = useApp();
-  const diagnostics = !!settings.scanDiagnostics;
-  const diagnosticsRef = useRef(diagnostics);
-  diagnosticsRef.current = diagnostics;
-  const [diagnosticsShared, setDiagnosticsShared] = useState<string | null>(null);
+  const { t, fmt, days } = useApp();
   const daysRef = useRef(days);
   daysRef.current = days;
   const video = useRef<HTMLVideoElement>(null);
@@ -147,7 +142,6 @@ export function Scanner({
         v.srcObject = stream;
         await v.play();
         setFrame({ width: v.videoWidth, height: v.videoHeight });
-        startScanLog({ width: v.videoWidth, height: v.videoHeight });
         setPhase({ kind: 'aiming', hint: 'loading', aim: null, progress: 0 });
       } catch (e) {
         if (!alive) return;
@@ -200,20 +194,13 @@ export function Scanner({
           } catch {
             reading = { date: null, dateUncertain: true, rows: [], issues: ['no-table'], confidence: 0 };
           }
-          if (diagnosticsRef.current) {
-            logFrame(canvas, { mode: 'shutter', ms: 0, hint: 'shutter', found: lastFound, votes: 0, agreed: false });
-            noteScanLog(`shutter read: ${reading.date ?? '-'} ${reading.rows.map((r) => `${r.in ?? '?'}-${r.out ?? '?'}`).join(',')} issues=${reading.issues.join(',')}`);
-          }
           if (!alive) return;
           setPhase({ kind: 'done', scan: { file: await toFile(canvas), reading }, complete: false });
           return;
         }
         let found: FoundTable | null;
-        const frameStart = performance.now();
-        let mode = 'find';
         try {
           found = following ? await trackInFrame(image, following) : null;
-          if (following) mode = found ? 'track' : 'lost+find';
           // Not locked on yet, or lost: search the whole area.
           if (!found) found = await findInFrame(image);
           started = true;
@@ -221,7 +208,6 @@ export function Scanner({
         } catch (e) {
           if (!alive) return;
           errors++;
-          if (diagnosticsRef.current) noteScanLog(`error: ${errorText(e)}`);
           if (errors >= MAX_ERRORS) {
             setPhase({ kind: 'error', reason: 'reading', detail: errorText(e) });
             return;
@@ -256,9 +242,6 @@ export function Scanner({
         else if (hint !== 'steady') history = history.slice(1);
         setPhase({ kind: 'aiming', hint, aim: a, progress: progress(history) });
         const agreed = hint === 'steady' ? agreement(history) : null;
-        if (diagnosticsRef.current) {
-          logFrame(canvas, { mode: `${mode} digits=${check.verdict}${check.doubts.length ? ` doubts=${check.doubts.join(',')}` : ''}`, ms: performance.now() - frameStart, hint, found, aim: a, votes: progress(history), agreed: !!agreed });
-        }
         if (!agreed) continue;
 
         v.pause();
@@ -450,15 +433,6 @@ export function Scanner({
             <button type="button" className="link-button" onClick={onPickFiles} disabled={phase.kind === 'reading'}>
               {t('scan.pick')}
             </button>
-            {diagnostics && (
-              <button
-                type="button"
-                className="link-button"
-                onClick={async () => setDiagnosticsShared(hasScanLog() ? t(`diag.${await shareScanLog()}`) : t('diag.empty'))}
-              >
-                {diagnosticsShared ?? t('diag.share')}
-              </button>
-            )}
           </div>
         </div>
       )}

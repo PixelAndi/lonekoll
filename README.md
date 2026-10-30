@@ -50,9 +50,6 @@ report you can go through with your employer.
   makes a reading count for more unless both agree. Inställningar shows how
   far it has come and how often its own reading was right, and can make it
   forget.
-  With **scanner diagnostics** turned on (Inställningar → Dina data), the
-  latest frames as the scanner read them and a line per frame on what it made
-  of them are kept until the next scan and can be shared, for troubleshooting.
 - **Absences.** Sick (optionally the shift you were booked for), vacation,
   time off from the working-time account, a public holiday you would have
   worked, permission, unpaid leave.
@@ -90,13 +87,26 @@ report you can go through with your employer.
 
 ## Privacy
 
+Nobody but the user can see what they enter, including whoever develops or
+hosts the app. This is a design rule, and it is enforced:
+
 - Everything is stored in the browser (IndexedDB) on the user's device. There
   is no server, no account and no analytics.
 - The built app ships a strict Content Security Policy (`connect-src 'self'`),
   so the browser blocks any connection to another server.
-- Backups are zip files the user saves and restores themselves
-  (Settings → Your data).
-- Never commit real photos or pay slips to this repository (it is public).
+- The app has no way of sending data out: no network calls of its own, no
+  sharing to other apps. The offline cache (`src/sw-template.js`) only passes
+  on the app's own requests for its own files.
+- `src/privacy.test.ts` checks all of this. The tests run before every
+  deploy, so a change that adds a way to send data out, or loosens the
+  security policy, fails the build and is never published.
+- The only things that leave the device are what the user chooses to save:
+  a backup zip and the printed report.
+- The app is served by GitHub Pages. Like any website host, GitHub sees which
+  addresses download the app's files; the repository owner gets no visitor
+  logs, and no app data is ever sent.
+- Never commit real photos, pay slips, names or stamp times to this repository
+  (it is public); tests use made-up values only.
 
 ## Rules implemented
 

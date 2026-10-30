@@ -8,7 +8,6 @@ import { LANGUAGE_NAMES } from '../i18n.ts';
 import { Card, Field, Notice, Page } from './common.tsx';
 import { decimalText, LazyInput, numberOrUndefined } from './settings/inputs.tsx';
 import { TimeField } from './StampRowsEditor.tsx';
-import { hasScanLog, shareScanLog } from './scanDiagnostics.ts';
 import { ScannerLearning } from './settings/ScannerLearning.tsx';
 import { ScheduleSettings } from './settings/ScheduleSettings.tsx';
 import { SupplementSettings } from './settings/SupplementSettings.tsx';
@@ -166,16 +165,6 @@ export function SettingsView() {
           <input ref={importInput} type="file" accept=".zip,application/zip" hidden onChange={(e) => onImport(e.target.files?.[0])} />
         </div>
         <ScannerLearning />
-        <label className="checkbox">
-          <input type="checkbox" checked={!!settings.scanDiagnostics} onChange={(e) => save({ scanDiagnostics: e.target.checked })} />
-          {t('diag.setting')}
-        </label>
-        <p className="muted small">{t('diag.hint')}</p>
-        {settings.scanDiagnostics && (
-          <button type="button" className="button button-small" onClick={async () => setMessage({ kind: 'ok', text: hasScanLog() ? t(`diag.${await shareScanLog()}`) : t('diag.empty') })}>
-            {t('diag.share')}
-          </button>
-        )}
         <button type="button" className="button button-danger button-small" onClick={onDeleteAll}>
           {t('settings.deleteAll')}
         </button>
@@ -185,7 +174,7 @@ export function SettingsView() {
         <p>{t('settings.aboutText')}</p>
         <p className="muted small">{t('settings.notCovered')}</p>
         <p className="muted small">{t('settings.source')}</p>
-        <p className="muted small">{t('privacy.short')}</p>
+        <p className="small">{t('privacy.full')}</p>
         <p className="muted small">Version {__APP_VERSION__}</p>
       </Card>
     </Page>

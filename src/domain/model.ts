@@ -122,8 +122,6 @@ export interface Settings {
   tax: TaxSettings;
   /** Pay slip codes the user has re-classified. */
   codeOverrides: Record<string, string>;
-  /** Keep the scanner's latest frames and what it made of them, to share for troubleshooting. */
-  scanDiagnostics?: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
