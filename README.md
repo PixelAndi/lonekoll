@@ -17,9 +17,12 @@ report you can go through with your employer.
   large frame, a bit off-centre or tilted is fine. Each frame is read in one
   pass; the table is found from the words on its date bar (the date, "Föreg
   Dag" and "Nästa Dag" give its place, size and tilt), and the stamp rows are
-  read twice, once in that pass and once on their own as digits. A frame
-  counts only when both readings agree, and the data is grabbed when the last
-  two such frames agree (or three of the last five): the scanner confirms
+  read twice, once in that pass and once on their own as digits. Once locked
+  on, the table is followed from frame to frame by matching a small picture of
+  the date (no text recognition), and only the date and the rows are read
+  there, which is much quicker. A searched frame counts as two readings when
+  both agree, a followed frame as one, and the data is grabbed when at least
+  three readings agree on every value: the scanner confirms
   with a check mark and the times, then opens the usual check. A targeting
   display guides the aim: a target in the middle, a tracker that follows the
   table, a guide arrow for which way to move the phone, chevrons for closer or
@@ -37,6 +40,9 @@ report you can go through with your employer.
   in by hand instead, and saved photos can be chosen (those are read by
   finding the table's coloured bars). Times are read on the device
   (Tesseract OCR) and shown next to the picture for you to confirm.
+  With **scanner diagnostics** turned on (Inställningar → Dina data), the
+  latest frames as the scanner read them and a line per frame on what it made
+  of them are kept until the next scan and can be shared, for troubleshooting.
 - **Absences.** Sick (optionally the shift you were booked for), vacation,
   time off from the working-time account, a public holiday you would have
   worked, permission, unpaid leave.
