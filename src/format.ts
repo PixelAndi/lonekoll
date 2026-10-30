@@ -1,10 +1,18 @@
-import type { Language } from './i18n.ts';
+import { isRightToLeft, type Language } from './i18n.ts';
 import { formatDuration, parseDate, type LocalDate } from './domain/time.ts';
 
-// Number and date formatting for the two languages.
+// Number and date formatting for each language.
 
-const LOCALES: Record<Language, string> = { sv: 'sv-SE', en: 'en-GB', pl: 'pl-PL' };
+// Dari: the Gregorian calendar and Latin digits, as on the clock and the pay slips.
+const LOCALES: Record<Language, string> = { sv: 'sv-SE', en: 'en-GB', pl: 'pl-PL', prs: 'fa-AF-u-ca-gregory-nu-latn' };
 const locale = (lang: Language) => LOCALES[lang];
+
+/**
+ * Kept left to right inside right-to-left text, so "14:30–18:20" or
+ * "1 234,00 kr" isn't shown back to front. Invisible, and harmless in
+ * left-to-right text.
+ */
+export const ltr = (s: string) => `\u2066${s}\u2069`;
 
 /** "ons 28 okt." → "Ons 28 okt." (only the first letter; Swedish months stay lower case). */
 const capitalizeFirst = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -28,11 +36,12 @@ export function formatter(lang: Language): Formatter {
     const { y, m, d: day } = parseDate(d);
     return new Date(Date.UTC(y, m - 1, day));
   };
+  const keep = isRightToLeft(lang) ? ltr : (s: string) => s;
   return {
-    money: (n) => (n === undefined ? '–' : `${two.format(n)} kr`),
-    signedMoney: (n) => (n === undefined ? '–' : `${n > 0 ? '+' : n < 0 ? '−' : ''}${two.format(Math.abs(n))} kr`),
-    number: (n, decimals = 2) => (n === undefined ? '–' : num(decimals).format(n)),
-    hours: (n) => (n === undefined ? '–' : `${two.format(n)} h`),
+    money: (n) => (n === undefined ? '–' : keep(`${two.format(n)} kr`)),
+    signedMoney: (n) => (n === undefined ? '–' : keep(`${n > 0 ? '+' : n < 0 ? '−' : ''}${two.format(Math.abs(n))} kr`)),
+    number: (n, decimals = 2) => (n === undefined ? '–' : keep(num(decimals).format(n))),
+    hours: (n) => (n === undefined ? '–' : keep(`${two.format(n)} h`)),
     duration: (minutes) => formatDuration(minutes),
     date: (d, style = 'short') => {
       if (style === 'numeric') return d;

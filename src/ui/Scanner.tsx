@@ -9,6 +9,7 @@ import { checkRows, EMPTY_MEMORY, type DigitMemory } from '../ocr/glyphs.ts';
 import { agreement, aim, HISTORY, progress, searchArea, type Aim, type FrameReading, type Hint } from '../ocr/live.ts';
 import type { ClockReading, FoundTable } from '../ocr/pipeline.ts';
 import { ClockHowTo } from './ClockHowTo.tsx';
+import { ltr } from '../format.ts';
 import { hasScanLog, logFrame, noteScanLog, shareScanLog, startScanLog } from './scanDiagnostics.ts';
 import { ScannerHud, type HudState } from './ScannerHud.tsx';
 
@@ -305,7 +306,7 @@ export function Scanner({
   const locked = phase.kind === 'aiming' && phase.hint === 'steady';
   const grabbed = phase.kind === 'done' && phase.complete;
   const shown = phase.kind === 'done' || phase.kind === 'missing' || phase.kind === 'otherDay' ? phase.scan.reading : null;
-  const rowsText = (shown?.rows ?? []).map((r) => `${r.in ?? '?'}–${r.out ?? '?'}`).join('  ');
+  const rowsText = (shown?.rows ?? []).map((r) => ltr(`${r.in ?? '?'}–${r.out ?? '?'}`)).join('  ');
 
   let message: string;
   let tone: 'info' | 'ok' | 'warn' = 'info';

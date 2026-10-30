@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { AppContext, type AppData } from './app-context.ts';
 import { db, loadSettings } from './db.ts';
 import { formatter } from './format.ts';
-import { translator } from './i18n.ts';
+import { isRightToLeft, LANGUAGE_TAGS, translator } from './i18n.ts';
 import { href, useRoute, type Route } from './router.ts';
 import { CompareView } from './ui/CompareView.tsx';
 import { Icon, Spinner } from './ui/common.tsx';
@@ -69,7 +69,9 @@ export function App() {
   }, [settings, days]);
 
   useEffect(() => {
-    if (data) document.documentElement.lang = data.lang;
+    if (!data) return;
+    document.documentElement.lang = LANGUAGE_TAGS[data.lang];
+    document.documentElement.dir = isRightToLeft(data.lang) ? 'rtl' : 'ltr';
   }, [data]);
 
   if (!data) return <Spinner />;

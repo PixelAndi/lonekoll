@@ -80,9 +80,10 @@ report you can go through with your employer.
   and checks the tax and net pay on the slip with Skatteverket's tables.
 - **Pay slip comparison.** Import the PDF; each line is matched against the
   calculation, with the difference and the agreement section that applies.
-- **Languages.** Swedish, English and Polish (chosen from the phone's
-  language at first start, changeable in Settings).
-- **Report.** A printable A4 report (Swedish, English or Polish) with the summary,
+- **Languages.** Swedish, English, Polish and Dari (chosen from the phone's
+  language at first start, changeable in Settings). Dari is shown right to
+  left, with Gregorian dates and the clock's Latin digits.
+- **Report.** A printable A4 report (Swedish, English, Polish or Dari) with the summary,
   explanations, assumptions, the day log and optionally the photos.
 - **Offline.** After the first visit the app, including photo reading,
   works without internet.
@@ -186,7 +187,8 @@ Code layout:
   wrapper, voting, and the live frame checks used by the scanner.
 - `src/pdf/`: pdf.js text extraction.
 - `src/ui/`: React screens; `src/db.ts` (Dexie/IndexedDB), `src/backup.ts`,
-  `src/i18n.ts` (Swedish and English) and `src/i18n-pl.ts` (Polish).
+  `src/i18n.ts` (Swedish and English), `src/i18n-pl.ts` (Polish) and
+  `src/i18n-prs.ts` (Dari).
 
 ## Deploying
 

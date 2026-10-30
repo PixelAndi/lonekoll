@@ -94,7 +94,7 @@ export interface TaxSettings {
 }
 
 export interface Settings {
-  language: 'sv' | 'en' | 'pl';
+  language: 'sv' | 'en' | 'pl' | 'prs';
   name: string;
   employer: string;
   wages: WagePeriod[];

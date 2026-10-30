@@ -124,7 +124,7 @@ const icons = {
 
 export function Icon({ name }: { name: keyof typeof icons }) {
   return (
-    <svg className="icon" viewBox="0 0 24 24" aria-hidden="true">
+    <svg className={`icon icon-${name}`} viewBox="0 0 24 24" aria-hidden="true">
       <path d={icons[name]} />
     </svg>
   );

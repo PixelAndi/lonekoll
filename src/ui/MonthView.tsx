@@ -55,11 +55,13 @@ export function MonthView({ month }: { month?: string }) {
                       <a href={href({ name: 'day', date: r.shift.date })}>{fmt.date(r.shift.date)}</a>
                     </td>
                     <td>
-                      {r.startTime}–{r.endTime}
+                      <bdi dir="ltr" className="time-range">
+                        {r.startTime}–{r.endTime}
+                      </bdi>
                     </td>
                     <td className="num">{formatDuration(r.shift.workedMinutes)}</td>
-                    <td className="num muted">{ob ? `${t('month.obShort')} ${formatDuration(ob)}` : ''}</td>
-                    <td className="num muted">{ot ? `${t('month.otShort')} ${formatDuration(ot)}` : ''}</td>
+                    <td className="num num-wrap muted">{ob ? `${t('month.obShort')} ${formatDuration(ob)}` : ''}</td>
+                    <td className="num num-wrap muted">{ot ? `${t('month.otShort')} ${formatDuration(ot)}` : ''}</td>
                   </tr>
                 );
               })}

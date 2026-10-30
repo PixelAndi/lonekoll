@@ -4,7 +4,7 @@ import { calculateShifts } from '../domain/calc.ts';
 import { hourlyRateOn, hourlySupplement, minimumWageOn, wagePeriodOn } from '../domain/model.ts';
 import { datesInRange, formatDuration, todayLocal } from '../domain/time.ts';
 import { formatter } from '../format.ts';
-import { LANGUAGE_NAMES, translator, type Language } from '../i18n.ts';
+import { isRightToLeft, LANGUAGE_NAMES, LANGUAGE_TAGS, translator, type Language } from '../i18n.ts';
 import { goBack } from '../router.ts';
 import { PhotoThumb, Spinner } from './common.tsx';
 import { coverageText, totalText } from './CompareView.tsx';
@@ -76,7 +76,7 @@ export function ReportView({ id }: { id: string }) {
         </button>
       </div>
 
-      <article className="report-page">
+      <article className="report-page" lang={LANGUAGE_TAGS[lang]} dir={isRightToLeft(lang) ? 'rtl' : 'ltr'}>
         <header>
           <h1>{t('report.title')}</h1>
           <p className="report-subtitle">{t('report.subtitle')}</p>

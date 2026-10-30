@@ -348,7 +348,7 @@ h3 {
 
 .tag {
   display: inline-block;
-  margin-left: 6px;
+  margin-inline-start: 6px;
   border-radius: 6px;
   padding: 0 6px;
   font-size: 0.75rem;
@@ -438,7 +438,7 @@ input[type='checkbox'] {
 
 .wage-steps {
   margin: 4px 0 0;
-  padding-left: 18px;
+  padding-inline-start: 18px;
 }
 
 .wage-row {
@@ -644,7 +644,7 @@ input[type='checkbox'] {
 .table th {
   padding: 6px 4px;
   border-bottom: 1px solid var(--border);
-  text-align: left;
+  text-align: start;
   vertical-align: top;
 }
 
@@ -655,8 +655,13 @@ input[type='checkbox'] {
 }
 
 .num {
-  text-align: right !important;
+  text-align: end !important;
   white-space: nowrap;
+}
+
+/* A label and a number that may go on two lines when space is short. */
+.num-wrap {
+  white-space: normal;
 }
 
 .table-lines select {
@@ -682,7 +687,7 @@ input[type='checkbox'] {
 
 .kv dd {
   margin: 0;
-  text-align: right;
+  text-align: end;
   font-variant-numeric: tabular-nums;
 }
 
@@ -693,7 +698,7 @@ input[type='checkbox'] {
 
 .warning-list {
   margin: 0;
-  padding-left: 1.2em;
+  padding-inline-start: 1.2em;
 }
 
 .shift-summary + .shift-summary {
@@ -716,11 +721,11 @@ input[type='checkbox'] {
 
 .compare-diff,
 .compare-missing {
-  border-left: 4px solid var(--error);
+  border-inline-start: 4px solid var(--error);
 }
 
 .compare-check {
-  border-left: 4px solid var(--warn);
+  border-inline-start: 4px solid var(--warn);
 }
 
 .slip-lines {
@@ -975,8 +980,8 @@ input[type='checkbox'] {
 }
 
 .report-meta th {
-  text-align: left;
-  padding-right: 16px;
+  text-align: start;
+  padding-inline-end: 16px;
   font-weight: 600;
 }
 
@@ -994,7 +999,7 @@ input[type='checkbox'] {
 .report-table td {
   border-bottom: 1px solid #ddd;
   padding: 4px 6px;
-  text-align: left;
+  text-align: start;
   vertical-align: top;
 }
 
@@ -1185,7 +1190,7 @@ input[type='checkbox'] {
 
 .howto figcaption ol {
   margin: 6px 0 0;
-  padding-left: 20px;
+  padding-inline-start: 20px;
 }
 
 .howto figcaption li + li {
@@ -1343,7 +1348,7 @@ input[type='checkbox'] {
 .howto-compact figcaption {
   font-size: 0.9rem;
   font-weight: 600;
-  padding-right: 36px;
+  padding-inline-end: 36px;
 }
 
 .scanner-howto .scanner-howto-hide {
@@ -1589,7 +1594,7 @@ input[type='checkbox'] {
 /* Work pattern suggestion */
 .pattern-days {
   margin: 0.25rem 0 0.75rem;
-  padding-left: 1.1rem;
+  padding-inline-start: 1.1rem;
   font-size: 0.875rem;
   line-height: 1.6;
 }
@@ -1606,4 +1611,14 @@ input[type='checkbox'] {
 
 .ok {
   color: var(--ok);
+}
+
+/* Right to left (Dari): back and forward arrows point the other way; time ranges stay on one line. */
+[dir='rtl'] .icon-chevronLeft,
+[dir='rtl'] .icon-chevronRight {
+  transform: scaleX(-1);
+}
+
+.time-range {
+  white-space: nowrap;
 }

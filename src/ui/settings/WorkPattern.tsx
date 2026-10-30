@@ -3,9 +3,10 @@ import { useApp } from '../../app-context.ts';
 import { saveSettings } from '../../db.ts';
 import { suggestWorkPattern } from '../../domain/pattern.ts';
 import { formatDuration, todayLocal, weekStart } from '../../domain/time.ts';
-
-const range = (from: string, to: string) => (from === to ? from : `${from}–${to}`);
+import { ltr } from '../../format.ts';
 import { Card } from '../common.tsx';
+
+const range = (from: string, to: string) => (from === to ? from : ltr(`${from}–${to}`));
 
 // Suggests a schedule, or the rules without one, from the weeks the user has
 // stamped: which weekdays they work and when they start. The end is left to

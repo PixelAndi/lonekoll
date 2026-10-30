@@ -410,7 +410,7 @@ export const pl: Record<TextKey, string> = {
   'learn.progress': 'Nauczył się {n} z 10 cyfr. Każde zapisane skanowanie uczy go więcej.',
   'learn.ready': 'Zna wszystkie cyfry i teraz sprawdza podwójnie każdą skanowaną godzinę.',
   'learn.readyChecked': 'Sprawdza podwójnie każdą skanowaną godzinę. Sam odczytał poprawnie {percent} % ({correct} z {checked} zapisanych godzin).',
-  'learn.hint': 'Gdy zapisujesz skanowanie, cyfry godzin są zachowywane jako małe obrazki z wartością, którą zapisałeś (również Twoje poprawki). Dzięki nim skaner odczytuje każdą godzinę jeszcze raz na swój sposób: jeśli odczyta to samo, skanowanie kończy się szybciej; jeśli nie, ta klatka się nie liczy. Im więcej jest używany, tym lepszy się staje. Wszystko zostaje w telefonie.',
+  'learn.hint': 'Gdy zapisujesz skanowanie, cyfry godzin są zachowywane jako małe obrazki z wartością, którą zapisałeś (również Twoje poprawki). Dzięki nim skaner odczytuje każdą godzinę jeszcze raz na swój sposób: jeśli odczyta to samo, skanowanie kończy się szybciej, a godzina odczytana wyraźnie inaczej jest zaznaczona na żółto, abyś ją sprawdził. Im więcej jest używany, tym lepszy się staje. Wszystko zostaje w telefonie.',
   'learn.forget': 'Zapomnij nauczone cyfry',
   'learn.forgetConfirm': 'Zapomnieć wszystko, czego skaner nauczył się o cyfrach zegara?',
   'diag.setting': 'Diagnostyka skanera',

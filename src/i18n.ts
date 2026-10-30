@@ -1,7 +1,8 @@
-// User-facing text in Swedish and English. Swedish is the source; the English
-// dictionary must have the same keys.
+// User-facing text in Swedish and English (Polish and Dari in their own files).
+// Swedish is the source; every dictionary must have the same keys.
 
 import { pl } from './i18n-pl.ts';
+import { prs } from './i18n-prs.ts';
 
 const sv = {
   'app.title': 'Lönekoll',
@@ -409,7 +410,7 @@ const sv = {
   'learn.progress': 'Har lärt sig {n} av 10 siffror. Varje skanning du sparar lär den mer.',
   'learn.ready': 'Känner igen alla siffror och dubbelkollar nu varje tid som skannas.',
   'learn.readyChecked': 'Dubbelkollar varje tid som skannas. Har läst {percent} % rätt på egen hand ({correct} av {checked} sparade tider).',
-  'learn.hint': 'När du sparar en skanning sparas siffrorna i tiderna som små bilder, med värdet du sparade (även dina rättelser). Med dem läser skannern varje tid en gång till på sitt eget sätt: läser den samma blir skanningen klar snabbare, läser den olika räknas inte bilden. Ju mer den används, desto bättre blir den. Allt stannar i telefonen.',
+  'learn.hint': 'När du sparar en skanning sparas siffrorna i tiderna som små bilder, med värdet du sparade (även dina rättelser). Med dem läser skannern varje tid en gång till på sitt eget sätt: läser den samma blir skanningen klar snabbare, och en tid den tydligt läser annorlunda markeras gul så att du kollar den. Ju mer den används, desto bättre blir den. Allt stannar i telefonen.',
   'learn.forget': 'Glöm inlärda siffror',
   'learn.forgetConfirm': 'Glömma allt skannern har lärt sig om klockans siffror?',
   'diag.setting': 'Skannerdiagnostik',
@@ -871,7 +872,7 @@ const en: Record<TextKey, string> = {
   'learn.progress': 'Has learned {n} of 10 digits. Every scan you save teaches it more.',
   'learn.ready': 'Knows every digit and now double-checks each time it scans.',
   'learn.readyChecked': 'Double-checks each time it scans. Has read {percent} % right on its own ({correct} of {checked} saved times).',
-  'learn.hint': 'When you save a scan, the digits of its times are kept as small pictures with the value you saved (your corrections too). With them the scanner reads each time once more in its own way: if it reads the same, the scan finishes sooner; if not, that frame doesn\'t count. The more it is used, the better it gets. Everything stays on the phone.',
+  'learn.hint': 'When you save a scan, the digits of its times are kept as small pictures with the value you saved (your corrections too). With them the scanner reads each time once more in its own way: if it reads the same, the scan finishes sooner, and a time it clearly reads differently is marked yellow for you to check. The more it is used, the better it gets. Everything stays on the phone.',
   'learn.forget': 'Forget learned digits',
   'learn.forgetConfirm': 'Forget everything the scanner has learned about the clock\'s digits?',
   'diag.setting': 'Scanner diagnostics',
@@ -925,11 +926,17 @@ const en: Record<TextKey, string> = {
   'holiday.newYearsEve': 'New Year’s Eve',
 };
 
-export type Language = 'sv' | 'en' | 'pl';
-export const DICTIONARIES: Record<Language, Record<TextKey, string>> = { sv, en, pl };
+export type Language = 'sv' | 'en' | 'pl' | 'prs';
+export const DICTIONARIES: Record<Language, Record<TextKey, string>> = { sv, en, pl, prs };
+
+/** Languages written right to left (Dari). */
+export const isRightToLeft = (lang: Language) => lang === 'prs';
+
+/** The language tag for the page: Dari is Persian as written in Afghanistan. */
+export const LANGUAGE_TAGS: Record<Language, string> = { sv: 'sv', en: 'en', pl: 'pl', prs: 'fa-AF' };
 
 /** Language names, each in its own language. */
-export const LANGUAGE_NAMES: Record<Language, string> = { sv: 'Svenska', en: 'English', pl: 'Polski' };
+export const LANGUAGE_NAMES: Record<Language, string> = { sv: 'Svenska', en: 'English', pl: 'Polski', prs: 'دری (Dari)' };
 
 export type Translate = (key: TextKey, values?: Record<string, string | number>) => string;
 
