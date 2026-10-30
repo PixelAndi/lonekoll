@@ -1,6 +1,6 @@
 import { agreementFor, RULES } from './agreement.ts';
 import type { PayCategory, PeriodResult } from './calc.ts';
-import { hourlyRateOn, hourlySupplement, minimumWageOn, wagePeriodOn, type DayRecord, type Settings } from './model.ts';
+import { hourlyRateOn, hourlySupplement, minimumWageOn, monthlyPayOn, wagePeriodOn, type DayRecord, type Settings } from './model.ts';
 import type { PaySlip, SlipCategory, SlipLine } from './payslip.ts';
 import { taxFor, type TaxBasis, type TaxColumn, type TaxTables } from './tax.ts';
 import type { LocalDate } from './time.ts';
@@ -26,6 +26,7 @@ export type NoteCode =
   | 'wage-rate-differs-minimum'
   | 'sick-base-only'
   | 'sick-estimate'
+  | 'sick-includes-karens'
   | 'vacation-below-min'
   | 'vacation-pay-unchecked'
   | 'timebank-rate-unknown'
@@ -133,7 +134,11 @@ export function comparePeriod(period: PeriodResult, slip: PaySlip, days: DayReco
   const t = period.totals;
   const lines = slip.lines;
   const hourly = hourlyRateOn(settings, period.end) ?? 0;
+  const monthly = monthlyPayOn(settings, period.end);
   const push = (row: ComparisonRow | null) => row && rows.push(row);
+
+  // Monthly salary (Bilaga F): the salary for the period.
+  push(moneyRow('monthlySalary', t.monthlySalary && { amount: t.monthlySalary.amount }, sumSlip(lines, ['monthlySalary']), 0));
 
   // Hourly wage, with a note on dated deductions (e.g. time-bank days).
   const wage = moneyRow('wage', t.wage, sumSlip(lines, ['wage']), hourly);
@@ -191,12 +196,27 @@ export function comparePeriod(period: PeriodResult, slip: PaySlip, days: DayReco
   push(moneyRow('shiftedTime', t.shiftedTime, sumSlip(lines, ['shiftedTime']), 40));
   push(moneyRow('shiftForm', t.shiftForm, sumSlip(lines, ['shiftForm']), hourly * 0.11));
 
+  // Monthly salary: the sick time deducted from the salary (Bilaga F §5).
+  const sickDeduction = moneyRow('sickDeduction', t.sickDeduction, sumSlip(lines, ['sickDeduction']), hourly);
+  if (sickDeduction && period.sick?.days.some((d) => d.basis === 'average') && sickDeduction.status === 'diff') sickDeduction.status = 'check';
+  push(sickDeduction);
+  // A monthly salary's unpaid sick hours may be shown as full sick pay less a karensavdrag: the same in total.
+  const karensInSick = monthly !== null && lines.some((l) => l.category === 'karens');
+  const sickCategories: SlipCategory[] = karensInSick ? ['sickPay', 'karens'] : ['sickPay'];
+
   // Sick pay: the expected value is an estimate when it rests on averages.
-  const sickRow = moneyRow('sickPay', t.sickPay && { amount: t.sickPay.amount, hours: t.sickPay.hours }, sumSlip(lines, ['sickPay']), hourly);
+  const sickRow = moneyRow('sickPay', t.sickPay && { amount: t.sickPay.amount, hours: t.sickPay.hours }, sumSlip(lines, sickCategories), hourly);
   if (sickRow) {
     const slipSick = sumSlip(lines, ['sickPay']);
     const basePrice = round2(hourly * RULES.sickPayPercent);
-    if (slipSick && slipSick.prices.length > 0 && slipSick.prices.every((p) => Math.abs(p - basePrice) < 0.02)) {
+    if (karensInSick) {
+      sickRow.notes.push({ code: 'sick-includes-karens' });
+      // The slip counts every sick hour; only the amounts compare.
+      sickRow.diff.hours = undefined;
+      if (sickRow.status === 'diff' && Math.abs(sickRow.diff.amount ?? 0) <= 1) sickRow.status = 'ok';
+    }
+    // A monthly salary's sick pay is by its pay per hour, without OB (Bilaga F §5.1).
+    if (!monthly && slipSick && slipSick.prices.length > 0 && slipSick.prices.every((p) => Math.abs(p - basePrice) < 0.02)) {
       const hadOb = period.shifts.some((s) => s.obMinutes[1] + s.obMinutes[2] + s.obMinutes[3] + s.obMinutes[4] > 0);
       if (hadOb) sickRow.notes.push({ code: 'sick-base-only', values: { price: basePrice } });
     }
@@ -208,7 +228,7 @@ export function comparePeriod(period: PeriodResult, slip: PaySlip, days: DayReco
     if (period.sick?.days.some((d) => d.basis === 'average')) sickRow.diff.hours = undefined;
     push(sickRow);
   }
-  const karens = moneyRow('karens', t.karens, sumSlip(lines, ['karens']), hourly);
+  const karens = karensInSick ? null : moneyRow('karens', t.karens, sumSlip(lines, ['karens']), hourly);
   if (karens && period.sick?.days.some((d) => d.basis === 'average') && karens.status === 'diff') karens.status = 'check';
   if (karens) karens.diff.hours = undefined;
   push(karens);
@@ -216,8 +236,12 @@ export function comparePeriod(period: PeriodResult, slip: PaySlip, days: DayReco
   push(moneyRow('holidayPay', t.holidayPay, sumSlip(lines, ['holidayPay']), hourly));
   push(moneyRow('permission', t.permission, sumSlip(lines, ['permission']), hourly));
 
+  // Monthly salary: vacation days and other absence deducted from the salary (Bilaga F §8, §10, §11).
+  push(moneyRow('vacationDeduction', t.vacationDeduction && { amount: t.vacationDeduction.amount }, sumSlip(lines, ['vacationDeduction']), 0));
+  push(moneyRow('absenceDeduction', t.absenceDeduction, sumSlip(lines, ['absenceDeduction']), hourly));
+
   // Vacation: days can be checked; the daily amount only against the minimum.
-  const vacSlip = sumSlip(lines, ['vacationDays']) ?? sumSlip(lines, ['vacationPay']);
+  const vacSlip = sumSlip(lines, ['vacationDays']) ?? sumSlip(lines, ['vacationDeduction']) ?? sumSlip(lines, ['vacationPay']);
   if (period.vacationDays || vacSlip) {
     const slipDays = vacSlip?.count ?? 0;
     rows.push({

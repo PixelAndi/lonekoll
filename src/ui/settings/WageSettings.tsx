@@ -2,7 +2,7 @@ import { useApp } from '../../app-context.ts';
 import { saveSettings } from '../../db.ts';
 import { AGREEMENT_PERIODS } from '../../domain/agreement.ts';
 import { RULES } from '../../domain/agreement.ts';
-import { hourlySupplement, minimumWageOn, type Settings, type WagePeriod } from '../../domain/model.ts';
+import { hourlySupplement, minimumWageOn, monthlyPayOn, type Settings, type WagePeriod } from '../../domain/model.ts';
 import { addDays, todayLocal, type LocalDate } from '../../domain/time.ts';
 import { Card, Field } from '../common.tsx';
 import { decimalText, LazyInput, numberOrUndefined } from './inputs.tsx';
@@ -37,6 +37,8 @@ export function WageSettings() {
       <p className="muted small">{t('settings.wagesHint')}</p>
       {settings.wages.map((w, i) => {
         const minimum = w.basis === 'minimum';
+        const monthly = w.basis === 'monthly';
+        const monthlyPay = monthly ? monthlyPayOn(settings, w.from) : null;
         const supplement = hourlySupplement(w);
         const perMonth = w.supplementPer === 'month';
         return (
@@ -53,9 +55,39 @@ export function WageSettings() {
               <select value={w.basis ?? 'fixed'} onChange={(e) => patch(i, { basis: e.target.value as WagePeriod['basis'] })}>
                 <option value="fixed">{t('wageBasis.fixed')}</option>
                 <option value="minimum">{t('wageBasis.minimum')}</option>
+                <option value="monthly">{t('wageBasis.monthly')}</option>
               </select>
             </Field>
-            <div className="field-row">
+            {monthly && (
+              <>
+                <div className="field-row">
+                  <Field label={t('settings.monthlyAmount')}>
+                    <LazyInput
+                      type="text"
+                      inputMode="decimal"
+                      value={decimalText(w.monthly, lang)}
+                      onCommit={(v) => {
+                        const n = numberOrUndefined(v);
+                        if (n !== undefined) patch(i, { monthly: n });
+                      }}
+                    />
+                  </Field>
+                  <Field label={t('settings.weeklyHours')}>
+                    <LazyInput
+                      type="text"
+                      inputMode="decimal"
+                      placeholder={decimalText((RULES.fullTimeWeeklyHours * settings.employmentPercent) / 100, lang)}
+                      value={decimalText(w.weeklyHours, lang)}
+                      onCommit={(v) => patch(i, { weeklyHours: numberOrUndefined(v) })}
+                    />
+                  </Field>
+                </div>
+                {monthlyPay && (
+                  <p className="muted small">{t('settings.monthlyRates', { perHour: fmt.number(monthlyPay.perHour), perDay: fmt.number(monthlyPay.perDay) })}</p>
+                )}
+              </>
+            )}
+            {!monthly && <div className="field-row">
               {!minimum && (
                 <Field label={t('settings.wageHourly')}>
                   <LazyInput
@@ -84,8 +116,8 @@ export function WageSettings() {
                   <option value="month">{t('wagePer.month')}</option>
                 </select>
               </Field>
-            </div>
-            {perMonth && !!w.supplement && (
+            </div>}
+            {!monthly && perMonth && !!w.supplement && (
               <p className="muted small">
                 {t('settings.wagePerMonthHint', { amount: fmt.number(w.supplement, 0), hours: RULES.hoursPerMonth, hourly: fmt.number(supplement) })}
               </p>
@@ -112,7 +144,10 @@ export function WageSettings() {
         className="button button-small"
         onClick={() => {
           const last = settings.wages.at(-1);
-          setWages([...settings.wages, { from: todayLocal(), basis: last?.basis, hourly: last?.hourly ?? 0, supplement: last?.supplement }]);
+          setWages([
+            ...settings.wages,
+            { from: todayLocal(), basis: last?.basis, hourly: last?.hourly ?? 0, supplement: last?.supplement, monthly: last?.monthly, weeklyHours: last?.weeklyHours },
+          ]);
         }}
       >
         + {t('settings.addWage')}

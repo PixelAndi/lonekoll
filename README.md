@@ -1,7 +1,7 @@
 # Lönekoll
 
 Check your pay against the time clock. Lönekoll is a local-first web app for
-hourly-paid bakery workers covered by **Livsmedelsavtalet 2025–2027 with
+bakery workers on hourly pay or a monthly salary, covered by **Livsmedelsavtalet 2025–2027 with
 Tilläggsavtal för Bageriföretag**. It reads photos of the time clock, works
 out what you should be paid, compares that with your pay slip, and prints a
 report you can go through with your employer.
@@ -123,6 +123,7 @@ hosts the app. This is a design rule, and it is enforced:
 | Overtime | With no schedule: time past 8 h in a shift (the usual local agreement; the agreement's own fallback without one is 9 h 15 min), and a sixth shift in a week (both configurable). Weekdays +50 % for 2 h then +100 %; from Sat 11:00 and from 18:00 the day before a holiday +100 %. Weekday OB is paid on top; holiday overtime gets Sunday OB instead of holiday OB | Avtalet §3.1.2, §3.3; Bageri §2, §4 |
 | Sick pay | 80 % of lost pay including OB; waiting-day deduction 20 % of an average week's sick pay; days 1–14 | Sjuklönelagen 6 §; Avtalet §5.2 |
 | Holiday pay | Hours you would have worked, with the OB of an ordinary weekday | Avtalet §5.1 |
+| Monthly salary | The same salary every calendar month, holidays included; a month the employment starts in is paid per day (or per hour for five working days or fewer). Pay per hour = salary × 12 / (52 × weekly hours), per day = salary × 12 / 365. Overtime pays the whole hour plus the supplement; no shift-form supplement. Sick hours on days 1–14 are deducted per hour, with no sick pay for the first 20 % of a week's hours in the spell and 80 % after; from day 15 every calendar day is deducted per day. Vacation deducts 1/21.75 of the salary a day; unpaid absence per hour for up to five working days, then per calendar day; never more than the salary. Minimum: the hourly minimum × 174. These are the agreement's guidelines; other rules may be agreed locally | Avtalet Bilaga F |
 | Vacation pay | Checked against the minimum per day (1 789 kr from 1 Apr 2026) | Avtalet §5.7; Bageri §5 |
 | Working-time account | Hours taken and, if the hourly payout rate is entered, the amount | Bilaga C |
 | With a schedule | Overtime past the scheduled length (optionally from a minimum per shift); a shift on a day off is overtime; work on a scheduled holiday is overtime plus holiday pay | Avtalet §3.3, §5.1 |
@@ -138,7 +139,7 @@ and the app warns about it.
 ### Not covered
 
 Vacation pay beyond the daily minimum (it depends on the whole earning year),
-monthly salaries and time off in lieu, and one-time tax (engångsskatt) on
+time off in lieu, and one-time tax (engångsskatt) on
 irregular payments. Without a schedule, the end of the Sunday/holiday
 overtime window uses a configurable "ordinary start" (default 06:00), and sick
 pay without a booked shift is an estimate from up to 13 weeks of logged

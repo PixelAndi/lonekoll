@@ -54,6 +54,14 @@ export function agreementFor(date: LocalDate): AgreementPeriod | undefined {
 
 /** Fixed rules that are the same in every period. */
 export const RULES = {
+  /** §3.1.1: ordinary working time for full-time day work, hours per week. */
+  fullTimeWeeklyHours: 40,
+  /** Bilaga F §5.1: a monthly-paid worker gets no sick pay for this share of the weekly hours in each sick spell. */
+  monthlySickUnpaidShare: 0.2,
+  /** Bilaga F §8: vacation deduction per day, as a share of the monthly salary. */
+  vacationDaysPerMonth: 21.75,
+  /** Bilaga F §11: absence longer than this many working days is deducted per calendar day. */
+  monthlyHourlyAbsenceDays: 5,
   /** §3.1.2: without a local agreement a shift is at most 9 h 15 min… (the app's default is 8 h, the usual local agreement) */
   defaultOrdinaryShiftMinutes: 555,
   /** …and at most five shifts a week. */

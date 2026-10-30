@@ -57,9 +57,10 @@ export interface WagePeriod {
   from: LocalDate;
   /**
    * fixed (default): `hourly` as entered · minimum: the agreement's minimum
-   * wage on each date plus `supplement`, so it follows every new minimum.
+   * wage on each date plus `supplement`, so it follows every new minimum ·
+   * monthly: a monthly salary (`monthly`), paid by Bilaga F.
    */
-  basis?: 'fixed' | 'minimum';
+  basis?: 'fixed' | 'minimum' | 'monthly';
   /** Everything you get per hour, including personal supplements (fixed basis). */
   hourly: number;
   /**
@@ -69,6 +70,10 @@ export interface WagePeriod {
   supplement?: number;
   /** The supplement is entered per hour (default) or per month, e.g. "2 000 kr more a month". */
   supplementPer?: 'hour' | 'month';
+  /** Monthly salary (monthly basis), including fixed monthly supplements (Bilaga F, Definitioner). */
+  monthly?: number;
+  /** Ordinary working hours per week on average (monthly basis); 40 × the employment rate if not set. */
+  weeklyHours?: number;
 }
 
 /** Which agreement supplements apply to this person. */
@@ -194,9 +199,34 @@ export function hourlySupplement(w: WagePeriod): number {
   return w.supplementPer === 'month' ? round2(amount / RULES.hoursPerMonth) : amount;
 }
 
+/** A monthly salary's pay per hour and per day (Bilaga F §1). */
+export interface MonthlyPay {
+  monthly: number;
+  weeklyHours: number;
+  /** Månadslönen × 12 / (52 × ordinary weekly hours): for overtime, sick leave and absence. */
+  perHour: number;
+  /** Månadslönen × 12 / 365: for longer absences. */
+  perDay: number;
+}
+
+export function monthlyPayOn(settings: Settings, date: LocalDate): MonthlyPay | null {
+  const w = wagePeriodOn(settings, date);
+  if (w?.basis !== 'monthly' || !w.monthly) return null;
+  const weeklyHours = w.weeklyHours || round2((RULES.fullTimeWeeklyHours * settings.employmentPercent) / 100);
+  // For overtime a full-timer's week counts as 40 hours, also on shifts (Bilaga F §3).
+  const hoursForRate = settings.employmentPercent >= 100 ? RULES.fullTimeWeeklyHours : weeklyHours;
+  return {
+    monthly: w.monthly,
+    weeklyHours,
+    perHour: round2((w.monthly * 12) / (52 * hoursForRate)),
+    perDay: round2((w.monthly * 12) / 365),
+  };
+}
+
 export function hourlyRateOn(settings: Settings, date: LocalDate): number | null {
   const w = wagePeriodOn(settings, date);
   if (!w) return null;
+  if (w.basis === 'monthly') return monthlyPayOn(settings, date)?.perHour ?? null;
   if (w.basis !== 'minimum') return w.hourly;
   const m = minimumWageOn(settings, date);
   return m ? round2(m.minimum + hourlySupplement(w)) : null;

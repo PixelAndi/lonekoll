@@ -1,6 +1,6 @@
 import { agreementFor, payShare, RULES, type ObLevel } from './agreement.ts';
 import { isHoliday, specialDay } from './holidays.ts';
-import { ageOn, hourlyRateOn, minimumWageOn, supplementOn, wagePeriodOn, type DayRecord, type ScheduledShift, type Settings } from './model.ts';
+import { ageOn, hourlyRateOn, minimumWageOn, monthlyPayOn, supplementOn, wagePeriodOn, type DayRecord, type ScheduledShift, type Settings } from './model.ts';
 import { rotationShifts, scheduledIntervals, scheduledMinutes, scheduledShift, scheduledWindow } from './schedule.ts';
 import { buildShifts, type Shift, type StampIssue } from './shifts.ts';
 import {
@@ -13,6 +13,8 @@ import {
   toMinutes,
   utcToLocal,
   weekStart,
+  monthEnd,
+  monthStart,
   type LocalDate,
 } from './time.ts';
 
@@ -32,7 +34,12 @@ export type PayCategory =
   | 'holidayPay'
   | 'permission'
   | 'timebankPay'
-  | 'vacationPay';
+  | 'vacationPay'
+  // Monthly salary (Bilaga F): the salary, and what is deducted from it.
+  | 'monthlySalary'
+  | 'sickDeduction'
+  | 'vacationDeduction'
+  | 'absenceDeduction';
 
 export const OB_CATEGORY: Record<ObLevel, PayCategory> = { 1: 'ob1', 2: 'ob2', 3: 'ob3', 4: 'ob4' };
 
@@ -90,6 +97,8 @@ export interface ShiftResult {
   shiftedMinutes: number;
   /** Per-minute results keyed by the local date of the minute. */
   byDate: Map<LocalDate, Bucket[]>;
+  /** Worked minutes by the local date of the minute. */
+  workedByDate: Map<LocalDate, number>;
   /** Everything the shift earns, unrounded (used for averages). */
   earnings: number;
   warnings: ShiftWarningCode[];
@@ -117,6 +126,7 @@ function classify(intervals: { start: number; end: number }[], settings: Setting
   const ordinaryStart = toMinutes(settings.ordinaryStart);
   const shiftFormPercent = RULES.shiftFormPercent[settings.shiftForm] ?? 0;
   const byDate = new Map<LocalDate, Bucket[]>();
+  const workedByDate = new Map<LocalDate, number>();
   const obMinutes: Record<ObLevel, number> = { 1: 0, 2: 0, 3: 0, 4: 0 };
   let worked = 0;
   let overtime50 = 0;
@@ -127,20 +137,24 @@ function classify(intervals: { start: number; end: number }[], settings: Setting
   let missingAgreement = false;
   let rateDate = '';
   let rate: number | null = null;
+  let monthly = false;
   for (const iv of intervals) {
     for (let t = iv.start; t < iv.end; t += MINUTE_MS) {
       const { date, minute } = utcToLocal(t);
       const list = byDate.get(date) ?? [];
       byDate.set(date, list);
+      workedByDate.set(date, (workedByDate.get(date) ?? 0) + 1);
       if (date !== rateDate) {
         rate = hourlyRateOn(settings, date);
+        monthly = monthlyPayOn(settings, date) !== null;
         rateDate = date;
       }
       const period = agreementFor(date);
       if (rate === null) missingRate = true;
       if (!period) missingAgreement = true;
       const hourly = rate ?? 0;
-      addToBucket(list, 'wage', hourly);
+      // A monthly salary covers the hours; only what comes on top is paid per hour.
+      if (!monthly) addToBucket(list, 'wage', hourly);
       earnings += hourly / 60;
 
       const ordinary = worked < opts.ordinaryMinutes;
@@ -149,8 +163,10 @@ function classify(intervals: { start: number; end: number }[], settings: Setting
         const full =
           overtime50 + overtime100 >= RULES.overtimeFirstTierMinutes || inFullOvertimeWindow(date, minute, ordinaryStart);
         const pct = full ? RULES.overtimeHighPercent : RULES.overtimeLowPercent;
-        addToBucket(list, full ? 'ot100' : 'ot50', round2(hourly * pct));
-        earnings += (hourly * pct) / 60;
+        // Monthly salary: the overtime hour itself (pay per hour) as well as the supplement (Bilaga F §3).
+        const otRate = monthly ? round2(hourly * (1 + pct)) : round2(hourly * pct);
+        addToBucket(list, full ? 'ot100' : 'ot50', otRate);
+        earnings += (monthly ? otRate : hourly * pct) / 60;
         if (full) overtime100++;
         else overtime50++;
         // Holiday OB is not paid on top of overtime, but holiday overtime may not
@@ -169,8 +185,8 @@ function classify(intervals: { start: number; end: number }[], settings: Setting
         earnings += period.shiftedTime / 60;
         shifted++;
       }
-      // §4.4: not paid for hours that got overtime pay.
-      if (shiftFormPercent > 0 && (ordinary || !settings.supplements.overtime)) {
+      // §4.4: not paid for hours that got overtime pay, nor with a monthly salary (Bilaga F §4).
+      if (shiftFormPercent > 0 && !monthly && (ordinary || !settings.supplements.overtime)) {
         const shiftRate = round2(hourly * shiftFormPercent);
         addToBucket(list, 'shiftForm', shiftRate);
         earnings += shiftRate / 60;
@@ -178,7 +194,7 @@ function classify(intervals: { start: number; end: number }[], settings: Setting
       worked++;
     }
   }
-  return { byDate, obMinutes, overtime50, overtime100, shifted, earnings, missingRate, missingAgreement };
+  return { byDate, workedByDate, obMinutes, overtime50, overtime100, shifted, earnings, missingRate, missingAgreement };
 }
 
 /** The scheduled shift an actual shift belongs to: most overlap, else the same day's. */
@@ -270,6 +286,7 @@ export function calculateShifts(days: DayRecord[], settings: Settings): { result
       overtimeReason: c.overtime50 + c.overtime100 === 0 ? null : reason,
       shiftedMinutes: c.shifted,
       byDate: c.byDate,
+      workedByDate: c.workedByDate,
       earnings: c.earnings,
       warnings,
     });
@@ -304,11 +321,22 @@ export interface SickResult {
   /** Weeks of logged work the averages are based on (0 when the schedule is used). */
   weeksUsed: number;
   averageWeekPay: number | null;
+  /** Monthly salary (Bilaga F §5): what is deducted, and the sick hours that are paid. */
+  monthly?: {
+    /** Sick hours on days 1–14, deducted at pay per hour. */
+    deductedHours: number;
+    /** Hours of those paid as sick pay (after the unpaid 20 % of a week). */
+    paidHours: number;
+    /** Calendar days from day 15, deducted at pay per day. */
+    deductedDays: number;
+    deduction: number;
+  };
 }
 
 export type PeriodWarningCode =
   | 'below-minimum-wage'
   | 'below-minimum-wage-base'
+  | 'below-minimum-wage-monthly'
   | 'minimum-wage-unknown'
   | 'sick-beyond-14'
   | 'sick-no-history'
@@ -421,6 +449,10 @@ function calculateSick(days: DayRecord[], results: ShiftResult[], settings: Sett
 
   const out: SickResult = { days: [], sickPay: 0, waitingDeduction: 0, weeksUsed: 0, averageWeekPay: null };
   for (const spell of spells) {
+    // Monthly salary (Bilaga F §5): the spell's first 20 % of a week's hours get no sick pay.
+    const monthly = monthlyPayOn(settings, spell[0]);
+    const unpaidHours = monthly ? monthly.weeklyHours * RULES.monthlySickUnpaidShare : 0;
+    let spellHours = 0;
     if (!spell.some((d) => d >= start && d <= end)) continue;
     const avg = fixed ? null : averages(results, spell[0]);
     const weekPay = fixed ? scheduleWeekPay(settings) : (avg?.perWeek ?? null);
@@ -457,17 +489,47 @@ function calculateSick(days: DayRecord[], results: ShiftResult[], settings: Sett
       } else {
         warnings.push({ code: 'sick-no-history', date });
       }
-      const sickPay = lostPay * RULES.sickPayPercent;
+      let sickPay = lostPay * RULES.sickPayPercent;
+      if (monthly) {
+        // The lost hours are deducted from the salary; sick pay is 80 % of pay per hour beyond the unpaid hours.
+        const hours = lostMinutes / 60;
+        const paid = Math.max(0, spellHours + hours - unpaidHours) - Math.max(0, spellHours - unpaidHours);
+        spellHours += hours;
+        lostPay = hours * monthly.perHour;
+        sickPay = paid * monthly.perHour * RULES.sickPayPercent;
+        if (date >= start && date <= end) {
+          const m = (out.monthly ??= { deductedHours: 0, paidHours: 0, deductedDays: 0, deduction: 0 });
+          m.deductedHours += hours;
+          m.paidHours += paid;
+          m.deduction += lostPay;
+        }
+      }
       spellPay += sickPay;
       if (date >= start && date <= end) {
         out.days.push({ date, dayInSpell, basis, lostMinutes, lostPay: round2(lostPay), sickPay: round2(sickPay) });
         out.sickPay += sickPay;
       }
     }
-    // The waiting-day deduction belongs to the period where the spell starts.
-    if (spell[0] >= start && spell[0] <= end && weekPay !== null) {
+    if (monthly) {
+      // From day 15 every calendar day is deducted at pay per day, days off included (Bilaga F §5.2).
+      let from = addDays(spell[0], RULES.sickPayDays);
+      if (from < start) from = start;
+      const to = spell[spell.length - 1] < end ? spell[spell.length - 1] : end;
+      if (from <= to) {
+        const days = daysBetween(from, to) + 1;
+        const m = (out.monthly ??= { deductedHours: 0, paidHours: 0, deductedDays: 0, deduction: 0 });
+        m.deductedDays += days;
+        m.deduction += days * monthly.perDay;
+      }
+    } else if (spell[0] >= start && spell[0] <= end && weekPay !== null) {
+      // The waiting-day deduction belongs to the period where the spell starts.
       out.waitingDeduction += Math.min(weekPay * RULES.sickPayPercent * RULES.waitingDayPercent, spellPay);
     }
+  }
+  if (out.monthly) {
+    out.monthly.deductedHours = round2(out.monthly.deductedHours);
+    out.monthly.paidHours = round2(out.monthly.paidHours);
+    out.monthly.deduction = round2(out.monthly.deduction);
   }
   out.sickPay = round2(out.sickPay);
   out.waitingDeduction = round2(out.waitingDeduction);
@@ -491,6 +553,14 @@ function minimumWageWarnings(settings: Settings, start: LocalDate, end: LocalDat
     }
     if (checked) continue;
     const minimum = m.minimum;
+    const pay = monthlyPayOn(settings, date);
+    if (pay) {
+      // A monthly salary against the minimum hourly wage × 174 (Bilaga F §12).
+      const minimumMonthly = round2(minimum * RULES.hoursPerMonth);
+      if (pay.monthly < minimumMonthly) warnings.push({ code: 'below-minimum-wage-monthly', date, values: { monthly: pay.monthly, minimum: minimumMonthly } });
+      checked = true;
+      continue;
+    }
     const supplement = supplementOn(settings, date);
     if (rate < minimum) {
       warnings.push({ code: 'below-minimum-wage', date, values: { rate, minimum } });
@@ -500,6 +570,120 @@ function minimumWageWarnings(settings: Settings, start: LocalDate, end: LocalDat
       checked = true;
     }
   }
+}
+
+/** Hours a day of absence would have been worked: as entered, the booked shift, the schedule, or a fifth of the week. */
+function absenceHours(day: DayRecord, settings: Settings, weeklyHours: number): number {
+  const a = day.absence;
+  if (a?.hours) return a.hours;
+  if (a?.bookedStart && a.bookedEnd) {
+    const iv = bookedInterval(day.date, a.bookedStart, a.bookedEnd);
+    return (iv.end - iv.start) / (60 * MINUTE_MS);
+  }
+  const scheduled = scheduledShift(settings, day.date, day);
+  if (scheduled) return scheduledMinutes(day.date, scheduled) / 60;
+  return weeklyHours / 5;
+}
+
+const later = (a: LocalDate, b: LocalDate) => (a > b ? a : b);
+const earlier = (a: LocalDate, b: LocalDate) => (a < b ? a : b);
+
+/**
+ * Monthly salary (Bilaga F): the salary for the period, and what is deducted
+ * for vacation (§8) and unpaid absence (§10, §11). Sick leave is deducted in
+ * calculateSick. Nothing is added for hourly pay.
+ */
+function monthlyTotals(days: DayRecord[], results: ShiftResult[], settings: Settings, start: LocalDate, end: LocalDate, totals: PeriodResult['totals']) {
+  let salary = 0;
+  let any = false;
+  for (let first = monthStart(start); first <= end; first = addDays(monthEnd(first), 1)) {
+    const last = monthEnd(first);
+    const from = later(first, start);
+    const to = earlier(last, end);
+    const since = settings.employedSince;
+    if (since && since > first && since <= to) {
+      // Employment starting during the month (§2): pay per day for six calendar days or more, else per hour worked.
+      const begin = later(from, since);
+      const pay = monthlyPayOn(settings, to);
+      if (!pay) continue;
+      any = true;
+      const calendarDays = daysBetween(begin, to) + 1;
+      if (calendarDays >= 6) salary += calendarDays * pay.perDay;
+      else {
+        let minutes = 0;
+        for (const r of results) for (const [date, m] of r.workedByDate) if (date >= begin && date <= to) minutes += m;
+        salary += (minutes / 60) * pay.perHour;
+      }
+      continue;
+    }
+    // The monthly salary whatever the month's days and holidays; a change of salary within the month by calendar days.
+    const inMonth = daysBetween(first, last) + 1;
+    for (let d = from; d <= to; d = addDays(d, 1)) {
+      if (since && d < since) continue;
+      const pay = monthlyPayOn(settings, d);
+      if (!pay) continue;
+      any = true;
+      salary += pay.monthly / inMonth;
+    }
+  }
+  if (!any) return;
+
+  // Vacation: 1/21.75 of the monthly salary per vacation day (§8).
+  let vacation = 0;
+  for (const d of days) {
+    if (d.date < start || d.date > end || d.absence?.type !== 'vacation') continue;
+    const pay = monthlyPayOn(settings, d.date);
+    if (pay) vacation += pay.monthly / RULES.vacationDaysPerMonth;
+  }
+
+  // Unpaid absence (VAB, leave): per hour up to five working days, beyond that per calendar day (§10, §11).
+  const unpaidDates = days.filter((d) => d.absence?.type === 'unpaid').map((d) => d.date).sort();
+  const byDate = new Map(days.map((d) => [d.date, d]));
+  const spells: LocalDate[][] = [];
+  for (const date of unpaidDates) {
+    const spell = spells[spells.length - 1];
+    // A weekend in between doesn't break the absence.
+    if (spell && daysBetween(spell[spell.length - 1], date) <= 3) spell.push(date);
+    else spells.push([date]);
+  }
+  let absence = 0;
+  let absenceHoursTotal = 0;
+  for (const spell of spells) {
+    if (!spell.some((d) => d >= start && d <= end)) continue;
+    const workdays = spell.filter((d) => isoWeekday(d) <= 5 && !isHoliday(d)).length;
+    if (workdays <= RULES.monthlyHourlyAbsenceDays) {
+      for (const date of spell) {
+        const pay = monthlyPayOn(settings, date);
+        if (date < start || date > end || !pay) continue;
+        const hours = absenceHours(byDate.get(date)!, settings, pay.weeklyHours);
+        absenceHoursTotal += hours;
+        absence += hours * pay.perHour;
+      }
+    } else {
+      for (let d = later(spell[0], start); d <= earlier(spell[spell.length - 1], end); d = addDays(d, 1)) {
+        const pay = monthlyPayOn(settings, d);
+        if (pay) absence += pay.perDay;
+      }
+    }
+  }
+
+  // Never more deducted than the salary: a whole month away deducts the whole salary (§5.2, §11.3).
+  const sickDeduction = -(totals.sickDeduction?.amount ?? 0);
+  let excess = sickDeduction + vacation + absence - salary;
+  if (excess > 0) {
+    const cut = Math.min(excess, absence);
+    absence -= cut;
+    excess -= cut;
+  }
+  if (excess > 0 && totals.sickDeduction) {
+    totals.sickDeduction.amount = round2(totals.sickDeduction.amount + Math.min(excess, sickDeduction));
+    excess -= Math.min(excess, sickDeduction);
+  }
+  if (excess > 0) vacation -= Math.min(excess, vacation);
+
+  addTotal(totals, 'monthlySalary', 0, round2(salary));
+  if (vacation) addTotal(totals, 'vacationDeduction', 0, -round2(vacation));
+  if (absence) addTotal(totals, 'absenceDeduction', round2(absenceHoursTotal), -round2(absence));
 }
 
 export interface PeriodOptions {
@@ -530,10 +714,15 @@ export function calculatePeriod(days: DayRecord[], settings: Settings, start: Lo
       addTotal(totals, b.category, hours, amount, b.rate);
       return { ...b, hours, amount };
     });
-  const workedMinutes = merged.filter((b) => b.category === 'wage').reduce((s, b) => s + b.minutes, 0);
+  let workedMinutes = 0;
+  for (const r of results) for (const [date, minutes] of r.workedByDate) if (date >= start && date <= end) workedMinutes += minutes;
 
   const sick = calculateSick(days, results, settings, start, end, warnings);
-  if (sick) {
+  if (sick?.monthly) {
+    // Monthly salary: the sick time is deducted, and sick pay paid for the hours past the unpaid ones (Bilaga F §5).
+    addTotal(totals, 'sickDeduction', sick.monthly.deductedHours, -sick.monthly.deduction);
+    if (sick.sickPay) addTotal(totals, 'sickPay', sick.monthly.paidHours, sick.sickPay);
+  } else if (sick) {
     const lostHours = toHours(sick.days.reduce((s, d) => s + d.lostMinutes, 0));
     addTotal(totals, 'sickPay', lostHours, sick.sickPay);
     if (sick.waitingDeduction) addTotal(totals, 'karens', 0, -sick.waitingDeduction);
@@ -544,6 +733,8 @@ export function calculatePeriod(days: DayRecord[], settings: Settings, start: Lo
   const workedDates = new Set(results.flatMap((r) => r.shift.dates));
   for (let date = start; date <= end; date = addDays(date, 1)) {
     if (!settings.supplements.holidayPay || !isHoliday(date)) continue;
+    // A monthly salary is paid without deduction for the holiday instead (Bilaga F §6).
+    if (monthlyPayOn(settings, date)) continue;
     const day = byDate.get(date);
     let shift: ScheduledShift | null = null;
     if (fixed) shift = scheduledShift(settings, date, day);
@@ -574,8 +765,10 @@ export function calculatePeriod(days: DayRecord[], settings: Settings, start: Lo
       timebankHours += a.hours;
       if (settings.timeBankRate) addTotal(totals, 'timebankPay', a.hours, round2(a.hours * settings.timeBankRate), settings.timeBankRate);
     }
-    if (a.type === 'permission' && a.hours) addTotal(totals, 'permission', a.hours, round2(a.hours * rate), rate);
+    if (a.type === 'permission' && a.hours && !monthlyPayOn(settings, d.date)) addTotal(totals, 'permission', a.hours, round2(a.hours * rate), rate);
   }
+
+  monthlyTotals(days, results, settings, start, end, totals);
 
   // Scheduled days with neither stamps nor an absence: probably a missed photo.
   if (fixed && options.today) {

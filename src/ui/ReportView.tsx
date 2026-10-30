@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useApp } from '../app-context.ts';
 import { calculateShifts } from '../domain/calc.ts';
-import { hourlyRateOn, hourlySupplement, minimumWageOn, wagePeriodOn } from '../domain/model.ts';
+import { hourlyRateOn, hourlySupplement, minimumWageOn, monthlyPayOn, wagePeriodOn } from '../domain/model.ts';
 import { datesInRange, formatDuration, todayLocal } from '../domain/time.ts';
 import { formatter, ltr } from '../format.ts';
 import { isRightToLeft, LANGUAGE_NAMES, LANGUAGE_TAGS, translator, type Language } from '../i18n.ts';
@@ -115,6 +115,8 @@ function ReportPage({
   const rates = [
     ...new Set(
       datesInRange(start, end).flatMap((d) => {
+        const monthlyPay = monthlyPayOn(settings, d);
+        if (monthlyPay) return [t('report.monthlyRate', { monthly: fmt.number(monthlyPay.monthly), perHour: fmt.number(monthlyPay.perHour) })];
         const rate = hourlyRateOn(settings, d);
         if (rate === null) return [];
         const w = wagePeriodOn(settings, d);
@@ -125,6 +127,7 @@ function ReportPage({
       }),
     ),
   ];
+  const monthlyPay = monthlyPayOn(settings, end);
   const byDate = new Map(app.days.map((d) => [d.date, d]));
   const logDates = datesInRange(start, end).filter((d) => byDate.has(d));
   const photoIds = logDates.flatMap((d) => byDate.get(d)!.photoIds.map((pid) => ({ date: d, id: pid })));
@@ -157,7 +160,7 @@ function ReportPage({
                 </tr>
               )}
               <tr>
-                <th>{t('report.hourly')}</th>
+                <th>{t(monthlyPay ? 'report.monthly' : 'report.hourly')}</th>
                 <td>{rates.join(', ') || '–'}</td>
               </tr>
               <tr>
@@ -222,6 +225,11 @@ function ReportPage({
         <section>
           <h2>{t('report.assumptions')}</h2>
           <ul>
+            {monthlyPay && (
+              <li>
+                {t('settings.monthlyRates', { perHour: fmt.number(monthlyPay.perHour), perDay: fmt.number(monthlyPay.perDay) })} {t('report.monthlyLocal')}
+              </li>
+            )}
             {settings.scheduleMode === 'fixed' ? (
               <li>{t('report.scheduleFixed', { n: settings.schedule.weeks.length })}</li>
             ) : (
@@ -241,7 +249,7 @@ function ReportPage({
                 })}
               </li>
             )}
-            {period.sick && period.sick.weeksUsed > 0 && <li>{t('month.sickBasis', { weeks: period.sick.weeksUsed })}</li>}
+            {period.sick && period.sick.weeksUsed > 0 && period.sick.days.some((d) => d.basis === 'average') && <li>{t('month.sickBasis', { weeks: period.sick.weeksUsed })}</li>}
             <li>{t('month.excludesVacation')}</li>
             {settings.localDeals && (
               <li>

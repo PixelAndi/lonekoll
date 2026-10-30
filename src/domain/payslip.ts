@@ -93,15 +93,22 @@ const OB_RATES: { level: ObLevel; rate: number }[] = AGREEMENT_PERIODS.flatMap((
 export function classifyLine(text: string, amount: number | undefined, unitPrice: number | undefined, hourlyRate?: number): SlipCategory {
   const t = text.toLowerCase();
   if (t.includes('karens')) return 'karens';
+  // Monthly salary (Bilaga F): the salary, and deductions from it for sick leave, vacation and other absence.
+  if (/månadslön|mån\.?\s*lön|grundlön/.test(t)) return 'monthlySalary';
+  const negative = amount !== undefined && amount < 0;
+  if (t.includes('sjuk') && (/avdrag|frånvaro/.test(t) || (negative && !t.includes('sjuklön')))) return 'sickDeduction';
+  if (t.includes('semester') && (t.includes('avdrag') || negative)) return 'vacationDeduction';
+  if (/tjänstledig|föräldraledig|\bvab\b|vård av barn|frånvaroavdrag|frånvaro|löneavdrag|ledig utan lön/.test(t)) return 'absenceDeduction';
   if (t.includes('sjuklön')) return 'sickPay';
   if (t.includes('sjuk')) return amount === undefined ? 'sickHours' : 'sickPay';
   if (/övertid|ötid/.test(t)) {
     if (/100|kval/.test(t)) return 'ot100';
     if (/50|enkel/.test(t)) return 'ot50';
     if (unitPrice && hourlyRate) {
+      // The supplement alone (hourly pay), or the whole hour with it (monthly salary, Bilaga F §3).
       const ratio = unitPrice / hourlyRate;
-      if (Math.abs(ratio - 0.5) < 0.02) return 'ot50';
-      if (Math.abs(ratio - 1) < 0.02) return 'ot100';
+      if (Math.abs(ratio - 0.5) < 0.02 || Math.abs(ratio - 1.5) < 0.02) return 'ot50';
+      if (Math.abs(ratio - 1) < 0.02 || Math.abs(ratio - 2) < 0.02) return 'ot100';
     }
     return 'otUnknown';
   }

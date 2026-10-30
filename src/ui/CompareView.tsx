@@ -12,6 +12,7 @@ import { diffText, noteText, rowLabel, rowReference, sideText, useSlipComparison
 
 const SLIP_CATEGORIES: SlipCategory[] = [
   'wage',
+  'monthlySalary',
   'ob1',
   'ob2',
   'ob3',
@@ -23,6 +24,9 @@ const SLIP_CATEGORIES: SlipCategory[] = [
   'sickPay',
   'sickHours',
   'karens',
+  'sickDeduction',
+  'vacationDeduction',
+  'absenceDeduction',
   'holidayPay',
   'permission',
   'vacationDays',

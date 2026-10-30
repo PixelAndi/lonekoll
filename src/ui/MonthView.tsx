@@ -9,6 +9,7 @@ import { Card, Notice, Page } from './common.tsx';
 import { MonthNav } from './DaysView.tsx';
 
 export const CATEGORY_ORDER: PayCategory[] = [
+  'monthlySalary',
   'wage',
   'ob1',
   'ob2',
@@ -18,8 +19,11 @@ export const CATEGORY_ORDER: PayCategory[] = [
   'ot100',
   'shiftedTime',
   'shiftForm',
+  'sickDeduction',
   'sickPay',
   'karens',
+  'vacationDeduction',
+  'absenceDeduction',
   'holidayPay',
   'permission',
   'timebankPay',
@@ -116,7 +120,7 @@ export function PeriodTotals({ period }: { period: PeriodResult }) {
           </tr>
         </tfoot>
       </table>
-      {period.sick && period.sick.weeksUsed > 0 && <p className="muted small">{t('month.sickBasis', { weeks: period.sick.weeksUsed })}</p>}
+      {period.sick && period.sick.weeksUsed > 0 && period.sick.days.some((d) => d.basis === 'average') && <p className="muted small">{t('month.sickBasis', { weeks: period.sick.weeksUsed })}</p>}
     </Card>
   );
 }

@@ -82,6 +82,21 @@ describe('parsePaySlip', () => {
 });
 
 describe('classifyLine', () => {
+  it('reads the lines of a monthly salary (Bilaga F)', () => {
+    expect(classifyLine('Månadslön', 31670, undefined)).toBe('monthlySalary');
+    expect(classifyLine('Sjukavdrag dag 1-14', -1553.04, 182.71)).toBe('sickDeduction');
+    expect(classifyLine('Sjukfrånvaro', -1553.04, undefined)).toBe('sickDeduction');
+    expect(classifyLine('Sjuklön dag 1-14', 73.08, undefined)).toBe('sickPay');
+    expect(classifyLine('Karensavdrag', -1169.36, undefined)).toBe('karens');
+    expect(classifyLine('Semesteravdrag', -2912.18, undefined)).toBe('vacationDeduction');
+    expect(classifyLine('Semestertillägg', 1200, undefined)).toBe('vacationPay');
+    expect(classifyLine('Tjänstledig utan lön', -1461.68, undefined)).toBe('absenceDeduction');
+    expect(classifyLine('VAB', -1461.68, undefined)).toBe('absenceDeduction');
+    // Overtime with a monthly salary: the whole hour and the supplement in one price.
+    expect(classifyLine('Övertid', 3014.77, 274.07, 182.71)).toBe('ot50');
+    expect(classifyLine('Övertid', 1461.68, 365.42, 182.71)).toBe('ot100');
+  });
+
   it('recognises OB levels by price or name, and overtime', () => {
     expect(classifyLine('OB-tillägg', 1000, 98.87)).toBe('ob2');
     expect(classifyLine('OB 3 lördag', 1000, 999)).toBe('ob3');

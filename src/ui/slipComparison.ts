@@ -5,7 +5,8 @@ import { db, type SlipRecord } from '../db.ts';
 import { agreementFor } from '../domain/agreement.ts';
 import { calculatePeriod, type PeriodResult } from '../domain/calc.ts';
 import { comparePeriod, type Comparison, type ComparisonRow, type Note, type TaxContext } from '../domain/compare.ts';
-import type { Settings } from '../domain/model.ts';
+import { monthlyPayOn, type Settings } from '../domain/model.ts';
+import { RULES } from '../domain/agreement.ts';
 import type { PaySlip, SlipCategory } from '../domain/payslip.ts';
 import { taxBasis, taxColumn } from '../domain/tax.ts';
 import { formatDuration, monthEnd, monthStart, todayLocal } from '../domain/time.ts';
@@ -84,13 +85,32 @@ const REF: Partial<Record<ComparisonRow['key'], TextKey>> = {
   taxTable: 'ref.tax',
   tax: 'ref.tax',
   net: 'ref.net',
+  monthlySalary: 'ref.monthlySalary',
+  sickDeduction: 'ref.sickMonthly',
+  vacationDeduction: 'ref.vacationDeduction',
+  absenceDeduction: 'ref.absenceDeduction',
+};
+
+/** With a monthly salary, these rows follow Bilaga F instead. */
+const MONTHLY_REF: Partial<Record<ComparisonRow['key'], TextKey>> = {
+  ot50: 'ref.otMonthly',
+  ot100: 'ref.otMonthly',
+  otTotal: 'ref.otMonthly',
+  sickPay: 'ref.sickMonthly',
+  karens: 'ref.sickMonthly',
 };
 
 export function rowReference(row: ComparisonRow, t: Translate, settings: Settings, periodEnd: string, taxYear: number, fmt: Formatter): string {
-  const key = REF[row.key];
+  const monthly = monthlyPayOn(settings, periodEnd);
+  const key = (monthly && MONTHLY_REF[row.key]) || REF[row.key];
   if (!key) return '';
   const agreement = agreementFor(periodEnd);
   return t(key, {
+    perHour: fmt.number(monthly?.perHour ?? 0),
+    perDay: fmt.number(monthly?.perDay ?? 0),
+    perVacationDay: fmt.number(monthly ? monthly.monthly / RULES.vacationDaysPerMonth : 0),
+    sickRate: fmt.number(monthly ? monthly.perHour * RULES.sickPayPercent : 0),
+    unpaid: fmt.number(monthly ? monthly.weeklyHours * RULES.monthlySickUnpaidShare : 0),
     limit: formatDuration(settings.ordinaryShiftMinutes),
     minimum: String(agreement?.vacationPayPerDayMin ?? 0),
     rate: fmt.number(agreement?.shiftedTime ?? 0),
