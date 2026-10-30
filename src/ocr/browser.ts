@@ -67,6 +67,18 @@ export async function findInFrame(image: RGBAImage): Promise<FoundTable | null> 
   return findTableByText(image, ocr);
 }
 
+/** Starts following a table just found in this frame (see trackInFrame). */
+export async function anchorInFrame(image: RGBAImage, found: FoundTable): Promise<FoundTable | null> {
+  const { anchorTable } = await import('./pipeline.ts');
+  return anchorTable(image, found);
+}
+
+/** Follows a locked-on table: much quicker than searching for it. Null when it has moved too much. */
+export async function trackInFrame(image: RGBAImage, prev: FoundTable): Promise<FoundTable | null> {
+  const [{ trackTable }, ocr] = await Promise.all([import('./pipeline.ts'), getEngine()]);
+  return trackTable(image, prev, ocr);
+}
+
 /** The stamp table cut out of the photo, for checking the times side by side. */
 export async function tableCrop(photo: LoadedPhoto, table: NonNullable<ClockReading['table']>): Promise<Blob> {
   const margin = Math.round(table.width * 0.03);

@@ -106,49 +106,58 @@ export interface Stamps {
 export interface FrameReading {
   date: string | null;
   rows: StampRow[];
+  /**
+   * How many independent readings agreed on it: 2 for a frame where the table
+   * was searched for (the search pass and the rows crop), 1 for a followed one.
+   */
+  weight?: number;
 }
 
 /** Readings kept for the majority. */
 export const HISTORY = 5;
-/** Readings that must agree on every value when they aren't simply the last two. */
+/** Independent readings that must agree on every value. */
 export const MAJORITY = 3;
 
+const weightOf = (r: FrameReading) => r.weight ?? 2;
 const usable = (r: FrameReading) => r.date !== null && r.rows.length > 0 && checkOrder(r.rows) && checkPlausible(r.rows);
 const key = (r: FrameReading) => JSON.stringify([r.date, r.rows.map((x) => [x.in, x.out])]);
 
-/** Most common value and how many had it. */
-function majority<T>(values: T[]): { value: T; votes: number } {
+/** Most votes, and whether that is clear of the runner-up. */
+function majority<T>(values: { value: T; weight: number }[]): { value: T; votes: number; clear: boolean } {
   const tally = new Map<string, { value: T; votes: number }>();
-  for (const v of values) {
-    const k = JSON.stringify(v);
-    const t = tally.get(k) ?? { value: v, votes: 0 };
-    t.votes++;
+  for (const { value, weight } of values) {
+    const k = JSON.stringify(value);
+    const t = tally.get(k) ?? { value, votes: 0 };
+    t.votes += weight;
     tally.set(k, t);
   }
-  return [...tally.values()].sort((a, b) => b.votes - a.votes)[0];
+  const [best, next] = [...tally.values()].sort((a, b) => b.votes - a.votes);
+  return { ...best, clear: !next || best.votes > next.votes };
 }
 
 /**
  * What the latest frames agree on: the last two read exactly the same, or
- * every value (date, number of rows, each time) read the same by at least
- * MAJORITY of the recent readings. The result must be in order and
- * plausible. Null while they don't agree yet.
+ * every value (date, number of rows, each time) has a clear majority; either
+ * way backed by at least MAJORITY independent readings. The result must be
+ * in order and plausible. Null while they don't agree yet.
  */
 export function agreement(history: FrameReading[]): Stamps | null {
   const [a, b] = history.slice(-2);
-  if (a && b && usable(b) && key(a) === key(b)) return { date: b.date!, rows: b.rows.map((r) => ({ in: r.in, out: r.out })) };
+  if (a && b && usable(b) && key(a) === key(b) && weightOf(a) + weightOf(b) >= MAJORITY) {
+    return { date: b.date!, rows: b.rows.map((r) => ({ in: r.in, out: r.out })) };
+  }
   const read = history.filter((r) => r.date !== null && r.rows.length > 0);
-  if (read.length < MAJORITY) return null;
-  const date = majority(read.map((r) => r.date!));
-  const count = majority(read.map((r) => r.rows.length));
-  if (date.votes < MAJORITY || count.votes < MAJORITY) return null;
+  const won = <T>(m: { votes: number; clear: boolean; value: T }) => m.votes >= MAJORITY && m.clear;
+  const date = majority(read.map((r) => ({ value: r.date!, weight: weightOf(r) })));
+  const count = majority(read.map((r) => ({ value: r.rows.length, weight: weightOf(r) })));
+  if (!read.length || !won(date) || !won(count)) return null;
   const same = read.filter((r) => r.rows.length === count.value);
   const rows: StampRow[] = [];
   for (let i = 0; i < count.value; i++) {
     const row: StampRow = { in: null, out: null };
     for (const field of ['in', 'out'] as const) {
-      const m = majority(same.map((r) => r.rows[i][field]));
-      if (m.votes < MAJORITY) return null;
+      const m = majority(same.map((r) => ({ value: r.rows[i][field], weight: weightOf(r) })));
+      if (!won(m)) return null;
       row[field] = m.value;
     }
     rows.push(row);
@@ -160,6 +169,6 @@ export function agreement(history: FrameReading[]): Stamps | null {
 export function progress(history: FrameReading[]): number {
   const last = history[history.length - 1];
   if (!last || !usable(last)) return history.length && history[history.length - 1].date ? 1 : 0;
-  const same = history.filter((r) => key(r) === key(last)).length;
-  return Math.min(3, 1 + same);
+  const votes = history.filter((r) => key(r) === key(last)).reduce((n, r) => n + weightOf(r), 0);
+  return Math.min(3, votes);
 }

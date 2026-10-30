@@ -290,6 +290,12 @@ export interface FoundTable {
   bothEnds: boolean;
   /** The date bar's height in the image's pixels: below about 24 the text is too small to read reliably. */
   barHeight: number;
+  /** Where the date was read, in the image's pixels: what the next frames follow. */
+  dateBox?: { x0: number; y0: number; x1: number; y1: number };
+  /** Read by following the table (trackTable), not by searching for it. */
+  tracked?: boolean;
+  /** Set once locked on (anchorTable): what the following frames are compared with. */
+  track?: Track;
 }
 
 /**
@@ -382,6 +388,184 @@ export async function findTableByText(img: RGBAImage, engine: OcrEngine): Promis
     width: width / img.width,
     bothEnds: !!(left && right),
     barHeight: thickness,
+    dateBox: dateWord.bbox,
+  };
+}
+
+/** Preprocessing for the rows while following the table (binarising reads these crops poorly). */
+const TRACK_CROP: CropOptions = { grayscale: true, targetHeight: 56, rowsOffset: GUIDED_ROWS_OFFSET };
+/** Tracked frames in a row before the table is searched for again, to catch a phone moved closer or further. */
+export const TRACK_FRAMES = 6;
+/** How far (in bar heights) the table may move between frames and still be followed. */
+const TRACK_REACH = 1.5;
+/** Below this match the patch isn't there any more (moved too much, turned, or another day shown). */
+const TRACK_MIN_MATCH = 0.75;
+
+/** A table being followed from the frame it was locked on in. */
+export interface Track {
+  /** The table's place when locked on. */
+  loc: TableLocation;
+  /** Grey patch around the date then, sampled every `step` pixels, and its top-left corner in the image. */
+  patch: GrayImage;
+  step: number;
+  /** The same patch at full resolution, to place it to the pixel. */
+  fine: GrayImage;
+  left: number;
+  top: number;
+  /** How far the table has moved since, in the latest frame. */
+  dx: number;
+  dy: number;
+  /** Frames followed since the search. */
+  frames: number;
+}
+
+/** Luminance of an upright box of the image, sampled every `step` pixels (averaging each step × step cell). */
+function greyBox(img: RGBAImage, left: number, top: number, width: number, height: number, step: number): GrayImage {
+  const w = Math.max(1, Math.floor(width / step));
+  const h = Math.max(1, Math.floor(height / step));
+  const data = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let sum = 0;
+      let n = 0;
+      for (let j = 0; j < step; j++) {
+        const sy = Math.round(top) + y * step + j;
+        if (sy < 0 || sy >= img.height) continue;
+        for (let i = 0; i < step; i++) {
+          const sx = Math.round(left) + x * step + i;
+          if (sx < 0 || sx >= img.width) continue;
+          const k = (sy * img.width + sx) * 4;
+          sum += 0.299 * img.data[k] + 0.587 * img.data[k + 1] + 0.114 * img.data[k + 2];
+          n++;
+        }
+      }
+      data[y * w + x] = n ? Math.round(sum / n) : 0;
+    }
+  }
+  return { width: w, height: h, data };
+}
+
+/** Normalised cross-correlation of `patch` placed at (ox, oy) in `area`: 1 = the same picture. */
+function match(area: GrayImage, patch: GrayImage, ox: number, oy: number): number {
+  const n = patch.width * patch.height;
+  let sa = 0;
+  let sp = 0;
+  let saa = 0;
+  let spp = 0;
+  let sap = 0;
+  for (let y = 0; y < patch.height; y++) {
+    const ar = (oy + y) * area.width + ox;
+    const pr = y * patch.width;
+    for (let x = 0; x < patch.width; x++) {
+      const a = area.data[ar + x];
+      const p = patch.data[pr + x];
+      sa += a;
+      sp += p;
+      saa += a * a;
+      spp += p * p;
+      sap += a * p;
+    }
+  }
+  const va = saa - (sa * sa) / n;
+  const vp = spp - (sp * sp) / n;
+  return va > 0 && vp > 0 ? (sap - (sa * sp) / n) / Math.sqrt(va * vp) : 0;
+}
+
+/** Best place for `patch` in `area` among the offsets given, and how well it matches there. */
+function bestMatch(area: GrayImage, patch: GrayImage, xs: number[], ys: number[]) {
+  let best = { x: 0, y: 0, score: -1 };
+  for (const y of ys) {
+    for (const x of xs) {
+      if (x < 0 || y < 0 || x + patch.width > area.width || y + patch.height > area.height) continue;
+      const score = match(area, patch, x, y);
+      if (score > best.score) best = { x, y, score };
+    }
+  }
+  return best;
+}
+
+const range = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, i) => from + i);
+
+/**
+ * Starts following a table found by the search pass: keeps a grey patch of
+ * the date bar around the date, to find again in the following frames.
+ */
+export function anchorTable(img: RGBAImage, found: FoundTable): FoundTable | null {
+  const box = found.dateBox;
+  if (!box) return null;
+  const thickness = found.loc.thickness ?? found.barHeight;
+  // Sampled so the bar is about 12 pixels high: plenty to match on, quick to compare.
+  const step = Math.max(1, Math.round(thickness / 12));
+  const left = box.x0 - thickness * 0.5;
+  const top = (box.y0 + box.y1) / 2 - thickness * 0.6;
+  const patch = greyBox(img, left, top, box.x1 - box.x0 + thickness, thickness * 1.2, step);
+  const fine = greyBox(img, left, top, patch.width * step, patch.height * step, 1);
+  return { ...found, track: { loc: found.loc, patch, step, fine, left, top, dx: 0, dy: 0, frames: 0 } };
+}
+
+/**
+ * Follows a locked-on table instead of searching the whole image again: the
+ * date's patch is looked for near where it was in the frame before (by
+ * comparing pixels), and only the date and the rows are read where it is
+ * now. Much quicker than the search pass. Null when the patch isn't found
+ * (the phone moved too much), the date is another one, or after
+ * TRACK_FRAMES frames: search again then.
+ */
+export async function trackTable(img: RGBAImage, prev: FoundTable, engine: OcrEngine): Promise<FoundTable | null> {
+  const track = prev.track;
+  if (!track || track.frames >= TRACK_FRAMES) return null;
+  const { patch, step } = track;
+  const thickness = track.loc.thickness ?? prev.barHeight;
+  // Search around where it was in the frame before, roughly first and then to the pixel.
+  const reach = Math.ceil((thickness * TRACK_REACH) / step);
+  const areaLeft = track.left + track.dx - reach * step;
+  const areaTop = track.top + track.dy - reach * step;
+  const area = greyBox(img, areaLeft, areaTop, (patch.width + reach * 2) * step, (patch.height + reach * 2) * step, step);
+  const rough = bestMatch(area, patch, range(0, reach * 2), range(0, reach * 2));
+  if (rough.score < TRACK_MIN_MATCH) return null;
+  let dx = areaLeft + rough.x * step - track.left;
+  let dy = areaTop + rough.y * step - track.top;
+  if (step > 1) {
+    // Then to the pixel, with the full-resolution patch around the rough place.
+    const fine = track.fine;
+    const near = greyBox(img, track.left + dx - step, track.top + dy - step, fine.width + step * 2, fine.height + step * 2, 1);
+    const best = bestMatch(near, fine, range(0, step * 2), range(0, step * 2));
+    dx += best.x - step;
+    dy += best.y - step;
+  }
+  const at = track.loc;
+  const loc: TableLocation = {
+    ...at,
+    left: at.left + dx,
+    right: at.right + dx,
+    barTop: at.barTop + dy,
+    barBottom: at.barBottom + dy,
+    headerBottom: at.headerBottom + dy,
+  };
+  // The date is read too (a small strip, digits only): a day changed on the clock looks much the same as a patch.
+  const box = prev.dateBox!;
+  const scale = Math.min(5, Math.max(0.5, 70 / thickness));
+  const margin = Math.round(thickness * scale * 0.3);
+  const strip = extractRegion(
+    img,
+    { left: box.x0 + dx - thickness * 0.5, top: (box.y0 + box.y1) / 2 + dy - thickness * 0.6, width: box.x1 - box.x0 + thickness, height: thickness * 1.2 },
+    0,
+    { x: 0, y: 0 },
+    scale,
+    channels.luminance,
+  );
+  const dateWord = findDateWord(await engine.recognize(pad(strip, margin, 230), 'dateSparse'));
+  if (!dateWord || parseDate([dateWord]).value !== prev.date) return null;
+  const crop = cropsAt(img, loc, TRACK_CROP).rows;
+  const rows = parseRows(await engine.recognize(crop, 'rows'), crop.width).value;
+  return {
+    ...prev,
+    loc,
+    rows,
+    // One reading, not two: it counts for less towards the agreement (see live.ts).
+    confirmed: true,
+    tracked: true,
+    track: { ...track, dx, dy, frames: track.frames + 1 },
   };
 }
 

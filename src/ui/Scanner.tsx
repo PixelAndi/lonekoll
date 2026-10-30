@@ -3,7 +3,7 @@ import { useApp } from '../app-context.ts';
 import type { DayRecord } from '../domain/model.ts';
 import { forgottenStamps, otherDayNeeded, type ForgottenStamp } from '../domain/shifts.ts';
 import { addDays, todayLocal } from '../domain/time.ts';
-import { findInFrame, readPhoto, warmUp } from '../ocr/browser.ts';
+import { anchorInFrame, findInFrame, readPhoto, trackInFrame, warmUp } from '../ocr/browser.ts';
 import { agreement, aim, HISTORY, progress, searchArea, type Aim, type FrameReading, type Hint } from '../ocr/live.ts';
 import type { ClockReading, FoundTable } from '../ocr/pipeline.ts';
 import { ClockHowTo } from './ClockHowTo.tsx';
@@ -156,6 +156,8 @@ export function Scanner({
     (async () => {
       let history: FrameReading[] = [];
       let lastFound: FoundTable | null = null;
+      // Once locked on, the table is followed from frame to frame instead of searched for.
+      let following: FoundTable | null = null;
       let errors = 0;
       let wasLocked = false;
       while (alive) {
@@ -183,7 +185,9 @@ export function Scanner({
         }
         let found: FoundTable | null;
         try {
-          found = await findInFrame(image);
+          found = following ? await trackInFrame(image, following) : null;
+          // Not locked on yet, or lost: search the whole area.
+          if (!found) found = await findInFrame(image);
           started = true;
           errors = 0;
         } catch (e) {
@@ -204,14 +208,16 @@ export function Scanner({
         // A short tick when it locks on.
         if (a?.locked && !wasLocked) navigator.vibrate?.(15);
         wasLocked = !!a?.locked;
+        // Locked on: follow the table from here (a table just found is anchored in this frame).
+        following = a?.locked && found ? (found.track ? found : await anchorInFrame(image, found)) : null;
         // Asked for another day, but the clock still shows a different one.
         const wanted = targetRef.current;
         if (wanted && found?.date && found.date !== wanted.date) {
           hint = 'wrongDay';
           setShowHow(true);
         }
-        // Only locked frames where both readings agree count towards the agreement.
-        if (hint === 'steady' && found?.confirmed) history = [...history, { date: found.date, rows: found.rows }].slice(-HISTORY);
+        // Only locked frames count towards the agreement: searched ones where both readings agree, and followed ones.
+        if (hint === 'steady' && found?.confirmed) history = [...history, { date: found.date, rows: found.rows, weight: found.tracked ? 1 : 2 }].slice(-HISTORY);
         else if (hint !== 'steady') history = history.slice(1);
         setPhase({ kind: 'aiming', hint, aim: a, progress: progress(history) });
         const agreed = hint === 'steady' ? agreement(history) : null;

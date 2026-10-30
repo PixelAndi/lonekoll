@@ -86,6 +86,15 @@ describe('agreement', () => {
     expect(agreement([ok, misread, ok, { ...ok, date: null }, ok])).toEqual({ date: '2026-10-29', rows: [{ in: '14:30', out: '18:20' }] });
   });
 
+  it('counts a followed frame as one reading, a searched one as two', () => {
+    const followed = { ...ok, weight: 1 };
+    expect(agreement([followed, followed])).toBeNull();
+    expect(agreement([ok, followed])).toEqual({ date: '2026-10-29', rows: [{ in: '14:30', out: '18:20' }] });
+    expect(agreement([followed, { ...misread, weight: 1 }, followed, followed])).toEqual({ date: '2026-10-29', rows: [{ in: '14:30', out: '18:20' }] });
+    expect(agreement([ok, { ...misread, weight: 1 }])).toBeNull();
+    expect(progress([followed])).toBe(1);
+  });
+
   it('never accepts times that make no sense', () => {
     // 04:30–18:20 is a 14-hour row.
     expect(agreement([misread, misread])).toBeNull();
