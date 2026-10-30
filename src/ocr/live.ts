@@ -1,4 +1,5 @@
 import { checkOrder, checkPlausible, type StampRow } from './parse.ts';
+import type { LearnMaterial } from './glyphs.ts';
 import type { FoundTable } from './pipeline.ts';
 
 // The live scanner. The user points the camera roughly at the clock's table;
@@ -108,9 +109,14 @@ export interface FrameReading {
   rows: StampRow[];
   /**
    * How many independent readings agreed on it: 2 for a frame where the table
-   * was searched for (the search pass and the rows crop), 1 for a followed one.
+   * was searched for (the search pass and the rows crop), 1 for a followed one;
+   * one more when the learned digits read the same (see glyphs.ts).
    */
   weight?: number;
+  /** What to learn the digits from, should this reading be the one saved. */
+  learn?: LearnMaterial;
+  /** Times the learned digits clearly read differently, as "row:field" (see glyphs.ts). */
+  doubts?: string[];
 }
 
 /** Readings kept for the majority. */

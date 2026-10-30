@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useApp } from '../app-context.ts';
-import { db, newId, saveDay } from '../db.ts';
+import { db, learnDigits, newId, saveDay } from '../db.ts';
 import type { DayRecord, StampPair } from '../domain/model.ts';
 import { forgottenStamps } from '../domain/shifts.ts';
 import { todayLocal } from '../domain/time.ts';
@@ -164,6 +164,9 @@ function PhotoReview({
       updatedAt: Date.now(),
     };
     await saveDay(day);
+    // The scanner learns the clock's digits from the times as saved (corrections included).
+    const material = state.reading?.learn;
+    if (material) await learnDigits(material, latestRows.current).catch(() => undefined);
     onDone();
   };
 

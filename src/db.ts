@@ -1,6 +1,7 @@
 import Dexie, { type Table } from 'dexie';
 import { DEFAULT_SETTINGS, type DayRecord, type Settings } from './domain/model.ts';
 import type { PaySlip } from './domain/payslip.ts';
+import { EMPTY_MEMORY, learn, type DigitMemory, type LearnMaterial } from './ocr/glyphs.ts';
 import type { LocalDate } from './domain/time.ts';
 
 // Everything is stored in the browser's IndexedDB on this device only.
@@ -21,6 +22,11 @@ export interface SlipRecord {
   pdf: Blob;
 }
 
+/** What the scanner has learned of the clock's digits (see ocr/glyphs.ts). */
+export interface LearningRecord extends DigitMemory {
+  id: 'digits';
+}
+
 interface SettingsRecord {
   id: 'settings';
   value: Settings;
@@ -31,6 +37,7 @@ class LonekollDB extends Dexie {
   photos!: Table<PhotoRecord, string>;
   slips!: Table<SlipRecord, string>;
   settings!: Table<SettingsRecord, string>;
+  learning!: Table<LearningRecord, string>;
 
   constructor() {
     super('lonekoll');
@@ -40,6 +47,7 @@ class LonekollDB extends Dexie {
       slips: 'id, periodStart',
       settings: 'id',
     });
+    this.version(2).stores({ learning: 'id' });
   }
 }
 
@@ -71,6 +79,21 @@ export async function loadSettings(): Promise<Settings> {
 export async function saveSettings(patch: Partial<Settings>): Promise<void> {
   const current = await loadSettings();
   await db.settings.put({ id: 'settings', value: { ...current, ...patch } });
+}
+
+export async function loadDigitMemory(): Promise<DigitMemory> {
+  return (await db.learning.get('digits')) ?? EMPTY_MEMORY;
+}
+
+/** Learns the clock's digits from a saved scan: the times as saved, corrections included. */
+export async function learnDigits(material: LearnMaterial, saved: { in: string | null; out: string | null }[]): Promise<void> {
+  const before = await loadDigitMemory();
+  const after = learn(before, material, saved);
+  if (after !== before) await db.learning.put({ ...after, id: 'digits' });
+}
+
+export async function forgetDigits(): Promise<void> {
+  await db.learning.clear();
 }
 
 export async function saveDay(day: DayRecord): Promise<void> {

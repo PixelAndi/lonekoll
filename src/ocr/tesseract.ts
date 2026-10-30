@@ -20,11 +20,15 @@ const PARAMS: Record<OcrMode, Record<string, string>> = {
   rows: { tessedit_pageseg_mode: PSM.SPARSE_TEXT, tessedit_char_whitelist: '0123456789:x' },
 };
 
-type PageLike = { blocks: { paragraphs: { lines: { words: OcrWord[] }[] }[] }[] | null };
+type PageLike = { blocks: { paragraphs: { lines: { words: (OcrWord & { symbols?: { text: string; bbox: OcrWord['bbox'] }[] })[] }[] }[] }[] | null };
 
 function wordsOf(page: PageLike): OcrWord[] {
   return (page.blocks ?? []).flatMap((b) =>
-    b.paragraphs.flatMap((p) => p.lines.flatMap((l) => l.words.map(({ text, confidence, bbox }) => ({ text, confidence, bbox })))),
+    b.paragraphs.flatMap((p) =>
+      p.lines.flatMap((l) =>
+        l.words.map(({ text, confidence, bbox, symbols }) => ({ text, confidence, bbox, symbols: symbols?.map((c) => ({ text: c.text, bbox: c.bbox })) })),
+      ),
+    ),
   );
 }
 

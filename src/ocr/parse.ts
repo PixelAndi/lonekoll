@@ -11,7 +11,11 @@ export interface OcrWord {
   text: string;
   confidence: number;
   bbox: { x0: number; y0: number; x1: number; y1: number };
+  /** Its characters and where each is, when the OCR gives them. */
+  symbols?: { text: string; bbox: OcrWord['bbox'] }[];
 }
+
+export type TimeBox = OcrWord['bbox'] & { symbols?: OcrWord['symbols'] };
 
 export interface StampRow {
   in: string | null;
@@ -22,6 +26,9 @@ export interface StampRow {
 export interface ReadRow extends StampRow {
   inConfidence?: number;
   outConfidence?: number;
+  /** Where each time was read, in the crop's pixels, and its characters (to learn and check its digits). */
+  inBox?: TimeBox;
+  outBox?: TimeBox;
 }
 
 /** Column centres as a fraction of the bar width, measured on real photos. */
@@ -63,6 +70,7 @@ export function readTimeToken(raw: string): Token | null {
 interface Placed {
   token: Token;
   confidence: number;
+  bbox: TimeBox;
   cx: number;
   cy: number;
   height: number;
@@ -76,6 +84,7 @@ export function parseRows(words: OcrWord[], cropWidth: number): Parsed<ReadRow[]
     placed.push({
       token,
       confidence: w.confidence,
+      bbox: { ...w.bbox, symbols: w.symbols },
       cx: (w.bbox.x0 + w.bbox.x1) / 2 / cropWidth,
       cy: (w.bbox.y0 + w.bbox.y1) / 2,
       height: w.bbox.y1 - w.bbox.y0,
@@ -107,6 +116,7 @@ export function parseRows(words: OcrWord[], cropWidth: number): Parsed<ReadRow[]
       if (p.token.kind === 'time') {
         row[column] = p.token.value;
         row[column === 'in' ? 'inConfidence' : 'outConfidence'] = p.confidence;
+        row[column === 'in' ? 'inBox' : 'outBox'] = p.bbox;
         used.push(p.confidence);
       }
     }

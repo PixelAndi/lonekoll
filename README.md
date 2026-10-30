@@ -40,6 +40,15 @@ report you can go through with your employer.
   in by hand instead, and saved photos can be chosen (those are read by
   finding the table's coloured bars). Times are read on the device
   (Tesseract OCR) and shown next to the picture for you to confirm.
+  **The scanner learns.** Each saved scan teaches it the clock's digits: the
+  digits of every time are kept as small pictures with the value you saved
+  (your corrections included), on the phone only. Once it has seen every
+  digit, it reads each scanned time a second way by comparing its digits
+  with those: when both readings agree the scan finishes sooner, and a time
+  it clearly reads differently is marked for you to double-check. It never
+  makes a reading count for more unless both agree. Inställningar shows how
+  far it has come and how often its own reading was right, and can make it
+  forget.
   With **scanner diagnostics** turned on (Inställningar → Dina data), the
   latest frames as the scanner read them and a line per frame on what it made
   of them are kept until the next scan and can be shared, for troubleshooting.

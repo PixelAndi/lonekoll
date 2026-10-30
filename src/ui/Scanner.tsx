@@ -3,7 +3,9 @@ import { useApp } from '../app-context.ts';
 import type { DayRecord } from '../domain/model.ts';
 import { forgottenStamps, otherDayNeeded, type ForgottenStamp } from '../domain/shifts.ts';
 import { addDays, todayLocal } from '../domain/time.ts';
+import { loadDigitMemory } from '../db.ts';
 import { anchorInFrame, findInFrame, readPhoto, trackInFrame, warmUp } from '../ocr/browser.ts';
+import { checkRows, EMPTY_MEMORY, type DigitMemory } from '../ocr/glyphs.ts';
 import { agreement, aim, HISTORY, progress, searchArea, type Aim, type FrameReading, type Hint } from '../ocr/live.ts';
 import type { ClockReading, FoundTable } from '../ocr/pipeline.ts';
 import { ClockHowTo } from './ClockHowTo.tsx';
@@ -58,6 +60,9 @@ const HINT_TEXT = {
   left: 'scan.left',
   right: 'scan.right',
 } as const;
+
+const sameStamps = (a: FrameReading, b: { date: string; rows: { in: string | null; out: string | null }[] }) =>
+  a.date === b.date && a.rows.length === b.rows.length && a.rows.every((r, i) => r.in === b.rows[i].in && r.out === b.rows[i].out);
 
 /** A scan as the day it will be saved as, to check it together with the logged days. */
 const asDay = (scan: Scan): DayRecord => ({ date: scan.reading.date ?? '', rows: scan.reading.rows, photoIds: [], updatedAt: 0 });
@@ -114,6 +119,12 @@ export function Scanner({
   /** The day the other day is scanned from, for the how-to sketch. */
   const [fromDate, setFromDate] = useState<string | null>(null);
   const [showHow, setShowHow] = useState(false);
+
+  // What has been learned of the clock's digits, to check each reading against.
+  const digits = useRef<DigitMemory>(EMPTY_MEMORY);
+  useEffect(() => {
+    void loadDigitMemory().then((m) => (digits.current = m));
+  }, []);
 
   // Camera on while the scanner is open; text recognition loads meanwhile.
   useEffect(() => {
@@ -230,26 +241,36 @@ export function Scanner({
           hint = 'wrongDay';
           setShowHow(true);
         }
+        // The learned digits read the times too: a frame they agree with counts for more; times they clearly read differently are marked to double-check.
+        const check = found?.confirmed ? checkRows(found.rows, found.rowsCrop, digits.current) : { verdict: 'unsure' as const, doubts: [] };
         // Only locked frames count towards the agreement: searched ones where both readings agree, and followed ones.
-        if (hint === 'steady' && found?.confirmed) history = [...history, { date: found.date, rows: found.rows, weight: found.tracked ? 1 : 2 }].slice(-HISTORY);
+        if (hint === 'steady' && found?.confirmed) {
+          const weight = (found.tracked ? 1 : 2) + (check.verdict === 'agree' ? 1 : 0);
+          const learn = found.rowsCrop ? { crop: found.rowsCrop, rows: found.rows } : undefined;
+          history = [...history, { date: found.date, rows: found.rows, weight, learn, doubts: check.doubts }].slice(-HISTORY);
+        }
         else if (hint !== 'steady') history = history.slice(1);
         setPhase({ kind: 'aiming', hint, aim: a, progress: progress(history) });
         const agreed = hint === 'steady' ? agreement(history) : null;
         if (diagnosticsRef.current) {
-          logFrame(canvas, { mode, ms: performance.now() - frameStart, hint, found, aim: a, votes: progress(history), agreed: !!agreed });
+          logFrame(canvas, { mode: `${mode} digits=${check.verdict}${check.doubts.length ? ` doubts=${check.doubts.join(',')}` : ''}`, ms: performance.now() - frameStart, hint, found, aim: a, votes: progress(history), agreed: !!agreed });
         }
         if (!agreed) continue;
 
         v.pause();
         navigator.vibrate?.(80);
         const file = await toFile(canvas);
+        // A time the learned digits clearly read differently in any frame that read it so is marked to double-check.
+        const doubted = new Set(history.filter((r) => sameStamps(r, agreed)).flatMap((r) => r.doubts ?? []));
         const reading: ClockReading = {
           date: agreed.date,
           dateUncertain: false,
-          rows: agreed.rows,
+          rows: agreed.rows.map((r, i) => ({ ...r, inUncertain: doubted.has(`${i}:in`), outUncertain: doubted.has(`${i}:out`) })),
           issues: [],
           confidence: 100,
           table: { left: 0, top: 0, width: canvas.width, height: canvas.height },
+          // The latest frame that read exactly this, to learn the digits from once it's saved.
+          learn: [...history].reverse().find((r) => sameStamps(r, agreed))?.learn,
         };
         const scan = { file, reading };
         // The logged days plus what was scanned just now.

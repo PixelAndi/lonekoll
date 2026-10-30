@@ -21,6 +21,7 @@ import {
   type ReadRow,
   type StampRow,
 } from './parse.ts';
+import type { LearnMaterial } from './glyphs.ts';
 
 export type OcrMode = 'date' | 'dateSparse' | 'rows' | 'find';
 
@@ -44,6 +45,8 @@ export interface ClockReading {
   confidence: number;
   /** Where the stamp table is in the photo (photo pixels), to show it zoomed in. */
   table?: { left: number; top: number; width: number; height: number };
+  /** From the live scanner: what to learn the clock's digits from once the times are saved (see glyphs.ts). */
+  learn?: LearnMaterial;
 }
 
 export interface PreparedCrops {
@@ -296,6 +299,8 @@ export interface FoundTable {
   tracked?: boolean;
   /** Set once locked on (anchorTable): what the following frames are compared with. */
   track?: Track;
+  /** The crop the rows were read from (the boxes in `rows` are in its pixels). */
+  rowsCrop?: GrayImage;
 }
 
 /**
@@ -389,6 +394,7 @@ export async function findTableByText(img: RGBAImage, engine: OcrEngine): Promis
     bothEnds: !!(left && right),
     barHeight: thickness,
     dateBox: dateWord.bbox,
+    rowsCrop: crops.rows,
   };
 }
 
@@ -566,6 +572,7 @@ export async function trackTable(img: RGBAImage, prev: FoundTable, engine: OcrEn
     confirmed: true,
     tracked: true,
     track: { ...track, dx, dy, frames: track.frames + 1 },
+    rowsCrop: crop,
   };
 }
 

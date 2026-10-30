@@ -9,6 +9,7 @@ import { Card, Field, Notice, Page } from './common.tsx';
 import { decimalText, LazyInput, numberOrUndefined } from './settings/inputs.tsx';
 import { TimeField } from './StampRowsEditor.tsx';
 import { hasScanLog, shareScanLog } from './scanDiagnostics.ts';
+import { ScannerLearning } from './settings/ScannerLearning.tsx';
 import { ScheduleSettings } from './settings/ScheduleSettings.tsx';
 import { SupplementSettings } from './settings/SupplementSettings.tsx';
 import { TaxSettings } from './settings/TaxSettings.tsx';
@@ -164,6 +165,7 @@ export function SettingsView() {
           </button>
           <input ref={importInput} type="file" accept=".zip,application/zip" hidden onChange={(e) => onImport(e.target.files?.[0])} />
         </div>
+        <ScannerLearning />
         <label className="checkbox">
           <input type="checkbox" checked={!!settings.scanDiagnostics} onChange={(e) => save({ scanDiagnostics: e.target.checked })} />
           {t('diag.setting')}

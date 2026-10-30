@@ -52,8 +52,8 @@ export async function importBackup(file: Blob): Promise<void> {
     ...s,
     pdf: new Blob([(files[`slips/${s.id}.pdf`] ?? new Uint8Array()) as BlobPart], { type: 'application/pdf' }),
   }));
-  await db.transaction('rw', [db.settings, db.days, db.photos, db.slips], async () => {
-    await Promise.all([db.settings.clear(), db.days.clear(), db.photos.clear(), db.slips.clear()]);
+  await db.transaction('rw', [db.settings, db.days, db.photos, db.slips, db.learning], async () => {
+    await Promise.all([db.settings.clear(), db.days.clear(), db.photos.clear(), db.slips.clear(), db.learning.clear()]);
     if (data.settings) await db.settings.put({ id: 'settings', value: data.settings });
     await db.days.bulkPut(data.days);
     await db.photos.bulkPut(photos);
@@ -62,8 +62,8 @@ export async function importBackup(file: Blob): Promise<void> {
 }
 
 export async function deleteEverything(): Promise<void> {
-  await db.transaction('rw', [db.settings, db.days, db.photos, db.slips], async () => {
-    await Promise.all([db.settings.clear(), db.days.clear(), db.photos.clear(), db.slips.clear()]);
+  await db.transaction('rw', [db.settings, db.days, db.photos, db.slips, db.learning], async () => {
+    await Promise.all([db.settings.clear(), db.days.clear(), db.photos.clear(), db.slips.clear(), db.learning.clear()]);
   });
 }
 
