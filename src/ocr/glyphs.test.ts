@@ -56,18 +56,18 @@ const teach = (memory: DigitMemory, pairs: [string, string][]) => {
 
 describe('learning the clock’s digits', () => {
   it('cuts a time into its four digits', () => {
-    const { crop, boxes } = draw(['14:25']);
+    const { crop, boxes } = draw(['13:50']);
     expect(timeGlyphs(crop, boxes[0])).toHaveLength(4);
     // Also by its gaps, without the OCR's character boxes.
     expect(timeGlyphs(crop, { ...boxes[0], symbols: undefined })).toHaveLength(4);
   });
 
   it('is not used before every digit has been seen', () => {
-    const memory = teach(EMPTY_MEMORY, [['14:25', '18:40']]);
+    const memory = teach(EMPTY_MEMORY, [['13:50', '15:31']]);
     expect(memoryReady(memory)).toBe(false);
-    // 1 and 4 are seen twice each in 14:25 and 18:40.
-    expect(digitsLearned(memory)).toBe(2);
-    const s = scan([['14:25', '18:40']]);
+    // 1, 3 and 5 are seen twice each in 13:50 and 15:31.
+    expect(digitsLearned(memory)).toBe(3);
+    const s = scan([['13:50', '15:31']]);
     expect(checkRows(s.rows, s.crop, memory)).toEqual({ verdict: 'unsure', doubts: [] });
   });
 
