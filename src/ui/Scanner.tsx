@@ -4,15 +4,17 @@ import type { DayRecord } from '../domain/model.ts';
 import { forgottenStamps, otherDayNeeded, type ForgottenStamp } from '../domain/shifts.ts';
 import { addDays, todayLocal } from '../domain/time.ts';
 import { findInFrame, readPhoto, warmUp } from '../ocr/browser.ts';
-import { agreement, hintFor, HISTORY, progress, searchArea, type FrameReading, type Hint } from '../ocr/live.ts';
+import { agreement, aim, HISTORY, progress, searchArea, type Aim, type FrameReading, type Hint } from '../ocr/live.ts';
 import type { ClockReading, FoundTable } from '../ocr/pipeline.ts';
 import { ClockHowTo } from './ClockHowTo.tsx';
+import { ScannerHud, type HudState } from './ScannerHud.tsx';
 
 // Live camera scanner for the clock screen. The user points the camera
-// roughly at the clock's table; each frame's search area is read in one pass,
-// the table is found from the words on its date bar, and the data counts as
-// grabbed when the latest frames agree (see live.ts). Nothing depends on the
-// screen's colours.
+// roughly at the clock's table; each frame's search area is read in one pass
+// and the table is found from the words on its date bar. A targeting display
+// (ScannerHud) shows how to move the phone until the table is locked on, and
+// the data counts as grabbed when the latest locked frames agree (see
+// live.ts). Nothing depends on the screen's colours.
 
 /** Width the search area is drawn at for reading. */
 const READ_WIDTH = 1200;
@@ -30,7 +32,7 @@ type AimHint = Hint | 'loading' | 'slow' | 'wrongDay' | 'retrying';
 
 type Phase =
   | { kind: 'starting' }
-  | { kind: 'aiming'; hint: AimHint; found: FoundTable | null; progress: number }
+  | { kind: 'aiming'; hint: AimHint; aim: Aim | null; progress: number }
   | { kind: 'reading' }
   | { kind: 'done'; scan: Scan; complete: boolean }
   /** Read, but a stamp looks forgotten: fill it in by hand or scan again? */
@@ -50,6 +52,10 @@ const HINT_TEXT = {
   needRows: 'scan.needRows',
   steady: 'scan.steady',
   wrongDay: 'scan.wrongDay',
+  up: 'scan.up',
+  down: 'scan.down',
+  left: 'scan.left',
+  right: 'scan.right',
 } as const;
 
 /** A scan as the day it will be saved as, to check it together with the logged days. */
@@ -121,7 +127,7 @@ export function Scanner({
         v.srcObject = stream;
         await v.play();
         setFrame({ width: v.videoWidth, height: v.videoHeight });
-        setPhase({ kind: 'aiming', hint: 'loading', found: null, progress: 0 });
+        setPhase({ kind: 'aiming', hint: 'loading', aim: null, progress: 0 });
       } catch (e) {
         if (!alive) return;
         const denied = e instanceof DOMException && (e.name === 'NotAllowedError' || e.name === 'SecurityError');
@@ -151,6 +157,7 @@ export function Scanner({
       let history: FrameReading[] = [];
       let lastFound: FoundTable | null = null;
       let errors = 0;
+      let wasLocked = false;
       while (alive) {
         const v = video.current;
         if (!v || v.videoWidth === 0) {
@@ -186,23 +193,27 @@ export function Scanner({
             setPhase({ kind: 'error', reason: 'reading', detail: errorText(e) });
             return;
           }
-          setPhase({ kind: 'aiming', hint: 'retrying', found: null, progress: 0 });
+          setPhase({ kind: 'aiming', hint: 'retrying', aim: null, progress: 0 });
           await new Promise((r) => setTimeout(r, 800));
           continue;
         }
         if (!alive) return;
         if (found) lastFound = found;
-        let hint: AimHint = hintFor(found);
+        const a = aim(found, image.width, image.height);
+        let hint: AimHint = a?.hint ?? 'place';
+        // A short tick when it locks on.
+        if (a?.locked && !wasLocked) navigator.vibrate?.(15);
+        wasLocked = !!a?.locked;
         // Asked for another day, but the clock still shows a different one.
         const wanted = targetRef.current;
         if (wanted && found?.date && found.date !== wanted.date) {
           hint = 'wrongDay';
           setShowHow(true);
         }
-        // Only frames where both readings agree count towards the agreement.
+        // Only locked frames where both readings agree count towards the agreement.
         if (hint === 'steady' && found?.confirmed) history = [...history, { date: found.date, rows: found.rows }].slice(-HISTORY);
         else if (hint !== 'steady') history = history.slice(1);
-        setPhase({ kind: 'aiming', hint, found, progress: progress(history) });
+        setPhase({ kind: 'aiming', hint, aim: a, progress: progress(history) });
         const agreed = hint === 'steady' ? agreement(history) : null;
         if (!agreed) continue;
 
@@ -243,7 +254,7 @@ export function Scanner({
 
   const area = searchArea(frame.width, frame.height);
   const toFrame = area.width / Math.min(area.width, READ_WIDTH);
-  const found = phase.kind === 'aiming' ? phase.found : null;
+  const currentAim = phase.kind === 'aiming' ? phase.aim : null;
   const locked = phase.kind === 'aiming' && phase.hint === 'steady';
   const grabbed = phase.kind === 'done' && phase.complete;
   const shown = phase.kind === 'done' || phase.kind === 'missing' || phase.kind === 'otherDay' ? phase.scan.reading : null;
@@ -269,67 +280,30 @@ export function Scanner({
     tone = phase.complete ? 'ok' : 'info';
     message = phase.complete ? t('scan.grabbed') : t('scan.check');
   } else {
-    message = t(HINT_TEXT[phase.hint], { date: target ? fmt.date(target.date) : '', shown: found?.date ? fmt.date(found.date) : '' });
+    message = t(HINT_TEXT[phase.hint], { date: target ? fmt.date(target.date) : '', shown: ''  });
     if (phase.hint === 'steady') tone = 'ok';
     if (phase.hint === 'wrongDay') tone = 'warn';
   }
   const busy = phase.kind === 'starting' || phase.kind === 'reading' || (phase.kind === 'aiming' && ['loading', 'slow', 'retrying'].includes(phase.hint));
 
-  // Corner brackets of the search area.
-  const arm = Math.min(area.width, area.height) * 0.16;
-  const r = arm * 0.35;
-  const corners = [
-    [area.left, area.top, 1, 1],
-    [area.left + area.width, area.top, -1, 1],
-    [area.left, area.top + area.height, 1, -1],
-    [area.left + area.width, area.top + area.height, -1, -1],
-  ]
-    .map(([x, y, sx, sy]) => `M${x} ${y + sy * arm} V${y + sy * r} Q${x} ${y} ${x + sx * r} ${y} H${x + sx * arm}`)
-    .join(' ');
-
-  // The found table's outline in frame pixels: from the date bar down over the rows.
-  let outline = '';
-  if (found) {
-    const { loc } = found;
-    const w = loc.right - loc.left;
-    const thick = loc.barBottom - loc.barTop - Math.abs(Math.tan(loc.angle)) * w;
-    const cx = (loc.left + loc.right) / 2;
-    const cy = (loc.barTop + loc.barBottom) / 2;
-    const cos = Math.cos(loc.angle);
-    const sin = Math.sin(loc.angle);
-    outline = [
-      [-w / 2, -thick * 0.7],
-      [w / 2, -thick * 0.7],
-      [w / 2, thick * 5.5],
-      [-w / 2, thick * 5.5],
-    ]
-      .map(([dx, dy]) => `${area.left + (cx + dx * cos - dy * sin) * toFrame},${area.top + (cy + dx * sin + dy * cos) * toFrame}`)
-      .join(' ');
-  }
   const dots = phase.kind === 'aiming' ? phase.progress : grabbed ? 3 : 0;
+  const hudState: HudState =
+    grabbed ? 'grabbed' : locked ? 'locked' : phase.kind === 'aiming' && currentAim ? 'adjusting' : phase.kind === 'aiming' && !busy ? 'searching' : 'idle';
 
   return (
     <div className="scanner" role="dialog" aria-modal="true" aria-label={t('scan.title')}>
       <div className="scanner-view">
         <video ref={video} className="scanner-video" playsInline muted />
         {phase.kind !== 'error' && (
-          <svg className="scanner-hud" viewBox={`0 0 ${frame.width} ${frame.height}`} preserveAspectRatio="xMidYMid meet" aria-hidden="true">
-            <defs>
-              <mask id="scanner-cutout">
-                <rect width={frame.width} height={frame.height} fill="white" />
-                <rect x={area.left} y={area.top} width={area.width} height={area.height} rx={r} fill="black" />
-              </mask>
-            </defs>
-            <rect width={frame.width} height={frame.height} className="scanner-dim" mask="url(#scanner-cutout)" />
-            <path d={corners} className={`scanner-corners ${locked || grabbed ? 'scanner-corners-ok' : ''}`} />
-            {outline && <polygon points={outline} className={`scanner-found ${locked ? 'scanner-found-ok' : ''}`} />}
-            {grabbed && (
-              <g className="scanner-check" transform={`translate(${frame.width / 2} ${area.top + area.height / 2}) scale(${area.height / 160})`}>
-                <circle r="34" />
-                <path d="M-15 1 -4 12 17 -11" />
-              </g>
-            )}
-          </svg>
+          <ScannerHud
+            frame={frame}
+            area={area}
+            toFrame={toFrame}
+            aim={currentAim}
+            hint={phase.kind === 'aiming' && phase.hint in HINT_TEXT ? (phase.hint as Hint) : null}
+            state={hudState}
+            progress={phase.kind === 'aiming' ? phase.progress : grabbed ? 3 : 0}
+          />
         )}
         {phase.kind === 'otherDay' && phase.scan.reading.date && (
           <div className="scanner-howto">
@@ -387,7 +361,7 @@ export function Scanner({
                 pending.current = [...pending.current, phase.scan];
                 setFromDate(phase.scan.reading.date);
                 setTarget({ date: phase.date, direction: phase.direction });
-                setPhase({ kind: 'aiming', hint: 'place', found: null, progress: 0 });
+                setPhase({ kind: 'aiming', hint: 'place', aim: null, progress: 0 });
               }}
             >
               {t('scan.scanDay', { date: fmt.date(phase.date) })}
@@ -398,7 +372,7 @@ export function Scanner({
         <div className="scanner-question">
           <p>{t('scan.forgotQuestion')}</p>
           <div className="scanner-question-buttons">
-            <button type="button" className="button" onClick={() => setPhase({ kind: 'aiming', hint: 'place', found: null, progress: 0 })}>
+            <button type="button" className="button" onClick={() => setPhase({ kind: 'aiming', hint: 'place', aim: null, progress: 0 })}>
               {t('scan.again')}
             </button>
             <button type="button" className="button button-primary" onClick={() => onScanned([...pending.current, markForgotten(phase.scan, phase.forgotten)])}>

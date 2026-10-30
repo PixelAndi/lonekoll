@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { agreement, hintFor, progress, searchArea, type FrameReading } from './live.ts';
+import { agreement, aim, progress, searchArea, type FrameReading } from './live.ts';
 import type { FoundTable } from './pipeline.ts';
 
 const found = (f: Partial<FoundTable> = {}): FoundTable => ({
@@ -29,22 +29,46 @@ describe('searchArea', () => {
   });
 });
 
-describe('hintFor', () => {
-  it('says what to fix from where the table was found', () => {
-    expect(hintFor(null)).toBe('place');
-    expect(hintFor(found({ width: 0.3 }))).toBe('closer');
-    // Text too small to read: the bar is low in pixels, or the date couldn't be read.
-    expect(hintFor(found({ barHeight: 18 }))).toBe('closer');
-    expect(hintFor(found({ date: null, rows: [] }))).toBe('closer');
-    expect(hintFor(found({ width: 1.25 }))).toBe('further');
-    expect(hintFor(found({ width: 1.1, bothEnds: false }))).toBe('further');
-    // A little wider than the area is fine while both ends are read.
-    expect(hintFor(found({ width: 1.07 }))).toBe('steady');
-    expect(hintFor(found({ loc: { ...found().loc, angle: 0.2 } }))).toBe('straighten');
-    expect(hintFor(found({ rows: [] }))).toBe('needRows');
-    expect(hintFor(found())).toBe('steady');
-    // Roughly placed is fine: a bit small, a bit tilted.
-    expect(hintFor(found({ width: 0.55, loc: { ...found().loc, angle: 0.08 } }))).toBe('steady');
+describe('aim', () => {
+  // A 1000 × 600 search area; the target is a table 800 wide in the middle.
+  const W = 1000;
+  const H = 600;
+  const t = 800 / 23.5;
+  /** A table of the given width (share of the target), its middle at (x, y), tilted by `angle`. */
+  const at = (x: number, y: number, scale = 1, angle = 0, f: Partial<FoundTable> = {}) => {
+    const w = 800 * scale;
+    const th = t * scale;
+    const by = y - 2.25 * th;
+    return found({ loc: { left: x - w / 2, right: x + w / 2, barTop: by - th / 2, barBottom: by + th / 2, headerBottom: by + th, angle, thickness: th }, barHeight: th, ...f });
+  };
+
+  it('locks on when the table is roughly on the target', () => {
+    expect(aim(at(500, 300), W, H)).toMatchObject({ hint: 'steady', locked: true });
+    expect(aim(at(560, 340, 0.85, 0.06), W, H)).toMatchObject({ hint: 'steady', locked: true });
+    expect(aim(null, W, H)).toBeNull();
+  });
+
+  it('says which way to move the phone: towards where the table is', () => {
+    expect(aim(at(300, 300), W, H)?.hint).toBe('left');
+    expect(aim(at(700, 300), W, H)?.hint).toBe('right');
+    expect(aim(at(500, 150), W, H)?.hint).toBe('up');
+    expect(aim(at(500, 450), W, H)?.hint).toBe('down');
+    expect(aim(at(500, 300, 0.5), W, H)?.hint).toBe('closer');
+    expect(aim(at(500, 300, 1.4), W, H)?.hint).toBe('further');
+    expect(aim(at(500, 300, 1, 0.15), W, H)?.hint).toBe('straighten');
+  });
+
+  it('asks to come closer when the text is too small or unread, and for the rows when they are missing', () => {
+    expect(aim(at(500, 300, 1, 0, { barHeight: 18 }), W, H)?.hint).toBe('closer');
+    expect(aim(at(500, 300, 1, 0, { date: null, rows: [] }), W, H)?.hint).toBe('closer');
+    expect(aim(at(500, 300, 1, 0, { rows: [] }), W, H)).toMatchObject({ hint: 'needRows', locked: false });
+  });
+
+  it('reports the offsets for the guide', () => {
+    const a = aim(at(600, 240, 0.9), W, H)!;
+    expect(a.dx).toBeCloseTo(0.1);
+    expect(a.dy).toBeCloseTo(-0.1);
+    expect(a.scale).toBeCloseTo(0.9);
   });
 });
 

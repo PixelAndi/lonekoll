@@ -1103,8 +1103,7 @@ input[type='checkbox'] {
   min-height: 0;
 }
 
-.scanner-video,
-.scanner-hud {
+.scanner-video {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -1355,37 +1354,7 @@ input[type='checkbox'] {
   font-size: 0.85rem;
 }
 
-/* Scanner: corner brackets, found-table outline, status pill */
-.scanner-dim {
-  fill: rgb(0 0 0 / 0.45);
-}
-
-.scanner-corners {
-  fill: none;
-  stroke: rgb(255 255 255 / 0.9);
-  stroke-width: 5px;
-  stroke-linecap: round;
-  vector-effect: non-scaling-stroke;
-  transition: stroke 0.25s;
-}
-
-.scanner-corners-ok {
-  stroke: #3ddc84;
-}
-
-.scanner-found {
-  fill: rgb(255 255 255 / 0.06);
-  stroke: rgb(255 255 255 / 0.55);
-  stroke-width: 2px;
-  stroke-linejoin: round;
-  vector-effect: non-scaling-stroke;
-  transition: stroke 0.25s, fill 0.25s;
-}
-
-.scanner-found-ok {
-  fill: rgb(61 220 132 / 0.12);
-  stroke: #3ddc84;
-}
+/* Scanner: check mark, status pill */
 
 .scanner-check circle {
   fill: #3ddc84;
@@ -1514,4 +1483,217 @@ input[type='checkbox'] {
 
 .scanner-shutter:disabled {
   opacity: 0.35;
+}
+
+/* Scanner targeting display (ScannerHud) */
+.hud {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  --hud-idle: rgb(255 255 255 / 0.85);
+  --hud-adjust: #ffc93c;
+  --hud-lock: #3ddc84;
+}
+
+.hud * {
+  vector-effect: non-scaling-stroke;
+}
+
+.hud-dim {
+  fill: rgb(0 0 0 / 0.4);
+}
+
+.hud-area {
+  fill: none;
+  stroke: rgb(255 255 255 / 0.35);
+  stroke-width: 2px;
+  stroke-linecap: round;
+}
+
+.hud-target {
+  fill: none;
+  stroke: var(--hud-idle);
+  stroke-width: 3px;
+  stroke-linecap: round;
+  transition: stroke 0.25s;
+}
+
+.hud-cross {
+  stroke: var(--hud-idle);
+  stroke-width: 1.5px;
+  opacity: 0.7;
+}
+
+.hud-label {
+  fill: var(--hud-idle);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+}
+
+.hud-adjusting .hud-label {
+  fill: var(--hud-adjust);
+}
+
+.hud-locked .hud-target,
+.hud-grabbed .hud-target,
+.hud-locked .hud-cross {
+  stroke: var(--hud-lock);
+}
+
+.hud-locked .hud-label,
+.hud-grabbed .hud-label {
+  fill: var(--hud-lock);
+}
+
+/* Searching: a scan line sweeping down the target. */
+.hud-sweep {
+  animation: hud-sweep 1.6s ease-in-out infinite;
+}
+
+@keyframes hud-sweep {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(var(--sweep));
+  }
+}
+
+.hud-searching .hud-target {
+  animation: hud-breathe 1.6s ease-in-out infinite;
+}
+
+@keyframes hud-breathe {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* The tracker glides between readings. */
+.hud-tracker {
+  transform-box: view-box;
+  transform-origin: 0 0;
+  transition: transform 0.45s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.hud-tracker-box {
+  transform-box: view-box;
+  transform-origin: 0 0;
+  transition: transform 0.45s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.hud-tracker-box rect {
+  fill: rgb(255 201 60 / 0.08);
+  stroke: rgb(255 201 60 / 0.5);
+  stroke-width: 1.5px;
+  stroke-dasharray: 6 5;
+}
+
+.hud-tracker-box path {
+  fill: none;
+  stroke: var(--hud-adjust);
+  stroke-width: 3.5px;
+  stroke-linecap: round;
+}
+
+.hud-locked .hud-tracker-box rect {
+  fill: rgb(61 220 132 / 0.12);
+  stroke: rgb(61 220 132 / 0.6);
+  stroke-dasharray: none;
+}
+
+.hud-locked .hud-tracker-box path {
+  stroke: var(--hud-lock);
+}
+
+/* Which way to move the phone. */
+.hud-move-line {
+  fill: none;
+  stroke: var(--hud-adjust);
+  stroke-width: 3px;
+  stroke-dasharray: 8 7;
+  animation: hud-march 0.6s linear infinite;
+}
+
+@keyframes hud-march {
+  to {
+    stroke-dashoffset: -15;
+  }
+}
+
+.hud-move-head,
+.hud-zoom,
+.hud-turn path {
+  fill: none;
+  stroke: var(--hud-adjust);
+  stroke-width: 4px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.hud-zoom,
+.hud-move-head {
+  animation: hud-pulse 0.9s ease-in-out infinite;
+}
+
+.hud-turn {
+  transform-box: view-box;
+  transform-origin: 0 0;
+  animation: hud-pulse 0.9s ease-in-out infinite;
+}
+
+@keyframes hud-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* Lock-on ring. */
+.hud-ring-track {
+  fill: none;
+  stroke: rgb(61 220 132 / 0.25);
+  stroke-width: 4px;
+}
+
+.hud-ring-fill {
+  fill: none;
+  stroke: var(--hud-lock);
+  stroke-width: 4px;
+  stroke-linecap: round;
+  transition: stroke-dasharray 0.4s ease-out;
+}
+
+.hud-locked .hud-ring {
+  animation: hud-lock-in 0.35s ease-out;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+@keyframes hud-lock-in {
+  from {
+    transform: scale(1.8);
+    opacity: 0;
+  }
+}
+
+.hud-flash {
+  fill: #fff;
+  opacity: 0;
+  animation: hud-flash 0.5s ease-out;
+}
+
+@keyframes hud-flash {
+  15% {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hud * {
+    animation: none !important;
+    transition: none !important;
+  }
 }

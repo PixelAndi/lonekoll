@@ -20,8 +20,12 @@ report you can go through with your employer.
   read twice, once in that pass and once on their own as digits. A frame
   counts only when both readings agree, and the data is grabbed when the last
   two such frames agree (or three of the last five): the scanner confirms
-  with a check mark and the times, then opens the usual check. Short hints
-  ("Gå närmare", "Håll stilla") say what to change. Nothing depends on the
+  with a check mark and the times, then opens the usual check. A targeting
+  display guides the aim: a target in the middle, a tracker that follows the
+  table, a guide arrow for which way to move the phone, chevrons for closer or
+  further, a turn arrow for tilt; within a tolerance it locks on (green,
+  "LÅST", a short vibration) and a ring fills while the reading is
+  confirmed. Only locked frames count. Nothing depends on the
   screen's colours. If a stamp is missing (the clock shows "xx:xx") and it
   isn't a shift that crosses midnight, the scanner says which one looks
   forgotten and asks whether to fill it in by hand or scan again. A shift
