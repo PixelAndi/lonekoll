@@ -97,6 +97,11 @@ hosts the app. This is a design rule, and it is enforced:
 - The app has no way of sending data out: no network calls of its own, no
   sharing to other apps. The offline cache (`src/sw-template.js`) only passes
   on the app's own requests for its own files.
+- Pay slips (lönebesked) are read on the device: the PDF's bytes go straight
+  to pdf.js, which is bundled with the app, and the PDF and what was read from
+  it are stored only in the device's IndexedDB (deleting the slip deletes
+  both). It is never uploaded, and the app tells the user so where they import
+  it. Importing one makes no request except for the app's own pdf.js files.
 - `src/privacy.test.ts` checks all of this. The tests run before every
   deploy, so a change that adds a way to send data out, or loosens the
   security policy, fails the build and is never published.

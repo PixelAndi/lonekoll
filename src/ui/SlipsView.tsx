@@ -48,6 +48,9 @@ export function SlipsView() {
           <Icon name="slips" /> {t('slips.import')}
         </button>
         <input ref={input} type="file" accept="application/pdf,.pdf" hidden onChange={(e) => onFile(e.target.files?.[0])} />
+        <p className="slip-privacy small">
+          <Icon name="lock" /> <span>{t('slips.privacy')}</span>
+        </p>
         {busy && <Spinner label={t('slips.importing')} />}
         {error && <Notice kind="error">{error}</Notice>}
       </div>

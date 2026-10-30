@@ -83,4 +83,14 @@ describe('privacy: nothing leaves the device', () => {
     expect(calls.every((arg) => arg === 'request')).toBe(true);
     expect(code).not.toMatch(/XMLHttpRequest|sendBeacon|WebSocket|EventSource|https?:\/\//);
   });
+
+  it('a pay slip is read from its own bytes on the device, and nothing else is loaded for it', () => {
+    const extract = readFileSync(path.join(root, 'src', 'pdf', 'extract.ts'), 'utf8');
+    const browser = readFileSync(path.join(root, 'src', 'pdf', 'browser.ts'), 'utf8');
+    // pdf.js gets the file's bytes, never a link to fetch it from.
+    expect(extract).toMatch(/getDocument\(\{ data, isEvalSupported: false \}\)/);
+    // No fonts, character maps or decoders from elsewhere, and the reader itself is bundled with the app.
+    for (const code of [extract, browser]) expect(code).not.toMatch(/\burl\s*:|cMapUrl|standardFontDataUrl|wasmUrl|iccUrl/);
+    expect(browser).toContain("import('pdfjs-dist/build/pdf.worker.min.mjs?url')");
+  });
 });

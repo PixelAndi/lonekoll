@@ -279,6 +279,7 @@ const sv = {
 
   'slips.import': 'Importera lönebesked (PDF)',
   'slips.importing': 'Läser lönebeskedet…',
+  'slips.privacy': 'Ditt lönebesked stannar i telefonen. PDF:en läses här i appen och sparas bara på den här enheten – den laddas aldrig upp, och ingen annan kan se den, inte heller den som har gjort appen. Tar du bort lönebeskedet försvinner PDF:en också.',
   'slips.empty': 'Inga lönebesked ännu. Importera PDF:en du får från arbetsgivaren.',
   'slips.failed': 'Kunde inte läsa PDF:en: {error}',
   'slips.noLines': 'Hittade inga lönerader i PDF:en. Är det ett lönebesked?',
@@ -735,6 +736,7 @@ const en: Record<TextKey, string> = {
 
   'slips.import': 'Import pay slip (PDF)',
   'slips.importing': 'Reading the pay slip…',
+  'slips.privacy': 'Your pay slip stays on your phone. The PDF is read here in the app and stored only on this device – it is never uploaded, and nobody else can see it, not even whoever made the app. Deleting the pay slip deletes the PDF too.',
   'slips.empty': 'No pay slips yet. Import the PDF you get from your employer.',
   'slips.failed': 'Couldn’t read the PDF: {error}',
   'slips.noLines': 'No pay lines found in the PDF. Is it a pay slip?',

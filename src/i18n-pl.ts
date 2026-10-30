@@ -279,6 +279,7 @@ export const pl: Record<TextKey, string> = {
 
   'slips.import': 'Importuj pasek płacowy (PDF)',
   'slips.importing': 'Odczytywanie paska płacowego…',
+  'slips.privacy': 'Twój pasek płacowy zostaje w telefonie. PDF jest odczytywany tutaj, w aplikacji, i zapisywany tylko na tym urządzeniu – nigdy nie jest wysyłany i nikt inny go nie widzi, nawet twórca aplikacji. Usunięcie paska usuwa też PDF.',
   'slips.empty': 'Brak pasków płacowych. Zaimportuj PDF, który dostajesz od pracodawcy.',
   'slips.failed': 'Nie udało się odczytać PDF: {error}',
   'slips.noLines': 'Nie znaleziono pozycji płacowych w PDF. Czy to pasek płacowy?',

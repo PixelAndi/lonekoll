@@ -1622,3 +1622,20 @@ input[type='checkbox'] {
 .time-range {
   white-space: nowrap;
 }
+
+/* The pay slip page's privacy note */
+.slip-privacy {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 0;
+  color: var(--muted);
+}
+
+.slip-privacy .icon {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  fill: currentColor;
+}
