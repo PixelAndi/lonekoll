@@ -51,6 +51,11 @@ export class TesseractEngine implements OcrEngine {
     return this.worker;
   }
 
+  /** Loads the recognition engine and language data now (for use without internet). */
+  async ready(): Promise<void> {
+    await this.getWorker();
+  }
+
   recognize(image: GrayImage, mode: OcrMode): Promise<OcrWord[]> {
     const job = this.queue.then(async () => {
       const worker = await this.getWorker();

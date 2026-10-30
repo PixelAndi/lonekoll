@@ -61,6 +61,9 @@ export function DaysView({ month }: { month?: string }) {
       <div className="actions-stack">
         <PhotoImportButton />
         <p className="muted small">{t('days.photoHint')}</p>
+        <p className="small forgot-tip">
+          {t('days.forgotTip')} <a href={href({ name: 'help', section: 'forgot' })}>{t('days.forgotHow')}</a>
+        </p>
         <button type="button" className="button" onClick={() => navigate({ name: 'day', date: today })}>
           <Icon name="plus" /> {t('days.manual')}
         </button>

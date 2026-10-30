@@ -12,13 +12,14 @@ import { DaysView } from './ui/DaysView.tsx';
 import { MonthView } from './ui/MonthView.tsx';
 import { ReportView } from './ui/ReportView.tsx';
 import { SettingsView } from './ui/SettingsView.tsx';
+import { HelpView } from './ui/HelpView.tsx';
 import { SlipsView } from './ui/SlipsView.tsx';
 
 const TABS = [
   { route: { name: 'days' }, icon: 'days', label: 'nav.days', match: ['days', 'day'] },
   { route: { name: 'month' }, icon: 'month', label: 'nav.month', match: ['month'] },
   { route: { name: 'slips' }, icon: 'slips', label: 'nav.slips', match: ['slips', 'slip'] },
-  { route: { name: 'settings' }, icon: 'settings', label: 'nav.settings', match: ['settings'] },
+  { route: { name: 'settings' }, icon: 'settings', label: 'nav.settings', match: ['settings', 'help'] },
 ] as const;
 
 function Screen({ route }: { route: Route }) {
@@ -35,6 +36,8 @@ function Screen({ route }: { route: Route }) {
       return <ReportView id={route.id} />;
     case 'settings':
       return <SettingsView />;
+    case 'help':
+      return <HelpView section={route.section} />;
     default:
       return <DaysView month={route.month} />;
   }

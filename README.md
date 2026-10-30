@@ -83,8 +83,15 @@ report you can go through with your employer.
 - **Report.** An A4 report, saved as PDF in Swedish (for the employer), in the
   user's app language, or both in one file (Swedish first), with the summary,
   explanations, assumptions, the day log and optionally the photos.
-- **Offline.** After the first visit the app, including photo reading,
-  works without internet.
+- **Offline.** After the first visit the app works without internet; the
+  scanner's text recognition (about 7 MB) is saved the first time it is used,
+  or at once with "Make the app available offline" under Help and guides,
+  which also explains adding the app to the home screen (with an install
+  button where the browser offers one).
+- **Guides.** Help and guides (from Settings, and linked on the days page)
+  also shows how to clock out on the time clock after forgetting to clock in:
+  press the greyed-out red button twice. The scanner repeats the tip when it
+  finds a missing clock-in.
 
 ## Privacy
 

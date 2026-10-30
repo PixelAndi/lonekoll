@@ -10,7 +10,8 @@ export type Route =
   | { name: 'slips' }
   | { name: 'slip'; id: string }
   | { name: 'report'; id: string }
-  | { name: 'settings' };
+  | { name: 'settings' }
+  | { name: 'help'; section?: 'offline' | 'install' | 'forgot' };
 
 export function parseHash(hash: string): Route {
   const [name, arg] = hash.replace(/^#\/?/, '').split('/');
@@ -30,6 +31,8 @@ export function parseHash(hash: string): Route {
       break;
     case 'settings':
       return { name: 'settings' };
+    case 'help':
+      return { name: 'help', section: arg === 'offline' || arg === 'install' || arg === 'forgot' ? arg : undefined };
     case 'days':
       return { name: 'days', month: arg };
   }
@@ -46,6 +49,8 @@ export function href(route: Route): string {
     case 'days':
     case 'month':
       return route.month ? `#/${route.name}/${route.month}` : `#/${route.name}`;
+    case 'help':
+      return route.section ? `#/help/${route.section}` : '#/help';
     default:
       return `#/${route.name}`;
   }

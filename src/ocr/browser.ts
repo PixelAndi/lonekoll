@@ -61,6 +61,12 @@ export function warmUp(): void {
   void Promise.all([import('./pipeline.ts'), getEngine()]);
 }
 
+/** Downloads and starts text recognition now, so the offline cache holds it (see offline.ts). */
+export async function prepareRecognition(): Promise<void> {
+  const [, ocr] = await Promise.all([import('./pipeline.ts'), getEngine()]);
+  await ocr.ready();
+}
+
 /** One pass over a camera frame's search area: finds the table and reads it. */
 export async function findInFrame(image: RGBAImage): Promise<FoundTable | null> {
   const [{ findTableByText }, ocr] = await Promise.all([import('./pipeline.ts'), getEngine()]);

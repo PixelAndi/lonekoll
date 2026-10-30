@@ -399,6 +399,7 @@ export function Scanner({
       ) : phase.kind === 'missing' ? (
         <div className="scanner-question">
           <p>{t('scan.forgotQuestion')}</p>
+          {phase.forgotten.some((f) => f.field === 'in') && <p className="small">{t('scan.forgotClockTip')}</p>}
           <div className="scanner-question-buttons">
             <button type="button" className="button" onClick={() => setPhase({ kind: 'aiming', hint: 'place', aim: null, progress: 0 })}>
               {t('scan.again')}

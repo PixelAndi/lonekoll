@@ -1675,3 +1675,62 @@ input[type='checkbox'] {
   margin: 0;
   width: 100%;
 }
+
+/* Guides (HelpView) */
+.guide-steps {
+  padding-inline-start: 1.3rem;
+  line-height: 1.5;
+}
+
+.guide-steps li + li {
+  margin-top: 6px;
+}
+
+.help-links {
+  margin: 0;
+  padding-inline-start: 1.2rem;
+  line-height: 1.9;
+}
+
+.forgot-tip {
+  margin: 0;
+}
+
+.clock-buttons {
+  display: block;
+  width: 100%;
+  max-width: 320px;
+  margin: 8px auto;
+}
+
+.clock-buttons text {
+  font: 700 26px system-ui, sans-serif;
+  fill: #fff;
+}
+
+.clock-button-in {
+  fill: #2e9d4f;
+}
+
+.clock-button-out {
+  fill: #c9c9c9;
+  stroke: #d9534f;
+  stroke-width: 3;
+  stroke-dasharray: 6 4;
+}
+
+.clock-taps circle {
+  fill: none;
+  stroke: var(--primary);
+  stroke-width: 3;
+}
+
+.clock-taps circle:first-child {
+  fill: var(--primary);
+  fill-opacity: 0.35;
+}
+
+.clock-buttons .clock-taps-label {
+  fill: var(--primary);
+  font-size: 22px;
+}
