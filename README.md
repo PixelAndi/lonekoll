@@ -87,7 +87,7 @@ report you can go through with your employer.
 | --- | --- | --- |
 | Minimum wage | 169.92 / 176.83 kr/h (after one year's employment from age 18), from 1 Apr 2026; youth and trainee shares | Bageri §1 |
 | OB | Level 1 Mon–Fri 00–06, Mon–Thu 18–24 · Level 2 Fri 18–24, Sat 00–06 · Level 3 Sat 06–24, Sun, New Year's Eve, Midsummer Eve · Level 4 public holidays (incl. Christmas Eve) | Bageri §2 |
-| Overtime | With no schedule: time past 9 h 15 min in a shift, and a sixth shift in a week (configurable). Weekdays +50 % for 2 h then +100 %; from Sat 11:00 and from 18:00 the day before a holiday +100 %. Weekday OB is paid on top; holiday overtime gets Sunday OB instead of holiday OB | Avtalet §3.1.2, §3.3; Bageri §2, §4 |
+| Overtime | With no schedule: time past 8 h in a shift (the usual local agreement; the agreement's own fallback without one is 9 h 15 min), and a sixth shift in a week (both configurable). Weekdays +50 % for 2 h then +100 %; from Sat 11:00 and from 18:00 the day before a holiday +100 %. Weekday OB is paid on top; holiday overtime gets Sunday OB instead of holiday OB | Avtalet §3.1.2, §3.3; Bageri §2, §4 |
 | Sick pay | 80 % of lost pay including OB; waiting-day deduction 20 % of an average week's sick pay; days 1–14 | Sjuklönelagen 6 §; Avtalet §5.2 |
 | Holiday pay | Hours you would have worked, with the OB of an ordinary weekday | Avtalet §5.1 |
 | Vacation pay | Checked against the minimum per day (1 789 kr from 1 Apr 2026) | Avtalet §5.7; Bageri §5 |

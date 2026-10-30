@@ -131,7 +131,7 @@ export const DEFAULT_SETTINGS: Settings = {
   wages: [],
   traineeYear: 0,
   employmentPercent: 100,
-  ordinaryShiftMinutes: 555,
+  ordinaryShiftMinutes: 480,
   maxShiftsPerWeek: 5,
   minOvertimeMinutes: 0,
   ordinaryStart: '06:00',

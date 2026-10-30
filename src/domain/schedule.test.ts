@@ -86,7 +86,7 @@ describe('with a schedule', () => {
 });
 
 describe('optional supplements', () => {
-  const plain: Settings = { ...DEFAULT_SETTINGS, wages: [{ from: '2026-01-01', hourly: HOURLY }] };
+  const plain: Settings = { ...DEFAULT_SETTINGS, ordinaryShiftMinutes: 555, wages: [{ from: '2026-01-01', hourly: HOURLY }] };
   const evening = [day('2026-10-26', [['14:00', '18:00'], ['18:30', '00:30']])]; // 10 h, OB from 18:00
 
   it('pays the shift-form supplement on ordinary hours only', () => {

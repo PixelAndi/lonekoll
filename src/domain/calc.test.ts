@@ -5,7 +5,8 @@ import { buildShifts, forgottenStamps, otherDayNeeded } from './shifts.ts';
 import { addDays, isoWeekday } from './time.ts';
 
 const HOURLY = 180;
-const settings: Settings = { ...DEFAULT_SETTINGS, wages: [{ from: '2026-01-01', hourly: HOURLY }] };
+// The agreement's fallback without a local agreement: overtime after 9 h 15 min (§3.1.2).
+const settings: Settings = { ...DEFAULT_SETTINGS, ordinaryShiftMinutes: 555, wages: [{ from: '2026-01-01', hourly: HOURLY }] };
 
 const day = (date: string, rows: [string | null, string | null][], extra: Partial<DayRecord> = {}): DayRecord => ({
   date,

@@ -54,7 +54,7 @@ export function agreementFor(date: LocalDate): AgreementPeriod | undefined {
 
 /** Fixed rules that are the same in every period. */
 export const RULES = {
-  /** §3.1.2: without a local agreement a shift is at most 9 h 15 min… */
+  /** §3.1.2: without a local agreement a shift is at most 9 h 15 min… (the app's default is 8 h, the usual local agreement) */
   defaultOrdinaryShiftMinutes: 555,
   /** …and at most five shifts a week. */
   defaultMaxShiftsPerWeek: 5,
