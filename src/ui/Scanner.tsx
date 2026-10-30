@@ -5,7 +5,7 @@ import { forgottenStamps, otherDayNeeded, type ForgottenStamp } from '../domain/
 import { addDays, todayLocal } from '../domain/time.ts';
 import { loadDigitMemory } from '../db.ts';
 import { anchorInFrame, findInFrame, readPhoto, trackInFrame, warmUp } from '../ocr/browser.ts';
-import { checkRows, EMPTY_MEMORY, type DigitMemory } from '../ocr/glyphs.ts';
+import { checkRows, EMPTY_MEMORY, withShared, type DigitMemory } from '../ocr/glyphs.ts';
 import { agreement, aim, HISTORY, progress, searchArea, type Aim, type FrameReading, type Hint } from '../ocr/live.ts';
 import type { ClockReading, FoundTable } from '../ocr/pipeline.ts';
 import { ClockHowTo } from './ClockHowTo.tsx';
@@ -122,7 +122,7 @@ export function Scanner({
   // What has been learned of the clock's digits, to check each reading against.
   const digits = useRef<DigitMemory>(EMPTY_MEMORY);
   useEffect(() => {
-    void loadDigitMemory().then((m) => (digits.current = m));
+    void loadDigitMemory().then((m) => (digits.current = withShared(m)));
   }, []);
 
   // Camera on while the scanner is open; text recognition loads meanwhile.

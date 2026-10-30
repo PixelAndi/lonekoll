@@ -1734,3 +1734,14 @@ input[type='checkbox'] {
   fill: var(--primary);
   font-size: 22px;
 }
+
+/* The learned digits, as shared */
+.digit-sheet {
+  display: block;
+  width: 100%;
+  max-width: 360px;
+  image-rendering: pixelated;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin: 6px 0;
+}

@@ -49,7 +49,18 @@ report you can go through with your employer.
   it clearly reads differently is marked for you to double-check. It never
   makes a reading count for more unless both agree. Inställningar shows how
   far it has come and how often its own reading was right, and can make it
-  forget.
+  forget. A time it couldn't read at all and you typed in is learned too: its
+  place on the screen follows from the times it did read (the In and Ut
+  columns and the row spacing). Only cuts known to hold one character each
+  (checked against the digits' proportions) are learned without checking.
+- **Anonymous digit samples.** Under Inställningar the learned digits can be
+  saved as a file to share with whoever develops the app: only the small
+  single-digit pictures, in shuffled order, with no times, dates or names,
+  and the page shows exactly what is in it. Nothing is sent automatically.
+  Shared samples are added to the set built into the app
+  (`node scripts/add-digit-samples.mjs file.json` updates
+  `src/ocr/shared-digits.json`), so every new user's scanner starts out
+  knowing the clock's digits.
 - **Absences.** Sick (optionally the shift you were booked for), vacation,
   time off from the working-time account, a public holiday you would have
   worked, permission, unpaid leave.
