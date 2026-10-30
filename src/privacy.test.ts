@@ -77,10 +77,11 @@ describe('privacy: nothing leaves the device', () => {
     const code = readFileSync(path.join(root, 'src', 'sw-template.js'), 'utf8');
     expect(code).toContain("if (request.method !== 'GET') return;");
     expect(code).toContain('if (url.origin !== self.location.origin) return;');
-    // Every request it makes is the page's own, unchanged.
+    // Every request it makes is the page's own (at most asked to skip the browser's short-term cache).
     const calls = [...code.matchAll(/\bfetch\s*\(([^)]*)\)/g)].map((m) => m[1]);
     expect(calls.length).toBeGreaterThan(0);
-    expect(calls.every((arg) => arg === 'request')).toBe(true);
+    expect(calls.every((arg) => arg === 'request' || arg === 'request, FRESH')).toBe(true);
+    expect(code).toContain("const FRESH = { cache: 'no-store' };");
     expect(code).not.toMatch(/XMLHttpRequest|sendBeacon|WebSocket|EventSource|https?:\/\//);
   });
 

@@ -9,32 +9,20 @@ createRoot(document.getElementById('root')!).render(
   </StrictMode>,
 );
 
-// Offline support. A new version waits until the user taps "Update".
+// Offline support. A new version takes over in the background (see
+// sw-template.js); the open page keeps running and offers to reload into it.
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', async () => {
     try {
-      const reg = await navigator.serviceWorker.register('./sw.js');
-      // Reload only when the user asked for the update, not when the first
-      // install takes control of the page.
-      let reloadOnChange = false;
-      const announce = (worker: ServiceWorker | null) => {
-        if (!worker || !navigator.serviceWorker.controller) return;
-        const apply = () => {
-          reloadOnChange = true;
-          worker.postMessage('skip-waiting');
-        };
-        window.dispatchEvent(new CustomEvent('lonekoll:update', { detail: apply }));
-      };
-      announce(reg.waiting);
-      reg.addEventListener('updatefound', () => {
-        const worker = reg.installing;
-        worker?.addEventListener('statechange', () => worker.state === 'installed' && announce(worker));
-      });
+      // The first install taking control of the page is not an update.
+      let hadController = !!navigator.serviceWorker.controller;
       navigator.serviceWorker.addEventListener('controllerchange', () => {
-        if (!reloadOnChange) return;
-        reloadOnChange = false;
-        location.reload();
+        if (hadController) window.dispatchEvent(new CustomEvent('lonekoll:update', { detail: () => location.reload() }));
+        hadController = true;
       });
+      // A worker from before this change may still be waiting for the old "Update" tap.
+      const reg = await navigator.serviceWorker.register('./sw.js');
+      reg.waiting?.postMessage('skip-waiting');
     } catch {
       // Without a service worker the app still works online.
     }
