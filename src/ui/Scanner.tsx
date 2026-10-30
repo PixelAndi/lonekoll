@@ -44,6 +44,9 @@ type Phase =
   | { kind: 'otherDay'; scan: Scan; date: string; direction: 'previous' | 'next' }
   | { kind: 'error'; reason: 'denied' | 'unavailable' | 'reading'; detail?: string };
 
+/** An arrow in the instruction for which way to move the phone. */
+const HINT_ICON: Partial<Record<AimHint, string>> = { up: '↑', down: '↓', left: '←', right: '→' };
+
 const HINT_TEXT = {
   loading: 'scan.loading',
   slow: 'scan.slow',
@@ -330,7 +333,6 @@ export function Scanner({
   }
   const busy = phase.kind === 'starting' || phase.kind === 'reading' || (phase.kind === 'aiming' && ['loading', 'slow', 'retrying'].includes(phase.hint));
 
-  const dots = phase.kind === 'aiming' ? phase.progress : grabbed ? 3 : 0;
   const hudState: HudState =
     grabbed ? 'grabbed' : locked ? 'locked' : phase.kind === 'aiming' && currentAim ? 'adjusting' : phase.kind === 'aiming' && !busy ? 'searching' : 'idle';
 
@@ -380,14 +382,12 @@ export function Scanner({
           )}
           <div className={`scanner-pill scanner-pill-${tone}`} role="status" aria-live="polite">
             {busy && <span className="spinner-dot" aria-hidden="true" />}
-            <span>{message}</span>
-            {(phase.kind === 'aiming' || grabbed) && (
-              <span className="scanner-dots" aria-hidden="true">
-                {[0, 1, 2].map((i) => (
-                  <i key={i} className={i < dots ? 'on' : ''} />
-                ))}
+            {phase.kind === 'aiming' && HINT_ICON[phase.hint] && (
+              <span className="scanner-pill-icon" aria-hidden="true">
+                {HINT_ICON[phase.hint]}
               </span>
             )}
+            <span>{message}</span>
           </div>
         </div>
       </div>

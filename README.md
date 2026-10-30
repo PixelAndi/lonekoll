@@ -23,12 +23,13 @@ report you can go through with your employer.
   there, which is much quicker. A searched frame counts as two readings when
   both agree, a followed frame as one, and the data is grabbed when at least
   three readings agree on every value: the scanner confirms
-  with a check mark and the times, then opens the usual check. A targeting
-  display guides the aim: a target in the middle, a tracker that follows the
-  table, a guide arrow for which way to move the phone, chevrons for closer or
-  further, a turn arrow for tilt; within a tolerance it locks on (green,
-  "LÅST", a short vibration) and a ring fills while the reading is
-  confirmed. Only locked frames count. Nothing depends on the
+  with a check mark and the times, then opens the usual check. The guide is
+  kept simple: one frame shows where the clock's table should go, with a
+  faint sketch of the table in it (the date bar with "Föreg Dag" and "Nästa
+  Dag", then the In and Ut times) until the real one is found; one plain
+  instruction says what to do, with a big arrow beside the frame when the
+  phone should move; the frame turns green when the table is in place, with a
+  bar filling while the times are read. Only locked frames count. Nothing depends on the
   screen's colours. If a stamp is missing (the clock shows "xx:xx") and it
   isn't a shift that crosses midnight, the scanner says which one looks
   forgotten and asks whether to fill it in by hand or scan again. A shift

@@ -35,8 +35,8 @@ export type Hint =
   /** On target: hold still while it is read and confirmed. */
   | 'steady';
 
-/** Below this bar height in pixels the text is too small to read reliably. */
-const MIN_BAR_HEIGHT = 24;
+/** Below this bar height in pixels the text is too small to read reliably (a table filling the frame on a 720-pixel-wide camera is about 22). */
+const MIN_BAR_HEIGHT = 20;
 /** The target: the table centred in the search area, this share of its width. */
 export const TARGET_WIDTH = 0.8;
 /** The table's height (bar, header and a few rows) in bar heights, and where its middle is below the bar's. */
