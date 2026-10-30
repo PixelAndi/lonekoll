@@ -11,6 +11,7 @@ import { TimeField } from './StampRowsEditor.tsx';
 import { ScheduleSettings } from './settings/ScheduleSettings.tsx';
 import { SupplementSettings } from './settings/SupplementSettings.tsx';
 import { TaxSettings } from './settings/TaxSettings.tsx';
+import { WorkPattern } from './settings/WorkPattern.tsx';
 import { WageSettings } from './settings/WageSettings.tsx';
 
 export function SettingsView() {
@@ -44,6 +45,7 @@ export function SettingsView() {
   return (
     <Page title={t('nav.settings')}>
       <WageSettings />
+      <WorkPattern />
       <ScheduleSettings />
       <SupplementSettings />
       <TaxSettings />
