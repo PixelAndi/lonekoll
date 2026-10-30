@@ -80,7 +80,8 @@ report you can go through with your employer.
 - **Languages.** Swedish, English, Polish and Dari (chosen from the phone's
   language at first start, changeable in Settings). Dari is shown right to
   left, with Gregorian dates and the clock's Latin digits.
-- **Report.** A printable A4 report (Swedish, English, Polish or Dari) with the summary,
+- **Report.** An A4 report, saved as PDF in Swedish (for the employer), in the
+  user's app language, or both in one file (Swedish first), with the summary,
   explanations, assumptions, the day log and optionally the photos.
 - **Offline.** After the first visit the app, including photo reading,
   works without internet.

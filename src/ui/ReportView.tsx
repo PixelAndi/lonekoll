@@ -1,9 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useApp } from '../app-context.ts';
 import { calculateShifts } from '../domain/calc.ts';
 import { hourlyRateOn, hourlySupplement, minimumWageOn, wagePeriodOn } from '../domain/model.ts';
 import { datesInRange, formatDuration, todayLocal } from '../domain/time.ts';
-import { formatter } from '../format.ts';
+import { formatter, ltr } from '../format.ts';
 import { isRightToLeft, LANGUAGE_NAMES, LANGUAGE_TAGS, translator, type Language } from '../i18n.ts';
 import { goBack } from '../router.ts';
 import { PhotoThumb, Spinner } from './common.tsx';
@@ -12,18 +12,95 @@ import { SlipNotFound } from './SlipsView.tsx';
 import { diffText, noteText, rowLabel, rowReference, sideText, useSlipComparison } from './slipComparison.ts';
 import { stampText } from './stamps.ts';
 
-/** A printable report for the employer; Swedish by default. */
+/** The report for the employer, in Swedish, and in the user's own language too when that is another. */
 export function ReportView({ id }: { id: string }) {
   const app = useApp();
   const data = useSlipComparison(id);
-  const [lang, setLang] = useState<Language>('sv');
+  // Swedish is for the employer; the app's language is for the user.
+  const languages: Language[] = app.lang === 'sv' ? ['sv'] : ['sv', app.lang];
+  const [preview, setPreview] = useState<Language>('sv');
   const [withPhotos, setWithPhotos] = useState(false);
-  const t = useMemo(() => translator(lang), [lang]);
-  const fmt = useMemo(() => formatter(lang), [lang]);
+  /** The versions being saved as PDF right now (through the print dialog). */
+  const [printing, setPrinting] = useState<Language[] | null>(null);
   const shiftResults = useMemo(() => calculateShifts(app.days, app.settings).results, [app.days, app.settings]);
+
+  // Print once the chosen versions are on the page; the title becomes the PDF's suggested file name.
+  useEffect(() => {
+    if (!printing || !data) return;
+    const title = document.title;
+    const month = data.start.slice(0, 7);
+    document.title = `${translator('sv')('report.title')} ${month} – ${printing.map((l) => LANGUAGE_FILE_NAMES[l]).join(' + ')}`;
+    const done = () => {
+      document.title = title;
+      setPrinting(null);
+    };
+    window.addEventListener('afterprint', done, { once: true });
+    window.print();
+    return () => window.removeEventListener('afterprint', done);
+  }, [printing, data]);
 
   if (data === undefined) return <Spinner />;
   if (data === null) return <SlipNotFound />;
+  const shown = printing ?? [preview];
+  const save = (langs: Language[]) => setPrinting(langs);
+
+  return (
+    <div className="report">
+      <div className="report-controls no-print">
+        <button type="button" className="button" onClick={() => goBack({ name: 'slip', id })}>
+          {app.t('common.back')}
+        </button>
+        {languages.length > 1 && (
+          <div className="segmented" role="group" aria-label={app.t('report.preview')}>
+            {languages.map((l) => (
+              <button key={l} type="button" className={preview === l ? 'on' : ''} aria-pressed={preview === l} onClick={() => setPreview(l)}>
+                {LANGUAGE_NAMES[l]}
+              </button>
+            ))}
+          </div>
+        )}
+        <label className="inline-field">
+          <input type="checkbox" checked={withPhotos} onChange={(e) => setWithPhotos(e.target.checked)} /> {app.t('report.includePhotos')}
+        </label>
+        <div className="report-downloads">
+          {languages.map((l) => (
+            <button key={l} type="button" className={`button ${l === 'sv' ? 'button-primary' : ''}`} onClick={() => save([l])}>
+              {app.t('report.downloadIn', { language: LANGUAGE_NAMES[l] })}
+            </button>
+          ))}
+          {languages.length > 1 && (
+            <button type="button" className="button" onClick={() => save(languages)}>
+              {app.t('report.downloadBoth')}
+            </button>
+          )}
+        </div>
+        <p className="muted small report-download-hint">{app.t(languages.length > 1 ? 'report.downloadHintBoth' : 'report.downloadHint')}</p>
+      </div>
+      {shown.map((l) => (
+        <ReportPage key={l} lang={l} data={data} withPhotos={withPhotos} shiftResults={shiftResults} />
+      ))}
+    </div>
+  );
+}
+
+/** Language names for file names (plain letters). */
+const LANGUAGE_FILE_NAMES: Record<Language, string> = { sv: 'svenska', en: 'English', pl: 'polski', prs: 'Dari' };
+
+/** The report itself in one language. */
+function ReportPage({
+  lang,
+  data,
+  withPhotos,
+  shiftResults,
+}: {
+  lang: Language;
+  data: NonNullable<ReturnType<typeof useSlipComparison>>;
+  withPhotos: boolean;
+  shiftResults: ReturnType<typeof calculateShifts>['results'];
+}) {
+  const app = useApp();
+  const t = useMemo(() => translator(lang), [lang]);
+  const fmt = useMemo(() => formatter(lang), [lang]);
   const { slip, comparison, start, end, period, tax, taxYear } = data;
   const settings = app.settings;
   const total = totalText(comparison, t, fmt);
@@ -44,7 +121,7 @@ export function ReportView({ id }: { id: string }) {
         const m = w?.basis === 'minimum' ? minimumWageOn(settings, d) : null;
         return m
           ? [t('report.hourlyMinimum', { hourly: fmt.number(rate), minimum: fmt.number(m.minimum), supplement: fmt.number(w ? hourlySupplement(w) : 0) })]
-          : [`${fmt.number(rate)} kr`];
+          : [fmt.money(rate)];
       }),
     ),
   ];
@@ -53,29 +130,6 @@ export function ReportView({ id }: { id: string }) {
   const photoIds = logDates.flatMap((d) => byDate.get(d)!.photoIds.map((pid) => ({ date: d, id: pid })));
 
   return (
-    <div className="report">
-      <div className="report-controls no-print">
-        <button type="button" className="button" onClick={() => goBack({ name: 'slip', id })}>
-          {app.t('common.back')}
-        </button>
-        <label className="inline-field">
-          {app.t('report.language')}
-          <select value={lang} onChange={(e) => setLang(e.target.value as Language)}>
-            {Object.entries(LANGUAGE_NAMES).map(([code, name]) => (
-              <option key={code} value={code}>
-                {name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="inline-field">
-          <input type="checkbox" checked={withPhotos} onChange={(e) => setWithPhotos(e.target.checked)} /> {app.t('report.includePhotos')}
-        </label>
-        <button type="button" className="button button-primary" onClick={() => window.print()}>
-          {app.t('common.print')}
-        </button>
-      </div>
-
       <article className="report-page" lang={LANGUAGE_TAGS[lang]} dir={isRightToLeft(lang) ? 'rtl' : 'ltr'}>
         <header>
           <h1>{t('report.title')}</h1>
@@ -94,9 +148,7 @@ export function ReportView({ id }: { id: string }) {
               </tr>
               <tr>
                 <th>{t('report.period')}</th>
-                <td>
-                  {start} – {end}
-                </td>
+                <td>{ltr(`${start} – ${end}`)}</td>
               </tr>
               {slip.payDate && (
                 <tr>
@@ -257,6 +309,5 @@ export function ReportView({ id }: { id: string }) {
 
         <footer className="report-disclaimer">{t('report.disclaimer')}</footer>
       </article>
-    </div>
   );
 }

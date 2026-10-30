@@ -939,11 +939,8 @@ input[type='checkbox'] {
   gap: 12px;
   align-items: center;
   padding: 12px 16px;
-  position: sticky;
-  top: 0;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
-  z-index: 5;
 }
 
 .report-page {
@@ -1087,6 +1084,11 @@ input[type='checkbox'] {
 
   .report-table tr {
     break-inside: avoid;
+  }
+
+  /* Both languages in one file: each starts on a new page. */
+  .report-page + .report-page {
+    break-before: page;
   }
 }
 
@@ -1638,4 +1640,38 @@ input[type='checkbox'] {
   height: 18px;
   margin-top: 1px;
   fill: currentColor;
+}
+
+/* Report: preview language and downloads */
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.segmented button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 8px 14px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.segmented button.on {
+  background: var(--primary);
+  color: var(--primary-text);
+}
+
+.report-downloads {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+}
+
+.report-download-hint {
+  margin: 0;
+  width: 100%;
 }
