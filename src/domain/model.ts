@@ -9,6 +9,12 @@ export interface StampPair {
   /** True when typed by hand rather than read from a photo. */
   inManual?: boolean;
   outManual?: boolean;
+  /** What the scanner read, kept when the time was then changed by hand. */
+  inRead?: LocalTime;
+  outRead?: LocalTime;
+  /** Saved as read although the scanner was unsure of it. */
+  inDoubt?: boolean;
+  outDoubt?: boolean;
 }
 
 export type Theme = 'auto' | 'light' | 'dark';

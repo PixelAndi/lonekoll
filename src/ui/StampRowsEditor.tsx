@@ -72,6 +72,17 @@ export interface Uncertain {
 }
 
 /** Editable list of In/Ut pairs. Edited times are marked as typed by hand. */
+/**
+ * A time changed by hand: marked as typed, no longer in doubt, and the
+ * scanner's reading kept (once) so the report can show what was read.
+ */
+function changed(row: StampPair, field: 'in' | 'out', value: string | null): StampPair {
+  const read = field === 'in' ? 'inRead' : 'outRead';
+  const manual = field === 'in' ? 'inManual' : 'outManual';
+  const scanned = !row[manual] && row[field] ? row[field]! : undefined;
+  return { ...row, [field]: value, [manual]: true, [read]: row[read] ?? scanned, [field === 'in' ? 'inDoubt' : 'outDoubt']: undefined };
+}
+
 export function StampRowsEditor({
   rows,
   onChange,
@@ -84,7 +95,7 @@ export function StampRowsEditor({
   const { t } = useApp();
   // Functional updates, so two fields committing back to back don't overwrite each other.
   const update = (i: number, field: 'in' | 'out', value: string | null) => {
-    onChange((current) => current.map((r, j) => (j === i ? { ...r, [field]: value, [field === 'in' ? 'inManual' : 'outManual']: true } : r)));
+    onChange((current) => current.map((r, j) => (j === i ? changed(r, field, value) : r)));
   };
   return (
     <div className="stamp-rows">

@@ -146,7 +146,14 @@ function PhotoReview({
 
   const save = async () => {
     await flushFocusedField();
-    const rowsToSave = latestRows.current.filter((r) => r.in || r.out);
+    // Times the scanner was unsure of and that were saved unchanged are remembered as such.
+    const rowsToSave = latestRows.current
+      .map((r, i) => ({
+        ...r,
+        inDoubt: (uncertain[i]?.in && r.in && !r.inManual) || undefined,
+        outDoubt: (uncertain[i]?.out && r.out && !r.outManual) || undefined,
+      }))
+      .filter((r) => r.in || r.out);
     const existing = days.find((d) => d.date === date);
     const key = (list: StampPair[]) => JSON.stringify(list.map((r) => [r.in, r.out]));
     if (existing && existing.rows.length > 0 && key(existing.rows) !== key(rowsToSave) && !confirm(t('photo.replace', { date }))) return;

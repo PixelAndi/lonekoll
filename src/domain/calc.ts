@@ -64,6 +64,16 @@ export function obLevelAt(date: LocalDate, minute: number, ignoreSpecialDays = f
   return minute < 360 || minute >= 1080 ? 1 : 0;
 }
 
+/**
+ * When ordinary working time starts on a date, which ends the Sunday and
+ * holiday overtime windows (Bageri §4): that day's scheduled start with a
+ * schedule, otherwise the "ordinary start" setting.
+ */
+export function ordinaryStartOn(settings: Settings, date: LocalDate, day?: DayRecord): number {
+  const scheduled = scheduledShift(settings, date, day);
+  return toMinutes(scheduled?.start ?? settings.ordinaryStart);
+}
+
 /** Overtime in this minute is +100 % from the start (Sunday or holiday window, Bageri §4). */
 export function inFullOvertimeWindow(date: LocalDate, minute: number, ordinaryStart: number): boolean {
   const wd = isoWeekday(date);
@@ -124,11 +134,12 @@ interface ClassifyOptions {
   asOrdinaryDay?: boolean;
   /** The overtime is taken as komptid instead of money (§4.3). */
   komp?: boolean;
+  /** The day records, for each date's scheduled start (see ordinaryStartOn). */
+  days?: Map<LocalDate, DayRecord>;
 }
 
 /** Classifies every minute of a set of work intervals. */
 function classify(intervals: { start: number; end: number }[], settings: Settings, opts: ClassifyOptions) {
-  const ordinaryStart = toMinutes(settings.ordinaryStart);
   const shiftFormPercent = RULES.shiftFormPercent[settings.shiftForm] ?? 0;
   const byDate = new Map<LocalDate, Bucket[]>();
   const workedByDate = new Map<LocalDate, number>();
@@ -168,7 +179,8 @@ function classify(intervals: { start: number; end: number }[], settings: Setting
       let level = settings.supplements.ob ? obLevelAt(date, minute, opts.asOrdinaryDay) : 0;
       if (!ordinary && settings.supplements.overtime) {
         const full =
-          overtime50 + overtime100 >= RULES.overtimeFirstTierMinutes || inFullOvertimeWindow(date, minute, ordinaryStart);
+          overtime50 + overtime100 >= RULES.overtimeFirstTierMinutes ||
+          inFullOvertimeWindow(date, minute, ordinaryStartOn(settings, date, opts.days?.get(date)));
         const pct = full ? RULES.overtimeHighPercent : RULES.overtimeLowPercent;
         if (komp && settings.kompMode === 'supplement') {
           // The supplement is taken as time too: 1.5 or 2 hours off, nothing paid now.
@@ -283,7 +295,7 @@ export function calculateShifts(days: DayRecord[], settings: Settings): { result
     // A few minutes over the schedule is not overtime where a minimum applies.
     if (reason === 'long-shift' && shift.workedMinutes - ordinaryMinutes < settings.minOvertimeMinutes) ordinaryMinutes = Infinity;
     const komp = (byDate.get(shift.date)?.overtimeAs ?? settings.overtimeAs) === 'komp';
-    const c = classify(shift.intervals, settings, { ordinaryMinutes, shiftedFrom, komp });
+    const c = classify(shift.intervals, settings, { ordinaryMinutes, shiftedFrom, komp, days: byDate });
     if (shift.intervals.some((iv) => iv.end - iv.start > RULES.maxMinutesWithoutBreak * MINUTE_MS)) warnings.push('no-break');
     if (previousEnd !== null && shift.start - previousEnd < RULES.minDailyRestMinutes * MINUTE_MS) warnings.push('short-rest');
     if (c.missingRate) warnings.push('no-rate');

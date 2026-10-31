@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { calculatePeriod, calculateShifts } from './calc.ts';
+import { calculatePeriod, calculateShifts, inFullOvertimeWindow, ordinaryStartOn } from './calc.ts';
 import { DEFAULT_SETTINGS, hourlyRateOn, minimumWageOn, type DayRecord, type Settings, type StampPair } from './model.ts';
 import { buildShifts, forgottenStamps, otherDayNeeded } from './shifts.ts';
-import { addDays, isoWeekday } from './time.ts';
+import { addDays, isoWeekday, toMinutes as toMinutesOf } from './time.ts';
 
 const HOURLY = 180;
 // The agreement's fallback without a local agreement: overtime after 9 h 15 min (§3.1.2).
@@ -260,5 +260,31 @@ describe('a shift on two clock screens', () => {
 
   it('leaves ordinary days alone', () => {
     expect(otherDayNeeded('2026-10-27', rows([['14:05', '16:40'], ['17:10', '23:20']]), [], '2026-10-29')).toBeNull();
+  });
+});
+
+describe('when the Sunday and holiday overtime windows end', () => {
+  const week = (start: string) => [{ start, end: '09:30', breakMinutes: 30 }, null, null, null, null, null, null];
+  it('at the ordinary start in the settings, without a schedule', () => {
+    expect(ordinaryStartOn({ ...settings, ordinaryStart: '06:00' }, '2026-11-02')).toBe(360);
+  });
+
+  it('at that day’s scheduled start with a schedule (bakers starting at 01:00 on Mondays)', () => {
+    const fixed: Settings = { ...settings, scheduleMode: 'fixed', schedule: { startMonday: '2026-01-05', weeks: [week('01:00')] } };
+    expect(ordinaryStartOn(fixed, '2026-11-02')).toBe(60);
+    // The window ends at 01:00 on Monday, not at 06:00.
+    expect(inFullOvertimeWindow('2026-11-02', 30, ordinaryStartOn(fixed, '2026-11-02'))).toBe(true);
+    expect(inFullOvertimeWindow('2026-11-02', 120, ordinaryStartOn(fixed, '2026-11-02'))).toBe(false);
+    // A day off in the schedule falls back to the setting.
+    expect(ordinaryStartOn(fixed, '2026-11-03')).toBe(toMinutesOf(settings.ordinaryStart));
+  });
+
+  it('starts at 18:00 the day before a holiday', () => {
+    // Friday 30 October 2026, the day before All Saints.
+    expect(inFullOvertimeWindow('2026-10-30', 17 * 60 + 59, 360)).toBe(false);
+    expect(inFullOvertimeWindow('2026-10-30', 18 * 60, 360)).toBe(true);
+    // Overtime 15:00–20:00 that day (shift 06:30–20:00 with a 30-minute break): 3 h before 18:00, 2 h after.
+    const r = calculateShifts([day('2026-10-30', [['06:30', '10:00'], ['10:30', '20:00']])], { ...settings, ordinaryShiftMinutes: 480 }).results[0];
+    expect([r.overtime50, r.overtime100]).toEqual([120, 180]);
   });
 });

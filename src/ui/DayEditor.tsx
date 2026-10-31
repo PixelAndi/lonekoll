@@ -96,7 +96,7 @@ function DayForm({ date, existing, days, t, fmt, settings }: FormProps) {
       {special && <Notice>{t(special.name as never)}</Notice>}
       <Card title={t('day.stamps')}>
         {continued && <p className="muted small">↩ {t('days.continued')}</p>}
-        <StampRowsEditor rows={rows} onChange={setRows} />
+        <StampRowsEditor rows={rows} onChange={setRows} uncertain={rows.map((r) => ({ in: !!r.inDoubt, out: !!r.outDoubt }))} />
         <p className="muted small">{t('day.midnightHint')}</p>
       </Card>
 

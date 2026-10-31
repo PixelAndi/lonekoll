@@ -2088,3 +2088,110 @@ input[type='checkbox'] {
 .clock-time {
   fill: #e6f2ff;
 }
+
+/* Checks before a report is saved. */
+.check-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.check-list li {
+  display: grid;
+  grid-template-columns: 26px 1fr;
+  gap: 10px;
+  align-items: start;
+}
+
+.check-list p {
+  margin: 2px 0 0;
+}
+
+.check-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 14px;
+  color: #fff;
+}
+
+.check-icon-ok {
+  background: var(--ok);
+}
+
+.check-icon-warn {
+  background: #c98a00;
+}
+
+.check-icon-info {
+  background: var(--muted);
+}
+
+.check-confirm {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 16px;
+  font-weight: 600;
+}
+
+.check-confirm input {
+  width: 20px;
+  height: 20px;
+}
+
+/* The report: how sure each row is, rows to go through, and their usual explanations. */
+.sure {
+  display: block;
+  width: fit-content;
+  margin-top: 2px;
+  font-size: 0.75em;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid #b9b2a6;
+  color: #5f6670;
+  white-space: nowrap;
+}
+
+.sure-estimate {
+  border-color: #c98a00;
+  color: #8a5a00;
+}
+
+.sure-local {
+  border-color: #1d5c87;
+  color: #1d5c87;
+}
+
+.report-review {
+  color: #8a5a00;
+  font-weight: 700;
+}
+
+.report-explain-title {
+  margin: 6px 0 0;
+  font-weight: 600;
+  font-size: 0.9em;
+}
+
+.report-explain {
+  margin: 2px 0 0;
+  padding-inline-start: 1.2rem;
+  font-size: 0.9em;
+}
+
+.report-edited {
+  color: #8a5a00;
+  font-size: 0.85em;
+}
+
+/* A heading stays with what follows it on paper. */
+.report-page h2,
+.report-page h3 {
+  break-after: avoid;
+}

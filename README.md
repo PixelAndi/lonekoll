@@ -94,6 +94,18 @@ report you can go through with your employer.
 - **Report.** An A4 report, saved as PDF in Swedish (for the employer), in the
   user's app language, or both in one file (Swedish first), with the summary,
   explanations, assumptions, the day log and optionally the photos.
+- **Checks before a report is saved.** Saving first lists what to look at:
+  working days without stamps, holidays without a shift marked (no
+  schedule), stamps that don't add up, times saved while the scanner was
+  unsure, pay slip lines the app can't check, and times changed by hand after
+  scanning. When almost every row differs, or the gross differs by more than
+  a tenth, it says to check the settings first, and points at a wage that
+  differs from the slip or an overtime limit the slip fits. Earlier slips the
+  calculation matched show the settings are probably right. Saving needs
+  "I have checked" ticked. In the report, differences are "to go through",
+  each with common innocent explanations; each row says how sure it is
+  (certain, estimated, depends on local agreement); and times changed after
+  scanning show what the scanner read.
 - **Offline.** After the first visit the app works without internet; the
   scanner's text recognition (about 7 MB) is saved the first time it is used,
   or at once with "Make the app available offline" under Help and guides,
@@ -148,6 +160,7 @@ hosts the app. This is a design rule, and it is enforced:
 | --- | --- | --- |
 | Minimum wage | 169.92 / 176.83 kr/h (after one year's employment from age 18), from 1 Apr 2026; youth and trainee shares | Bageri §1 |
 | OB | Level 1 Mon–Fri 00–06, Mon–Thu 18–24 · Level 2 Fri 18–24, Sat 00–06 · Level 3 Sat 06–24, Sun, New Year's Eve, Midsummer Eve · Level 4 public holidays (incl. Christmas Eve) | Bageri §2 |
+| Overtime windows | The Sunday window runs from Saturday 11:00 and the holiday window from 18:00 the day before a holiday, both until ordinary working time starts on the next weekday: that day's scheduled start with a schedule, otherwise the "ordinary start" setting | Bageri §4 |
 | Overtime | With no schedule: time past 8 h in a shift (the usual local agreement; the agreement's own fallback without one is 9 h 15 min), and a sixth shift in a week (both configurable). Weekdays +50 % for 2 h then +100 %; from Sat 11:00 and from 18:00 the day before a holiday +100 %. Weekday OB is paid on top; holiday overtime gets Sunday OB instead of holiday OB | Avtalet §3.1.2, §3.3; Bageri §2, §4 |
 | Sick pay | 80 % of lost pay including OB; waiting-day deduction 20 % of an average week's sick pay; days 1–14 | Sjuklönelagen 6 §; Avtalet §5.2 |
 | Holiday pay | Hours you would have worked, with the OB of an ordinary weekday | Avtalet §5.1 |

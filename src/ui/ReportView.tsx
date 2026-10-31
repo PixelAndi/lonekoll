@@ -11,12 +11,18 @@ import { Cited } from './Cited.tsx';
 import { coverageText, totalText } from './CompareView.tsx';
 import { SlipNotFound } from './SlipsView.tsx';
 import { diffText, noteText, rowLabel, rowReference, sideText, useSlipComparison } from './slipComparison.ts';
-import { stampText } from './stamps.ts';
+import { ReportCheckDialog, useReportCheck } from './ReportCheck.tsx';
+import { explanations, needsReview, rowCertainty, toReview, type ReportCheck } from '../domain/reportCheck.ts';
+import type { StampPair } from '../domain/model.ts';
+import type { Translate } from '../i18n.ts';
 
 /** The report for the employer, in Swedish, and in the user's own language too when that is another. */
 export function ReportView({ id }: { id: string }) {
   const app = useApp();
   const data = useSlipComparison(id);
+  const check = useReportCheck(data);
+  /** Versions waiting for the checks to be confirmed before saving. */
+  const [pending, setPending] = useState<Language[] | null>(null);
   // Swedish is for the employer; the app's language is for the user.
   const languages: Language[] = app.lang === 'sv' ? ['sv'] : ['sv', app.lang];
   const [preview, setPreview] = useState<Language>('sv');
@@ -43,7 +49,8 @@ export function ReportView({ id }: { id: string }) {
   if (data === undefined) return <Spinner />;
   if (data === null) return <SlipNotFound />;
   const shown = printing ?? [preview];
-  const save = (langs: Language[]) => setPrinting(langs);
+  // Anything to look at first opens the checks; otherwise straight to saving.
+  const save = (langs: Language[]) => (check?.warnings ? setPending(langs) : setPrinting(langs));
 
   return (
     <div className="report">
@@ -77,8 +84,19 @@ export function ReportView({ id }: { id: string }) {
         </div>
         <p className="muted small report-download-hint">{app.t(languages.length > 1 ? 'report.downloadHintBoth' : 'report.downloadHint')}</p>
       </div>
+      {pending && check && (
+        <ReportCheckDialog
+          check={check}
+          slipId={id}
+          onClose={() => setPending(null)}
+          onSave={() => {
+            setPending(null);
+            setPrinting(pending);
+          }}
+        />
+      )}
       {shown.map((l) => (
-        <ReportPage key={l} lang={l} data={data} withPhotos={withPhotos} shiftResults={shiftResults} />
+        <ReportPage key={l} lang={l} data={data} withPhotos={withPhotos} shiftResults={shiftResults} check={check} />
       ))}
     </div>
   );
@@ -93,11 +111,13 @@ function ReportPage({
   data,
   withPhotos,
   shiftResults,
+  check,
 }: {
   lang: Language;
   data: NonNullable<ReturnType<typeof useSlipComparison>>;
   withPhotos: boolean;
   shiftResults: ReturnType<typeof calculateShifts>['results'];
+  check?: ReportCheck;
 }) {
   const app = useApp();
   const t = useMemo(() => translator(lang), [lang]);
@@ -105,7 +125,15 @@ function ReportPage({
   const { slip, comparison, start, end, period, tax, taxYear } = data;
   const settings = app.settings;
   const total = totalText(comparison, t, fmt);
-  const findings = comparison.rows.filter((r) => ['diff', 'check', 'missing', 'extra'].includes(r.status) && r.key !== 'gross' && r.key !== 'net');
+  // Differences are things to go through together, with common reasons for them.
+  const findings = comparison.rows.filter(toReview);
+  const reviewSummary =
+    findings.length > 0 && comparison.totalDifference !== undefined && Math.abs(comparison.totalDifference) > 1
+      ? t('report.reviewSummary', { n: findings.length, amount: fmt.money(Math.abs(comparison.totalDifference)) }) +
+        (comparison.netDifference !== undefined ? ` ${t('compare.netDiff', { amount: fmt.signedMoney(comparison.netDifference) })}` : '')
+      : null;
+  const matched = check?.items.find((i) => i.code === 'settings-matched');
+  const certainties = comparison.rows.map((r) => rowCertainty(r, period, settings));
   const notApplied = [
     !settings.supplements.ob && t('settings.supp.ob'),
     !settings.supplements.overtime && t('settings.supp.overtime'),
@@ -175,8 +203,9 @@ function ReportPage({
         <section>
           <h2>{t('report.summary')}</h2>
           <p className="report-total">
-            <strong>{total.text}</strong>
+            <strong>{reviewSummary ?? total.text}</strong>
           </p>
+          {matched && <p className="muted small">{t('report.settingsMatched', { months: matched.months.map((m) => fmt.month(m)).join(', ') })}</p>}
           {comparison.coverage.map((c) => (
             <p key={c.code}>{coverageText(c, t, fmt)}</p>
           ))}
@@ -192,18 +221,22 @@ function ReportPage({
               </tr>
             </thead>
             <tbody>
-              {comparison.rows.map((row) => (
+              {comparison.rows.map((row, i) => (
                 <tr key={row.key} className={row.key === 'gross' ? 'report-sum' : ''}>
-                  <td>{rowLabel(row, t)}</td>
+                  <td>
+                    {rowLabel(row, t)}
+                    {certainties[i] && <span className={`sure sure-${certainties[i]}`}>{t(`sure.${certainties[i]!}`)}</span>}
+                  </td>
                   <td className="num">{sideText(row.expected, row.key, fmt)}</td>
                   <td className="num">{sideText(row.slip, row.key, fmt)}</td>
                   <td className="num">{diffText(row, fmt)}</td>
-                  <td>{t(`status.${row.status}`)}</td>
+                  <td className={needsReview(row) ? 'report-review' : ''}>{t(needsReview(row) ? 'report.status.review' : `status.${row.status}`)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
           </div>
+          {certainties.some(Boolean) && <p className="report-ref">{t('report.sureNote')}</p>}
         </section>
 
         {findings.length > 0 && (
@@ -211,9 +244,7 @@ function ReportPage({
             <h2>{t('report.details')}</h2>
             {findings.map((row) => (
               <div key={row.key} className="report-finding">
-                <h3>
-                  {rowLabel(row, t)} – {t(`status.${row.status}`)}
-                </h3>
+                <h3>{rowLabel(row, t)}</h3>
                 {row.notes.map((n, i) => (
                   <p key={i}>
                     <Cited t={t} text={noteText(n, t, fmt)} />
@@ -222,6 +253,14 @@ function ReportPage({
                 <p className="report-ref">
                   <Cited t={t} text={rowReference(row, t, settings, end, taxYear, fmt)} />
                 </p>
+                <p className="report-explain-title">{t('explain.title')}</p>
+                <ul className="report-explain">
+                  {explanations(row).map((e) => (
+                    <li key={e}>
+                      <Cited t={t} text={t(`explain.${e}`)} />
+                    </li>
+                  ))}
+                </ul>
               </div>
             ))}
           </section>
@@ -290,7 +329,9 @@ function ReportPage({
                 return (
                   <tr key={date}>
                     <td>{fmt.date(date)}</td>
-                    <td>{stampText(day.rows, true)}</td>
+                    <td>
+                      <LogStamps rows={day.rows} t={t} />
+                    </td>
                     <td className="num">{worked ? formatDuration(worked) : ''}</td>
                     <td className="num">{ob ? formatDuration(ob) : ''}</td>
                     <td className="num">{ot ? formatDuration(ot) : ''}</td>
@@ -326,5 +367,27 @@ function ReportPage({
           <Cited t={t} text={t('report.disclaimer')} />
         </footer>
       </article>
+  );
+}
+
+/**
+ * The day's stamps as on the clock: * after a time typed in by hand, and a
+ * time changed after scanning shown with what the scanner read.
+ */
+function LogStamps({ rows, t }: { rows: StampPair[]; t: Translate }) {
+  const time = (value: string | null, manual?: boolean, read?: string) => {
+    if (!value) return '··:··';
+    if (read && read !== value) return `${value} ✎`;
+    return manual && !read ? `${value}*` : value;
+  };
+  const edited = rows.flatMap((r) => [
+    r.inRead && r.in && r.inRead !== r.in ? r.inRead : null,
+    r.outRead && r.out && r.outRead !== r.out ? r.outRead : null,
+  ]).filter((x): x is string => !!x);
+  return (
+    <>
+      {rows.map((r) => ltr(`${time(r.in, r.inManual, r.inRead)}–${time(r.out, r.outManual, r.outRead)}`)).join(' · ')}
+      {edited.length > 0 && <span className="report-edited"> {t('report.editedMark', { times: edited.map((x) => ltr(x)).join(', ') })}</span>}
+    </>
   );
 }
