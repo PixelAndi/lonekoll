@@ -6,6 +6,7 @@ import { addDays, formatDuration, monthEnd, todayLocal } from '../domain/time.ts
 import { useTaxData } from '../taxData.ts';
 import { href } from '../router.ts';
 import { Card, Notice, Page } from './common.tsx';
+import { Cited } from './Cited.tsx';
 import { MonthNav } from './DaysView.tsx';
 
 export const CATEGORY_ORDER: PayCategory[] = [
@@ -133,10 +134,12 @@ export function PeriodWarnings({ period }: { period: PeriodResult }) {
     <Card title={t('month.warnings')}>
       {period.warnings.map((w, i) => (
         <Notice key={`p${i}`} kind="warn">
-          {t(`warn.${w.code}`, {
-            ...Object.fromEntries(Object.entries(w.values ?? {}).map(([k, v]) => [k, typeof v === 'number' ? fmt.number(v) : v])),
-            date: w.date ? fmt.date(w.date) : '',
-          })}
+          <Cited
+            text={t(`warn.${w.code}`, {
+              ...Object.fromEntries(Object.entries(w.values ?? {}).map(([k, v]) => [k, typeof v === 'number' ? fmt.number(v) : v])),
+              date: w.date ? fmt.date(w.date) : '',
+            })}
+          />
         </Notice>
       ))}
       <ul className="warning-list">
@@ -147,7 +150,7 @@ export function PeriodWarnings({ period }: { period: PeriodResult }) {
         ))}
         {shiftWarnings.map(({ date, w }) => (
           <li key={`${date}${w}`}>
-            <a href={href({ name: 'day', date })}>{fmt.date(date)}</a>: {t(`warn.${w}`)}
+            <a href={href({ name: 'day', date })}>{fmt.date(date)}</a>: <Cited text={t(`warn.${w}`)} />
           </li>
         ))}
       </ul>

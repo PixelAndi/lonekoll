@@ -33,7 +33,7 @@ export function StatusBadge({ status }: { status: RowStatus }) {
   return <span className={`badge badge-${status}`}>{t(`status.${status}`)}</span>;
 }
 
-export function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
+export function Field({ label, hint, children }: { label: ReactNode; hint?: ReactNode; children: ReactNode }) {
   return (
     <label className="field">
       <span className="field-label">{label}</span>

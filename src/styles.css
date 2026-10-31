@@ -1745,3 +1745,10 @@ input[type='checkbox'] {
   border-radius: 6px;
   margin: 6px 0;
 }
+
+/* A rule the text cites, linked to the agreement or the law. */
+.citation-page {
+  white-space: nowrap;
+  font-size: 0.8em;
+  opacity: 0.75;
+}

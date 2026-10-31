@@ -5,6 +5,7 @@ import { RULES } from '../../domain/agreement.ts';
 import { hourlySupplement, minimumWageOn, monthlyPayOn, type Settings, type WagePeriod } from '../../domain/model.ts';
 import { addDays, todayLocal, type LocalDate } from '../../domain/time.ts';
 import { Card, Field } from '../common.tsx';
+import { Cited } from '../Cited.tsx';
 import { decimalText, LazyInput, numberOrUndefined } from './inputs.tsx';
 
 interface WageStep {
@@ -83,7 +84,7 @@ export function WageSettings() {
                   </Field>
                 </div>
                 {monthlyPay && (
-                  <p className="muted small">{t('settings.monthlyRates', { perHour: fmt.number(monthlyPay.perHour), perDay: fmt.number(monthlyPay.perDay) })}</p>
+                  <p className="muted small"><Cited text={t('settings.monthlyRates', { perHour: fmt.number(monthlyPay.perHour), perDay: fmt.number(monthlyPay.perDay) })} /></p>
                 )}
               </>
             )}
@@ -119,7 +120,7 @@ export function WageSettings() {
             </div>}
             {!monthly && perMonth && !!w.supplement && (
               <p className="muted small">
-                {t('settings.wagePerMonthHint', { amount: fmt.number(w.supplement, 0), hours: RULES.hoursPerMonth, hourly: fmt.number(supplement) })}
+                <Cited text={t('settings.wagePerMonthHint', { amount: fmt.number(w.supplement, 0), hours: RULES.hoursPerMonth, hourly: fmt.number(supplement) })} />
               </p>
             )}
             {minimum && (

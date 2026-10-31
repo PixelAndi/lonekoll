@@ -2,6 +2,7 @@ import { useApp } from '../../app-context.ts';
 import { saveSettings } from '../../db.ts';
 import type { ShiftForm, Supplements } from '../../domain/model.ts';
 import { Card, Field } from '../common.tsx';
+import { Cited } from '../Cited.tsx';
 import { LazyInput, numberOrUndefined } from './inputs.tsx';
 
 const KEYS: (keyof Supplements)[] = ['ob', 'overtime', 'shiftedTime', 'holidayPay'];
@@ -23,7 +24,7 @@ export function SupplementSettings() {
           {t(`settings.supp.${key}`)}
         </label>
       ))}
-      <Field label={t('settings.shiftForm')}>
+      <Field label={<Cited text={t('settings.shiftForm')} />}>
         <select value={settings.shiftForm} onChange={(e) => void saveSettings({ shiftForm: e.target.value as ShiftForm })}>
           {(['none', 'two-shift', 'continuous'] as const).map((f) => (
             <option key={f} value={f}>

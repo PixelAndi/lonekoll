@@ -58,10 +58,12 @@ describe('privacy: nothing leaves the device', () => {
       /mailto:/,
       /https?:\/\/(?!localhost)[a-z0-9-]+\.[a-z]/i,
     ];
-    // The service worker only passes on the app's own requests for its own files (checked below).
+    // The service worker only passes on the app's own requests for its own files,
+    // and the links to the agreement and the law are fixed addresses (both checked below).
     const serviceWorker = path.join(root, 'src', 'sw-template.js');
+    const sources = path.join(root, 'src', 'domain', 'sources.ts');
     const found: string[] = [];
-    for (const file of [...sourceFiles(path.join(root, 'src')), path.join(root, 'index.html')].filter((f) => f !== serviceWorker)) {
+    for (const file of [...sourceFiles(path.join(root, 'src')), path.join(root, 'index.html')].filter((f) => f !== serviceWorker && f !== sources)) {
       // Comments may mention addresses (e.g. sources of the rules); only code counts.
       const code = readFileSync(file, 'utf8')
         .replace(/\/\*[\s\S]*?\*\//g, '')
@@ -83,6 +85,22 @@ describe('privacy: nothing leaves the device', () => {
     expect(calls.every((arg) => arg === 'request' || arg === 'request, FRESH')).toBe(true);
     expect(code).toContain("const FRESH = { cache: 'no-store' };");
     expect(code).not.toMatch(/XMLHttpRequest|sendBeacon|WebSocket|EventSource|https?:\/\//);
+  });
+
+  it('the links to the agreement and the law carry nothing from the app', () => {
+    const code = readFileSync(path.join(root, 'src', 'domain', 'sources.ts'), 'utf8');
+    // Exactly two addresses: the agreement as published by the union, and the Sick Pay Act at the Riksdag.
+    expect(code.match(/https?:\/\/[^'\s]+/g)).toEqual([
+      'https://www.livs.se/globalassets/livs.se/arbetsplats--och-avtalsfragor/kollektivavtal/livsmedelsavtalet-2025.pdf',
+      'https://www.riksdagen.se/sv/dokument-och-lagar/dokument/svensk-forfattningssamling/lag-19911047-om-sjuklon_sfs-1991-1047/',
+    ]);
+    // A link adds only a page or a paragraph, never anything the user entered…
+    const links = [...code.matchAll(/href: (?!string;)(.*) };$/gm)].map((m) => m[1].trim());
+    expect(links).toEqual(['paragraph ? `${SICK_PAY_ACT_URL}#P${paragraph}` : SICK_PAY_ACT_URL', '`${AGREEMENT_URL}#page=${page}`']);
+    // …and is opened only by a tap, without telling the other site where it came from.
+    const cited = readFileSync(path.join(root, 'src', 'ui', 'Cited.tsx'), 'utf8');
+    expect(cited).toContain('rel="noopener noreferrer"');
+    expect(cited).not.toMatch(/location|window\.open|fetch/);
   });
 
   it('a pay slip is read from its own bytes on the device, and nothing else is loaded for it', () => {

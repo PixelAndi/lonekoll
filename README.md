@@ -116,6 +116,13 @@ hosts the app. This is a design rule, and it is enforced:
 - The app has no way of sending data out: no network calls of its own, no
   sharing to other apps. The offline cache (`src/sw-template.js`) only passes
   on the app's own requests for its own files.
+- Every rule the app cites ("Bilaga F §5", "§3.1.2") links to where it can be
+  read in full: the agreement as published by Livsmedelsarbetareförbundet,
+  opened at the section's page (the page is also shown, for phones that open
+  PDFs at the first page), and the Sick Pay Act at the Riksdag. The links are
+  fixed addresses in `src/domain/sources.ts` and carry nothing from the app;
+  they open only when tapped, without telling the other site where they came
+  from.
 - Pay slips (lönebesked) are read on the device: the PDF's bytes go straight
   to pdf.js, which is bundled with the app, and the PDF and what was read from
   it are stored only in the device's IndexedDB (deleting the slip deletes

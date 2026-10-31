@@ -7,6 +7,7 @@ import { formatter, ltr } from '../format.ts';
 import { isRightToLeft, LANGUAGE_NAMES, LANGUAGE_TAGS, translator, type Language } from '../i18n.ts';
 import { goBack } from '../router.ts';
 import { PhotoThumb, Spinner } from './common.tsx';
+import { Cited } from './Cited.tsx';
 import { coverageText, totalText } from './CompareView.tsx';
 import { SlipNotFound } from './SlipsView.tsx';
 import { diffText, noteText, rowLabel, rowReference, sideText, useSlipComparison } from './slipComparison.ts';
@@ -214,9 +215,13 @@ function ReportPage({
                   {rowLabel(row, t)} – {t(`status.${row.status}`)}
                 </h3>
                 {row.notes.map((n, i) => (
-                  <p key={i}>{noteText(n, t, fmt)}</p>
+                  <p key={i}>
+                    <Cited t={t} text={noteText(n, t, fmt)} />
+                  </p>
                 ))}
-                <p className="report-ref">{rowReference(row, t, settings, end, taxYear, fmt)}</p>
+                <p className="report-ref">
+                  <Cited t={t} text={rowReference(row, t, settings, end, taxYear, fmt)} />
+                </p>
               </div>
             ))}
           </section>
@@ -227,7 +232,7 @@ function ReportPage({
           <ul>
             {monthlyPay && (
               <li>
-                {t('settings.monthlyRates', { perHour: fmt.number(monthlyPay.perHour), perDay: fmt.number(monthlyPay.perDay) })} {t('report.monthlyLocal')}
+                <Cited t={t} text={`${t('settings.monthlyRates', { perHour: fmt.number(monthlyPay.perHour), perDay: fmt.number(monthlyPay.perDay) })} ${t('report.monthlyLocal')}`} />
               </li>
             )}
             {settings.scheduleMode === 'fixed' ? (
@@ -235,7 +240,9 @@ function ReportPage({
             ) : (
               <>
                 <li>{t('report.scheduleNone')}</li>
-                <li>{t('report.overtimeRule', { limit: formatDuration(settings.ordinaryShiftMinutes) })}</li>
+                <li>
+                  <Cited t={t} text={t('report.overtimeRule', { limit: formatDuration(settings.ordinaryShiftMinutes) })} />
+                </li>
               </>
             )}
             {notApplied.length > 0 && <li>{t('report.notApplied', { list: notApplied.join(', ') })}</li>}
@@ -315,7 +322,9 @@ function ReportPage({
           </section>
         )}
 
-        <footer className="report-disclaimer">{t('report.disclaimer')}</footer>
+        <footer className="report-disclaimer">
+          <Cited t={t} text={t('report.disclaimer')} />
+        </footer>
       </article>
   );
 }

@@ -9,6 +9,7 @@ import { scheduledShift } from '../domain/schedule.ts';
 import { addDays, formatDuration } from '../domain/time.ts';
 import { goBack, href } from '../router.ts';
 import { Card, Field, Icon, Modal, Notice, Page, PhotoThumb, usePhotoUrl } from './common.tsx';
+import { Cited } from './Cited.tsx';
 import { flushFocusedField, StampRowsEditor, TimeField } from './StampRowsEditor.tsx';
 
 const ABSENCE_TYPES: AbsenceType[] = ['sick', 'vacation', 'timebank', 'holiday', 'permission', 'unpaid'];
@@ -136,7 +137,7 @@ function DayForm({ date, existing, days, t, fmt, settings }: FormProps) {
               <TimeField label={t('day.in')} value={absence.bookedStart ?? null} onChange={(v) => patchAbsence({ bookedStart: v ?? undefined })} />
               <TimeField label={t('day.out')} value={absence.bookedEnd ?? null} onChange={(v) => patchAbsence({ bookedEnd: v ?? undefined })} />
             </div>
-            <p className="muted small">{t(absence.type === 'sick' ? 'day.bookedHint.sick' : 'day.bookedHint.holiday')}</p>
+            <p className="muted small"><Cited text={t(absence.type === 'sick' ? 'day.bookedHint.sick' : 'day.bookedHint.holiday')} /></p>
           </>
         )}
         <Field label={t('day.note')}>
@@ -222,10 +223,10 @@ export function ShiftSummary({ result }: { result: ShiftResult }) {
           </div>
         )}
       </dl>
-      {r.overtimeReason && <p className="muted small">{t('day.overtime')}: {t(`day.overtimeReason.${r.overtimeReason}`, { limit })}</p>}
+      {r.overtimeReason && <p className="muted small">{t('day.overtime')}: <Cited text={t(`day.overtimeReason.${r.overtimeReason}`, { limit })} /></p>}
       {r.warnings.map((w) => (
         <Notice key={w} kind="warn">
-          {t(`warn.${w}`)}
+          <Cited text={t(`warn.${w}`)} />
         </Notice>
       ))}
     </div>
@@ -315,7 +316,7 @@ function ScheduleCard({
             <input type="checkbox" checked={moved} onChange={(e) => onMoved(e.target.checked)} />
             {t('day.shiftMoved')}
           </label>
-          {shiftedRate !== undefined && <p className="muted small">{t('day.shiftMovedHint', { rate: fmt.number(shiftedRate) })}</p>}
+          {shiftedRate !== undefined && <p className="muted small"><Cited text={t('day.shiftMovedHint', { rate: fmt.number(shiftedRate) })} /></p>}
         </>
       )}
     </Card>

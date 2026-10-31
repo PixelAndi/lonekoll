@@ -7,6 +7,7 @@ import { formatDuration, todayLocal, toMinutes } from '../domain/time.ts';
 import { LANGUAGE_NAMES } from '../i18n.ts';
 import { href } from '../router.ts';
 import { Card, Field, Notice, Page } from './common.tsx';
+import { Cited } from './Cited.tsx';
 import { decimalText, LazyInput, numberOrUndefined } from './settings/inputs.tsx';
 import { TimeField } from './StampRowsEditor.tsx';
 import { ScannerLearning } from './settings/ScannerLearning.tsx';
@@ -105,7 +106,7 @@ export function SettingsView() {
         {/* With a schedule, overtime follows the schedule instead of these limits. */}
         {settings.scheduleMode !== 'fixed' && (
           <div className="field-row">
-            <Field label={t('settings.ordinaryShift')} hint={t('settings.ordinaryShiftHint')}>
+            <Field label={t('settings.ordinaryShift')} hint={<Cited text={t('settings.ordinaryShiftHint')} />}>
               <LazyInput
                 type="text"
                 inputMode="numeric"
@@ -186,9 +187,13 @@ export function SettingsView() {
       </Card>
 
       <Card title={t('settings.about')}>
-        <p>{t('settings.aboutText')}</p>
+        <p>
+          <Cited text={t('settings.aboutText')} />
+        </p>
         <p className="muted small">{t('settings.notCovered')}</p>
-        <p className="muted small">{t('settings.source')}</p>
+        <p className="muted small">
+          <Cited text={t('settings.source')} />
+        </p>
         <p className="small">{t('privacy.full')}</p>
         <p className="muted small">Version {__APP_VERSION__}</p>
       </Card>

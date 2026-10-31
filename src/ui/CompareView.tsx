@@ -6,6 +6,7 @@ import type { Formatter } from '../format.ts';
 import type { Translate } from '../i18n.ts';
 import { goBack, href } from '../router.ts';
 import { Card, Notice, Page, Spinner, StatusBadge } from './common.tsx';
+import { Cited } from './Cited.tsx';
 import { PeriodWarnings } from './MonthView.tsx';
 import { SlipNotFound } from './SlipsView.tsx';
 import { diffText, noteText, rowLabel, rowReference, sideText, useSlipComparison } from './slipComparison.ts';
@@ -106,10 +107,12 @@ export function CompareView({ id }: { id: string }) {
             </dl>
             {row.notes.map((n, i) => (
               <p key={i} className="note">
-                {noteText(n, t, fmt)}
+                <Cited text={noteText(n, t, fmt)} />
               </p>
             ))}
-            <p className="muted small">{rowReference(row, t, settings, end, taxYear, fmt)}</p>
+            <p className="muted small">
+              <Cited text={rowReference(row, t, settings, end, taxYear, fmt)} />
+            </p>
           </Card>
         ))}
       </div>

@@ -113,6 +113,7 @@ export function DaysView({ month }: { month?: string }) {
                   ))}
                   {warnings.map((w) => (
                     <span key={w} className="flag flag-warn">
+                      {/* Inside the day's link: its rules are linked on the day itself. */}
                       {t(`warn.${w}`)}
                     </span>
                   ))}
