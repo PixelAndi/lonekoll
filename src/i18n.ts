@@ -335,6 +335,10 @@ const sv = {
   'report.col.note': 'Notering',
 
   'settings.language': 'Språk',
+  'settings.theme': 'Utseende',
+  'theme.auto': 'Som telefonen',
+  'theme.light': 'Ljust',
+  'theme.dark': 'Mörkt',
   'settings.you': 'Om dig',
   'settings.name': 'Namn (visas på rapporten)',
   'settings.employer': 'Arbetsgivare',
@@ -888,6 +892,10 @@ const en: Record<TextKey, string> = {
   'report.col.note': 'Note',
 
   'settings.language': 'Language',
+  'settings.theme': 'Appearance',
+  'theme.auto': 'Like the phone',
+  'theme.light': 'Light',
+  'theme.dark': 'Dark',
   'settings.you': 'About you',
   'settings.name': 'Name (shown on the report)',
   'settings.employer': 'Employer',

@@ -63,6 +63,16 @@ export function SettingsView() {
             ))}
           </select>
         </Field>
+        <div className="field">
+          <span className="field-label">{t('settings.theme')}</span>
+          <div className="segmented" role="group" aria-label={t('settings.theme')}>
+            {(['auto', 'light', 'dark'] as const).map((theme) => (
+              <button key={theme} type="button" className={settings.theme === theme ? 'on' : ''} aria-pressed={settings.theme === theme} onClick={() => save({ theme })}>
+                {t(`theme.${theme}`)}
+              </button>
+            ))}
+          </div>
+        </div>
         <Field label={t('settings.name')}>
           <LazyInput type="text" autoComplete="name" value={settings.name} onCommit={(v) => save({ name: v.trim() })} />
         </Field>

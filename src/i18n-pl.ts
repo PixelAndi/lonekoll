@@ -335,6 +335,10 @@ export const pl: Record<TextKey, string> = {
   'report.col.note': 'Notatka',
 
   'settings.language': 'Język',
+  'settings.theme': 'Wygląd',
+  'theme.auto': 'Jak w telefonie',
+  'theme.light': 'Jasny',
+  'theme.dark': 'Ciemny',
   'settings.you': 'O tobie',
   'settings.name': 'Imię i nazwisko (na raporcie)',
   'settings.employer': 'Pracodawca',

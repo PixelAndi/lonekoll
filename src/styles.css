@@ -19,8 +19,9 @@
   color-scheme: light;
 }
 
+/* Dark: by the phone's setting, unless the user picked light; or picked dark. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme='light']) {
     --bg: #15171a;
     --surface: #1e2125;
     --surface-2: #272b30;
@@ -38,6 +39,25 @@
     --error-soft: #3d1d1b;
     color-scheme: dark;
   }
+}
+
+:root[data-theme='dark'] {
+  --bg: #15171a;
+  --surface: #1e2125;
+  --surface-2: #272b30;
+  --text: #e8eaed;
+  --muted: #a0a7b0;
+  --border: #353a40;
+  --primary: #6aaee0;
+  --primary-text: #0d1720;
+  --primary-soft: #1d3446;
+  --ok: #6fd39a;
+  --ok-soft: #173326;
+  --warn: #f0c060;
+  --warn-soft: #3a2f16;
+  --error: #ff8a80;
+  --error-soft: #3d1d1b;
+  color-scheme: dark;
 }
 
 * {
@@ -1061,6 +1081,26 @@ input[type='checkbox'] {
 }
 
 @media print {
+  /* Doubled to outrank the dark rules above. */
+  :root:root {
+    --bg: #f6f4f0;
+    --surface: #ffffff;
+    --surface-2: #efece6;
+    --text: #1f2328;
+    --muted: #5f6670;
+    --border: #dcd7ce;
+    --primary: #1d5c87;
+    --primary-text: #ffffff;
+    --primary-soft: #e3eef6;
+    --ok: #1e7b46;
+    --ok-soft: #e2f3e8;
+    --warn: #8a5a00;
+    --warn-soft: #fbf0d9;
+    --error: #b42318;
+    --error-soft: #fbe5e3;
+    color-scheme: light;
+  }
+
   @page {
     size: A4;
     margin: 14mm;
@@ -1645,6 +1685,8 @@ input[type='checkbox'] {
 /* Report: preview language and downloads */
 .segmented {
   display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
   border: 1px solid var(--border);
   border-radius: 999px;
   overflow: hidden;

@@ -1,5 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useEffect, useMemo, useState } from 'react';
+import { applyTheme } from './theme.ts';
 import { AppContext, type AppData } from './app-context.ts';
 import { db, loadSettings } from './db.ts';
 import { formatter } from './format.ts';
@@ -76,6 +77,10 @@ export function App() {
     document.documentElement.lang = LANGUAGE_TAGS[data.lang];
     document.documentElement.dir = isRightToLeft(data.lang) ? 'rtl' : 'ltr';
   }, [data]);
+  const theme = data?.settings.theme;
+  useEffect(() => {
+    if (theme) applyTheme(theme);
+  }, [theme]);
 
   if (!data) return <Spinner />;
   const { t } = data;

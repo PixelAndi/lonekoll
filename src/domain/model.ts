@@ -11,6 +11,8 @@ export interface StampPair {
   outManual?: boolean;
 }
 
+export type Theme = 'auto' | 'light' | 'dark';
+
 export type AbsenceType = 'sick' | 'vacation' | 'timebank' | 'komp' | 'holiday' | 'permission' | 'unpaid';
 
 /** How a day's overtime is paid: in money, or as paid time off later (komptid, §4.3). */
@@ -112,6 +114,8 @@ export interface TaxSettings {
 
 export interface Settings {
   language: 'sv' | 'en' | 'pl' | 'prs';
+  /** Light or dark look; auto follows the phone. */
+  theme: Theme;
   name: string;
   employer: string;
   wages: WagePeriod[];
@@ -150,6 +154,7 @@ export interface Settings {
 
 export const DEFAULT_SETTINGS: Settings = {
   language: 'sv',
+  theme: 'auto',
   name: '',
   employer: '',
   wages: [],

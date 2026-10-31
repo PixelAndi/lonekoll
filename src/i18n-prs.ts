@@ -339,6 +339,10 @@ export const prs: Record<TextKey, string> = {
   'report.col.note': 'یادداشت',
 
   'settings.language': 'زبان',
+  'settings.theme': 'نما',
+  'theme.auto': 'مانند تیلفون',
+  'theme.light': 'روشن',
+  'theme.dark': 'تاریک',
   'settings.you': 'دربارهٔ شما',
   'settings.name': 'نام (در گزارش نشان داده می‌شود)',
   'settings.employer': 'کارفرما',

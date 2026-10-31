@@ -3,7 +3,9 @@ import { createRoot } from 'react-dom/client';
 import { App } from './App.tsx';
 import './styles.css';
 import { listenForInstall } from './install.ts';
+import { applySavedTheme } from './theme.ts';
 
+applySavedTheme();
 listenForInstall();
 
 createRoot(document.getElementById('root')!).render(
