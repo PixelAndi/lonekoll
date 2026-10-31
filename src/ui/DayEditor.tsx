@@ -174,6 +174,14 @@ function DayForm({ date, existing, days, t, fmt, settings }: FormProps) {
             </span>
           </div>
         )}
+        {/* The shifts' warnings last, so they don't read as part of the overtime choice. */}
+        {shifts.flatMap((r) =>
+          r.warnings.map((w) => (
+            <Notice key={`${r.shift.start}-${w}`} kind="warn">
+              <Cited text={t(`warn.${w}`)} />
+            </Notice>
+          )),
+        )}
       </Card>
 
       {existing && existing.photoIds.length > 0 && (
@@ -252,11 +260,6 @@ export function ShiftSummary({ result }: { result: ShiftResult }) {
         )}
       </dl>
       {r.overtimeReason && <p className="muted small">{t('day.overtime')}: <Cited text={t(`day.overtimeReason.${r.overtimeReason}`, { limit })} /></p>}
-      {r.warnings.map((w) => (
-        <Notice key={w} kind="warn">
-          <Cited text={t(`warn.${w}`)} />
-        </Notice>
-      ))}
     </div>
   );
 }
