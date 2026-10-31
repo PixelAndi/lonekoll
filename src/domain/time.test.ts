@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { easterSunday, specialDay } from './holidays.ts';
-import { addDays, isoWeekday, localToUtc, monthEnd, stockholmOffset, utcToLocal, weekStart } from './time.ts';
+import { addDays, isoWeekday, localToUtc, monthEnd, parseDuration, stockholmOffset, utcToLocal, weekStart } from './time.ts';
 
 describe('Swedish time', () => {
   it('switches to standard time at 01:00 UTC on the last Sunday of October', () => {
@@ -44,5 +44,20 @@ describe('special days', () => {
     expect(specialDay('2026-12-24')?.kind).toBe('holiday');
     expect(specialDay('2026-12-31')?.kind).toBe('sunday');
     expect(specialDay('2026-10-30')).toBeUndefined();
+  });
+});
+
+describe('parseDuration', () => {
+  it('reads a shift length as typed, also without ":"', () => {
+    for (const text of ['8:00', '8.00', '8,00', '800', '8', ' 8 ']) expect(parseDuration(text)).toBe(480);
+    expect(parseDuration('9:15')).toBe(555);
+    expect(parseDuration('915')).toBe(555);
+    expect(parseDuration('8,5')).toBe(510);
+    expect(parseDuration('10:30')).toBe(630);
+    expect(parseDuration('1030')).toBe(630);
+  });
+
+  it('refuses what is not a length of time', () => {
+    for (const text of ['', 'abc', '8:75', '875', '12345', '8:0:0']) expect(parseDuration(text)).toBeUndefined();
   });
 });

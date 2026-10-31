@@ -124,6 +124,24 @@ export function formatDuration(minutes: number): string {
   return `${sign}${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`;
 }
 
+/**
+ * A length of time as typed, also on a phone keypad without ":": "8:00",
+ * "8.00", "8,30", "800", "830", "8" (hours) or "8,5" (hours and a half).
+ * Undefined if it can't be read.
+ */
+export function parseDuration(text: string): number | undefined {
+  const s = text.trim().replace(/\s+/g, '');
+  let h: number;
+  let m: number;
+  let match: RegExpMatchArray | null;
+  if ((match = s.match(/^(\d{1,2})[:.,](\d{2})$/))) [h, m] = [Number(match[1]), Number(match[2])];
+  else if ((match = s.match(/^(\d{1,2})[.,](\d)$/))) [h, m] = [Number(match[1]), Number(match[2]) * 6];
+  else if ((match = s.match(/^(\d{1,2})(\d{2})$/))) [h, m] = [Number(match[1]), Number(match[2])];
+  else if ((match = s.match(/^(\d{1,2})$/))) [h, m] = [Number(match[1]), 0];
+  else return undefined;
+  return m < 60 ? h * 60 + m : undefined;
+}
+
 /** Hours with two decimals, the way pay slips count them. */
 export function toHours(minutes: number): number {
   return Math.round((minutes / 60) * 100) / 100;

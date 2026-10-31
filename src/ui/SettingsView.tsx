@@ -3,7 +3,7 @@ import { useApp } from '../app-context.ts';
 import { deleteEverything, downloadBlob, exportBackup, importBackup } from '../backup.ts';
 import { isPersisted, requestPersistence, saveSettings } from '../db.ts';
 import type { Settings } from '../domain/model.ts';
-import { formatDuration, todayLocal, toMinutes } from '../domain/time.ts';
+import { formatDuration, todayLocal, parseDuration } from '../domain/time.ts';
 import { LANGUAGE_NAMES } from '../i18n.ts';
 import { href } from '../router.ts';
 import { Card, Field, Notice, Page } from './common.tsx';
@@ -109,10 +109,14 @@ export function SettingsView() {
             <Field label={t('settings.ordinaryShift')} hint={<Cited text={t('settings.ordinaryShiftHint')} />}>
               <LazyInput
                 type="text"
-                inputMode="numeric"
-                pattern="\d{1,2}:\d{2}"
+                inputMode="decimal"
                 value={formatDuration(settings.ordinaryShiftMinutes)}
-                onCommit={(v) => /^\d{1,2}:\d{2}$/.test(v) && save({ ordinaryShiftMinutes: toMinutes(v) })}
+                onCommit={(v) => {
+                  // A phone's number pad has no ":", so "800", "8.00" and "8" work too.
+                  const minutes = parseDuration(v);
+                  if (minutes === undefined || minutes < 60 || minutes > 24 * 60) return false;
+                  save({ ordinaryShiftMinutes: minutes, ordinaryShiftChosen: true });
+                }}
               />
             </Field>
             <Field label={t('settings.maxShifts')}>

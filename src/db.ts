@@ -57,6 +57,8 @@ export function newId(): string {
   return crypto.randomUUID();
 }
 
+const OLD_DEFAULT_SHIFT = 9 * 60 + 15;
+
 export async function loadSettings(): Promise<Settings> {
   const record = await db.settings.get('settings');
   if (!record) {
@@ -68,9 +70,13 @@ export async function loadSettings(): Promise<Settings> {
   }
   // Nested settings are merged too, so fields added in later versions get defaults.
   const value = record.value;
+  // The first versions saved the agreement's 9:15 as the default shift length;
+  // unless the user chose it themselves, the default is now 8:00.
+  const ordinaryShift = !value.ordinaryShiftChosen && value.ordinaryShiftMinutes === OLD_DEFAULT_SHIFT ? { ordinaryShiftMinutes: DEFAULT_SETTINGS.ordinaryShiftMinutes } : {};
   return {
     ...DEFAULT_SETTINGS,
     ...value,
+    ...ordinaryShift,
     supplements: { ...DEFAULT_SETTINGS.supplements, ...value.supplements },
     tax: { ...DEFAULT_SETTINGS.tax, ...value.tax },
     schedule: value.schedule ?? DEFAULT_SETTINGS.schedule,

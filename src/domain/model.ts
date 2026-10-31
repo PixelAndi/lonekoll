@@ -110,6 +110,8 @@ export interface Settings {
   employmentPercent: number;
   /** Overtime starts after this many worked minutes in a shift. */
   ordinaryShiftMinutes: number;
+  /** Set when the user has entered the shift length themselves. */
+  ordinaryShiftChosen?: boolean;
   /** Shifts beyond this number in a Monday–Sunday week are overtime (0 = off). */
   maxShiftsPerWeek: number;
   /** Overtime shorter than this in a shift gets no overtime pay (many workplaces use 15 or 30). */
