@@ -94,6 +94,14 @@ report you can go through with your employer.
 - **Report.** An A4 report, saved as PDF in Swedish (for the employer), in the
   user's app language, or both in one file (Swedish first), with the summary,
   explanations, assumptions, the day log and optionally the photos.
+- **Points to go through.** Each difference in the report is a numbered
+  point: what differs (calculated and on the slip), a sum to check with a
+  calculator (hours × rate = amount), the days and stamps behind it, the rule
+  quoted word for word from the agreement with section and page, and either a
+  correction asked for (Avvikelse) or a question when it may depend on a local
+  agreement or an estimate, or the slip pays more (Fråga). An overview lists
+  the points and their amounts, and each point has a box for the employer's
+  answer. Clock photos of the days behind the points are always included.
 - **Checks before a report is saved.** Saving first lists what to look at:
   working days without stamps, holidays without a shift marked (no
   schedule), stamps that don't add up, times saved while the scanner was

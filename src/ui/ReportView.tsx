@@ -10,11 +10,12 @@ import { PhotoThumb, Spinner } from './common.tsx';
 import { Cited } from './Cited.tsx';
 import { coverageText, totalText } from './CompareView.tsx';
 import { SlipNotFound } from './SlipsView.tsx';
-import { diffText, noteText, rowLabel, rowReference, sideText, useSlipComparison } from './slipComparison.ts';
+import { diffText, rowLabel, sideText, useSlipComparison } from './slipComparison.ts';
 import { ReportCheckDialog, useReportCheck } from './ReportCheck.tsx';
-import { explanations, needsReview, rowCertainty, toReview, type ReportCheck } from '../domain/reportCheck.ts';
-import type { StampPair } from '../domain/model.ts';
-import type { Translate } from '../i18n.ts';
+import { needsReview, rowCertainty, type ReportCheck } from '../domain/reportCheck.ts';
+import { reportPoints } from '../domain/reportPoints.ts';
+import { LogStamps } from './LogStamps.tsx';
+import { PointCard, PointsOverview } from './ReportPoints.tsx';
 
 /** The report for the employer, in Swedish, and in the user's own language too when that is another. */
 export function ReportView({ id }: { id: string }) {
@@ -125,12 +126,12 @@ function ReportPage({
   const { slip, comparison, start, end, period, tax, taxYear } = data;
   const settings = app.settings;
   const total = totalText(comparison, t, fmt);
-  // Differences are things to go through together, with common reasons for them.
-  const findings = comparison.rows.filter(toReview);
+  // Differences as numbered points to go through together.
+  const points = reportPoints(comparison, period, app.days, settings);
   const reviewSummary =
-    findings.length > 0 && comparison.totalDifference !== undefined && Math.abs(comparison.totalDifference) > 1
-      ? t('report.reviewSummary', { n: findings.length, amount: fmt.money(Math.abs(comparison.totalDifference)) }) +
-        (comparison.netDifference !== undefined ? ` ${t('compare.netDiff', { amount: fmt.signedMoney(comparison.netDifference) })}` : '')
+    points.length > 0 && comparison.totalDifference !== undefined && Math.abs(comparison.totalDifference) > 1
+      ? t('report.reviewSummary', { n: points.length, amount: fmt.money(Math.abs(comparison.totalDifference)) }) +
+        (comparison.netDifference !== undefined ? ` ${t('compare.netDiff', { amount: fmt.money(Math.abs(comparison.netDifference)) })}` : '')
       : null;
   const matched = check?.items.find((i) => i.code === 'settings-matched');
   const certainties = comparison.rows.map((r) => rowCertainty(r, period, settings));
@@ -159,7 +160,10 @@ function ReportPage({
   const monthlyPay = monthlyPayOn(settings, end);
   const byDate = new Map(app.days.map((d) => [d.date, d]));
   const logDates = datesInRange(start, end).filter((d) => byDate.has(d));
-  const photoIds = logDates.flatMap((d) => byDate.get(d)!.photoIds.map((pid) => ({ date: d, id: pid })));
+  const pointDates = new Set(points.flatMap((p) => p.days.map((d) => d.date)));
+  const photoIds = logDates
+    .filter((d) => withPhotos || pointDates.has(d))
+    .flatMap((d) => byDate.get(d)!.photoIds.map((pid) => ({ date: d, id: pid })));
 
   return (
       <article className="report-page" lang={LANGUAGE_TAGS[lang]} dir={isRightToLeft(lang) ? 'rtl' : 'ltr'}>
@@ -206,6 +210,8 @@ function ReportPage({
             <strong>{reviewSummary ?? total.text}</strong>
           </p>
           {matched && <p className="muted small">{t('report.settingsMatched', { months: matched.months.map((m) => fmt.month(m)).join(', ') })}</p>}
+          {points.length > 0 && <PointsOverview points={points} comparison={comparison} t={t} fmt={fmt} />}
+          <h3 className="report-compare-title">{t('report.compareTitle')}</h3>
           {comparison.coverage.map((c) => (
             <p key={c.code}>{coverageText(c, t, fmt)}</p>
           ))}
@@ -239,29 +245,11 @@ function ReportPage({
           {certainties.some(Boolean) && <p className="report-ref">{t('report.sureNote')}</p>}
         </section>
 
-        {findings.length > 0 && (
+        {points.length > 0 && (
           <section>
             <h2>{t('report.details')}</h2>
-            {findings.map((row) => (
-              <div key={row.key} className="report-finding">
-                <h3>{rowLabel(row, t)}</h3>
-                {row.notes.map((n, i) => (
-                  <p key={i}>
-                    <Cited t={t} text={noteText(n, t, fmt)} />
-                  </p>
-                ))}
-                <p className="report-ref">
-                  <Cited t={t} text={rowReference(row, t, settings, end, taxYear, fmt)} />
-                </p>
-                <p className="report-explain-title">{t('explain.title')}</p>
-                <ul className="report-explain">
-                  {explanations(row).map((e) => (
-                    <li key={e}>
-                      <Cited t={t} text={t(`explain.${e}`)} />
-                    </li>
-                  ))}
-                </ul>
-              </div>
+            {points.map((p) => (
+              <PointCard key={p.n} point={p} comparison={comparison} settings={settings} end={end} taxYear={taxYear} t={t} fmt={fmt} />
             ))}
           </section>
         )}
@@ -349,7 +337,7 @@ function ReportPage({
           <p className="report-ref">{t('report.manualNote')}</p>
         </section>
 
-        {withPhotos && photoIds.length > 0 && (
+        {photoIds.length > 0 && (
           <section className="report-photos">
             <h2>{t('report.photos')}</h2>
             <div className="report-photo-grid">
@@ -370,24 +358,3 @@ function ReportPage({
   );
 }
 
-/**
- * The day's stamps as on the clock: * after a time typed in by hand, and a
- * time changed after scanning shown with what the scanner read.
- */
-function LogStamps({ rows, t }: { rows: StampPair[]; t: Translate }) {
-  const time = (value: string | null, manual?: boolean, read?: string) => {
-    if (!value) return '··:··';
-    if (read && read !== value) return `${value} ✎`;
-    return manual && !read ? `${value}*` : value;
-  };
-  const edited = rows.flatMap((r) => [
-    r.inRead && r.in && r.inRead !== r.in ? r.inRead : null,
-    r.outRead && r.out && r.outRead !== r.out ? r.outRead : null,
-  ]).filter((x): x is string => !!x);
-  return (
-    <>
-      {rows.map((r) => ltr(`${time(r.in, r.inManual, r.inRead)}–${time(r.out, r.outManual, r.outRead)}`)).join(' · ')}
-      {edited.length > 0 && <span className="report-edited"> {t('report.editedMark', { times: edited.map((x) => ltr(x)).join(', ') })}</span>}
-    </>
-  );
-}

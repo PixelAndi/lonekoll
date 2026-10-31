@@ -2195,3 +2195,128 @@ input[type='checkbox'] {
 .report-page h3 {
   break-after: avoid;
 }
+
+/* The report's points: one box each, kept on one page where possible. */
+.point {
+  border: 1.5px solid #d8d2c6;
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin: 12px 0;
+  break-inside: avoid;
+}
+
+.point-long {
+  break-inside: auto;
+}
+
+.point-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.point-head h3 {
+  margin: 0;
+}
+
+.point-kind {
+  font-size: 0.8em;
+  font-weight: 700;
+  padding: 1px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.point-kind-claim {
+  background: #fbe5e3;
+  color: #9b1c12;
+}
+
+.point-kind-question {
+  background: #e3eef6;
+  color: #1d5c87;
+}
+
+.point-facts {
+  display: grid;
+  grid-template-columns: 7.5em 1fr;
+  gap: 6px 12px;
+  margin: 10px 0 0;
+}
+
+.point-facts dt {
+  font-weight: 700;
+}
+
+.point-facts dd {
+  margin: 0;
+  min-width: 0;
+}
+
+.point-days {
+  font-size: 0.9em;
+}
+
+.point-days tfoot td {
+  font-weight: 700;
+  border-bottom: 0;
+}
+
+.point-photo {
+  color: #1d5c87;
+  font-size: 0.85em;
+}
+
+.point-quote {
+  margin: 0 0 6px;
+}
+
+.point-quote blockquote {
+  margin: 0;
+  padding: 1px 10px;
+  border-inline-start: 3px solid #1d5c87;
+  font-style: italic;
+}
+
+.point-quote figcaption {
+  font-size: 0.8em;
+  padding-inline-start: 13px;
+}
+
+.point-explain {
+  margin-top: 4px;
+  font-size: 0.85em;
+  color: #555;
+}
+
+.point-answer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin-top: 10px;
+  border: 1px dashed #b9b2a6;
+  border-radius: 6px;
+  padding: 8px 10px 22px;
+  font-size: 0.85em;
+  color: #555;
+}
+
+.point-answer-label {
+  font-weight: 700;
+}
+
+.report-compare-title {
+  margin-top: 16px;
+}
+
+@media (max-width: 520px) {
+  .point-facts {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+
+  .point-facts dd {
+    margin-bottom: 8px;
+  }
+}
