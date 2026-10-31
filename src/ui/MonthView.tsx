@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
+import { ltr } from '../format.ts';
 import { useApp } from '../app-context.ts';
-import { calculatePeriod, type CategoryTotal, type PayCategory, type PeriodResult } from '../domain/calc.ts';
+import { calculatePeriod, kompBalance, type CategoryTotal, type PayCategory, type PeriodResult } from '../domain/calc.ts';
 import { taxBasis, taxColumn, taxFor } from '../domain/tax.ts';
 import { addDays, formatDuration, monthEnd, todayLocal } from '../domain/time.ts';
 import { useTaxData } from '../taxData.ts';
@@ -28,6 +29,7 @@ export const CATEGORY_ORDER: PayCategory[] = [
   'holidayPay',
   'permission',
   'timebankPay',
+  'kompPay',
 ];
 
 export function MonthView({ month }: { month?: string }) {
@@ -79,7 +81,10 @@ export function MonthView({ month }: { month?: string }) {
 }
 
 export function PeriodTotals({ period }: { period: PeriodResult }) {
-  const { t, fmt } = useApp();
+  const { t, fmt, days, settings } = useApp();
+  const end = period.end;
+  // Komptid left at the end of the period, from everything logged up to it.
+  const komp = useMemo(() => kompBalance(days, settings, end), [days, settings, end]);
   const rows = CATEGORY_ORDER.map((c) => [c, period.totals[c]] as const).filter((x): x is [PayCategory, CategoryTotal] => !!x[1]);
   return (
     <Card>
@@ -102,6 +107,27 @@ export function PeriodTotals({ period }: { period: PeriodResult }) {
             <tr>
               <td>{t('month.vacationDays')}</td>
               <td className="num">{period.vacationDays}</td>
+              <td />
+            </tr>
+          )}
+          {period.kompEarnedHours > 0 && (
+            <tr>
+              <td>{t('cat.kompEarned')}</td>
+              <td className="num">{fmt.hours(period.kompEarnedHours)}</td>
+              <td />
+            </tr>
+          )}
+          {period.kompTakenHours > 0 && !period.totals.kompPay && (
+            <tr>
+              <td>{t('month.kompTaken')}</td>
+              <td className="num">{fmt.hours(period.kompTakenHours)}</td>
+              <td />
+            </tr>
+          )}
+          {komp.earned + komp.taken > 0 && (
+            <tr>
+              <td>{t('month.kompLeft', { date: ltr(end) })}</td>
+              <td className="num">{fmt.hours(komp.left)}</td>
               <td />
             </tr>
           )}

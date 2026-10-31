@@ -35,6 +35,9 @@ export type PayCategory =
   | 'permission'
   | 'timebankPay'
   | 'vacationPay'
+  // Komptid: hours earned from overtime (no money now), and pay for hours taken off.
+  | 'kompEarned'
+  | 'kompPay'
   // Monthly salary (Bilaga F): the salary, and what is deducted from it.
   | 'monthlySalary'
   | 'sickDeduction'
@@ -119,6 +122,8 @@ interface ClassifyOptions {
   shiftedFrom?: { start: number; end: number };
   /** Holiday pay: OB as if the day were an ordinary weekday. */
   asOrdinaryDay?: boolean;
+  /** The overtime is taken as komptid instead of money (§4.3). */
+  komp?: boolean;
 }
 
 /** Classifies every minute of a set of work intervals. */
@@ -153,20 +158,29 @@ function classify(intervals: { start: number; end: number }[], settings: Setting
       if (rate === null) missingRate = true;
       if (!period) missingAgreement = true;
       const hourly = rate ?? 0;
+      const ordinary = worked < opts.ordinaryMinutes;
+      const komp = !ordinary && !!opts.komp && settings.supplements.overtime;
       // A monthly salary covers the hours; only what comes on top is paid per hour.
-      if (!monthly) addToBucket(list, 'wage', hourly);
+      // An overtime hour taken as komptid is paid when the time off is taken instead.
+      if (!monthly && !komp) addToBucket(list, 'wage', hourly);
       earnings += hourly / 60;
 
-      const ordinary = worked < opts.ordinaryMinutes;
       let level = settings.supplements.ob ? obLevelAt(date, minute, opts.asOrdinaryDay) : 0;
       if (!ordinary && settings.supplements.overtime) {
         const full =
           overtime50 + overtime100 >= RULES.overtimeFirstTierMinutes || inFullOvertimeWindow(date, minute, ordinaryStart);
         const pct = full ? RULES.overtimeHighPercent : RULES.overtimeLowPercent;
-        // Monthly salary: the overtime hour itself (pay per hour) as well as the supplement (Bilaga F §3).
-        const otRate = monthly ? round2(hourly * (1 + pct)) : round2(hourly * pct);
-        addToBucket(list, full ? 'ot100' : 'ot50', otRate);
-        earnings += (monthly ? otRate : hourly * pct) / 60;
+        if (komp && settings.kompMode === 'supplement') {
+          // The supplement is taken as time too: 1.5 or 2 hours off, nothing paid now.
+          addToBucket(list, 'kompEarned', 0, 1 + pct);
+        } else {
+          if (komp) addToBucket(list, 'kompEarned', 0);
+          // Monthly salary: the overtime hour itself (pay per hour) as well as the supplement (Bilaga F §3),
+          // unless the hour went to komptid.
+          const otRate = monthly && !komp ? round2(hourly * (1 + pct)) : round2(hourly * pct);
+          addToBucket(list, full ? 'ot100' : 'ot50', otRate);
+        }
+        earnings += (monthly ? hourly * (1 + pct) : hourly * pct) / 60;
         if (full) overtime100++;
         else overtime50++;
         // Holiday OB is not paid on top of overtime, but holiday overtime may not
@@ -268,7 +282,8 @@ export function calculateShifts(days: DayRecord[], settings: Settings): { result
 
     // A few minutes over the schedule is not overtime where a minimum applies.
     if (reason === 'long-shift' && shift.workedMinutes - ordinaryMinutes < settings.minOvertimeMinutes) ordinaryMinutes = Infinity;
-    const c = classify(shift.intervals, settings, { ordinaryMinutes, shiftedFrom });
+    const komp = (byDate.get(shift.date)?.overtimeAs ?? settings.overtimeAs) === 'komp';
+    const c = classify(shift.intervals, settings, { ordinaryMinutes, shiftedFrom, komp });
     if (shift.intervals.some((iv) => iv.end - iv.start > RULES.maxMinutesWithoutBreak * MINUTE_MS)) warnings.push('no-break');
     if (previousEnd !== null && shift.start - previousEnd < RULES.minDailyRestMinutes * MINUTE_MS) warnings.push('short-rest');
     if (c.missingRate) warnings.push('no-rate');
@@ -362,6 +377,9 @@ export interface PeriodResult {
   holidays: { date: LocalDate; minutes: number; pay: number }[];
   vacationDays: number;
   timebankHours: number;
+  /** Komptid earned from overtime, and taken off, in the period (hours). */
+  kompEarnedHours: number;
+  kompTakenHours: number;
   warnings: PeriodWarning[];
   expectedGross: number;
 }
@@ -756,6 +774,7 @@ export function calculatePeriod(days: DayRecord[], settings: Settings, start: Lo
 
   let vacationDays = 0;
   let timebankHours = 0;
+  let kompTakenHours = 0;
   for (const d of days) {
     if (d.date < start || d.date > end || !d.absence) continue;
     const a = d.absence;
@@ -766,6 +785,11 @@ export function calculatePeriod(days: DayRecord[], settings: Settings, start: Lo
       if (settings.timeBankRate) addTotal(totals, 'timebankPay', a.hours, round2(a.hours * settings.timeBankRate), settings.timeBankRate);
     }
     if (a.type === 'permission' && a.hours && !monthlyPayOn(settings, d.date)) addTotal(totals, 'permission', a.hours, round2(a.hours * rate), rate);
+    // Komptid taken: paid time off at the hourly wage (a monthly salary simply continues).
+    if (a.type === 'komp' && a.hours) {
+      kompTakenHours += a.hours;
+      if (!monthlyPayOn(settings, d.date)) addTotal(totals, 'kompPay', a.hours, round2(a.hours * rate), rate);
+    }
   }
 
   monthlyTotals(days, results, settings, start, end, totals);
@@ -796,7 +820,24 @@ export function calculatePeriod(days: DayRecord[], settings: Settings, start: Lo
     holidays,
     vacationDays,
     timebankHours,
+    kompEarnedHours: totals.kompEarned?.hours ?? 0,
+    kompTakenHours: round2(kompTakenHours),
     warnings,
     expectedGross,
   };
+}
+
+/** Komptid left at the end of a date: all hours earned from overtime up to it, less the hours taken. */
+export function kompBalance(days: DayRecord[], settings: Settings, upTo: LocalDate): { earned: number; taken: number; left: number } {
+  const { results } = calculateShifts(days, settings);
+  let minutes = 0;
+  for (const r of results) {
+    for (const [date, list] of r.byDate) {
+      if (date > upTo) continue;
+      for (const b of list) if (b.category === 'kompEarned') minutes += b.minutes;
+    }
+  }
+  const earned = toHours(minutes);
+  const taken = round2(days.reduce((s, d) => s + (d.date <= upTo && d.absence?.type === 'komp' ? (d.absence.hours ?? 0) : 0), 0));
+  return { earned, taken, left: round2(earned - taken) };
 }

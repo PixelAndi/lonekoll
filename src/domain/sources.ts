@@ -20,6 +20,7 @@ const PAGES: Record<Exclude<Source, 'sickPayAct'>, Record<string, number>> = {
     '3.2': 10,
     '3.3': 12,
     '4': 13,
+    '4.3': 14,
     '4.4': 14,
     '5': 15,
     '5.1': 15,

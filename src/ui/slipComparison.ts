@@ -14,6 +14,18 @@ import { useTaxData } from '../taxData.ts';
 import type { Formatter } from '../format.ts';
 import type { TextKey, Translate } from '../i18n.ts';
 import { shiftMonth } from './DaysView.tsx';
+import { earningYearForVacationOn, slipDueDate, vacationBasis, type VacationBasis } from '../domain/vacation.ts';
+
+/** The earning year a slip's vacation pay is paid from, and how much of it has its pay slips. */
+export function vacationBasisFor(slip: PaySlip, all: SlipRecord[], settings: Settings): VacationBasis | undefined {
+  const date = slip.periodEnd ?? slipDueDate(slip);
+  if (!date) return undefined;
+  return vacationBasis(
+    all.map((r) => r.slip),
+    settings,
+    earningYearForVacationOn(date, settings),
+  );
+}
 
 export interface SlipComparison {
   record: SlipRecord;
@@ -43,17 +55,19 @@ export function slipPeriod(slip: PaySlip, importedAt: number): { start: string; 
 export function useSlipComparison(id: string): SlipComparison | null | undefined {
   const { days, settings } = useApp();
   const record = useLiveQuery(() => db.slips.get(id).then((r) => r ?? null), [id]);
+  const all = useLiveQuery(() => db.slips.toArray(), []);
   const taxYear = Number((record?.slip.payDate ?? record?.slip.periodEnd ?? todayLocal()).slice(0, 4));
   const taxData = useTaxData(taxYear);
   return useMemo(() => {
-    if (record === undefined || taxData.loading) return undefined;
+    if (record === undefined || all === undefined || taxData.loading) return undefined;
     if (record === null) return null;
     const slip = applyOverrides(record.slip, settings.codeOverrides);
     const { start, end } = slipPeriod(slip, record.importedAt);
     const period = calculatePeriod(days, settings, start, end);
     const tax: TaxContext = { basis: taxBasis(settings.tax, taxData.rates), tables: taxData.tables, column: taxColumn(settings.birthDate, taxYear) };
-    return { record, slip, start, end, period, tax, taxYear, comparison: comparePeriod(period, slip, days, settings, tax) };
-  }, [record, days, settings, taxData, taxYear]);
+    const vacation = vacationBasisFor(slip, all, settings);
+    return { record, slip, start, end, period, tax, taxYear, comparison: comparePeriod(period, slip, days, settings, tax, vacation) };
+  }, [record, all, days, settings, taxData, taxYear]);
 }
 
 /** Rows worth a look; gross and net only repeat the other rows' differences. */
@@ -81,6 +95,8 @@ const REF: Partial<Record<ComparisonRow['key'], TextKey>> = {
   timebankPay: 'ref.timebank',
   gross: 'ref.gross',
   shiftedTime: 'ref.shiftedTime',
+  kompEarned: 'ref.komp',
+  kompPay: 'ref.komp',
   shiftForm: 'ref.shiftForm',
   taxTable: 'ref.tax',
   tax: 'ref.tax',
@@ -142,6 +158,16 @@ export function noteText(note: Note, t: Translate, fmt: Formatter): string {
       return t('note.tax-table-differs', { slip: String(v.slip), expected: String(v.expected) });
     case 'tax-percent':
       return t('note.tax-percent', { percent: num('percent') });
+    case 'vacation-pay-checked':
+      return t('note.vacation-pay-checked', {
+        pay: fmt.number(v.pay as number),
+        days: String(v.days),
+        price: num('price'),
+        from: fmt.date(String(v.from)),
+        to: fmt.date(String(v.to)),
+      });
+    case 'komp-earned':
+      return t('note.komp-earned', { hours: num('hours') });
     case 'net-other-deductions':
       return t('note.net-other-deductions', { amount: fmt.money(v.amount as number) });
     default:

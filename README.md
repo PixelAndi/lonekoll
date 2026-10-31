@@ -150,7 +150,8 @@ hosts the app. This is a design rule, and it is enforced:
 | Sick pay | 80 % of lost pay including OB; waiting-day deduction 20 % of an average week's sick pay; days 1–14 | Sjuklönelagen 6 §; Avtalet §5.2 |
 | Holiday pay | Hours you would have worked, with the OB of an ordinary weekday | Avtalet §5.1 |
 | Monthly salary | The same salary every calendar month, holidays included; a month the employment starts in is paid per day (or per hour for five working days or fewer). Pay per hour = salary × 12 / (52 × weekly hours), per day = salary × 12 / 365. Overtime pays the whole hour plus the supplement; no shift-form supplement. Sick hours on days 1–14 are deducted per hour, with no sick pay for the first 20 % of a week's hours in the spell and 80 % after; from day 15 every calendar day is deducted per day. Vacation deducts 1/21.75 of the salary a day; unpaid absence per hour for up to five working days, then per calendar day; never more than the salary. Minimum: the hourly minimum × 174. These are the agreement's guidelines; other rules may be agreed locally | Avtalet Bilaga F |
-| Vacation pay | Checked against the minimum per day (1 789 kr from 1 Apr 2026) | Avtalet §5.7; Bageri §5 |
+| Vacation pay | 13.2 % of the pay that fell due in the earning year (1 April–31 March, or the calendar year) less vacation pay itself, over the paid days earned (25, or a share rounded up for part of a year), at least 1 789 kr a day from 1 Apr 2026. Checked once a pay slip is imported for every month of the earning year; until then only against the minimum, with a progress bar under Pay slips showing the months still missing | Avtalet §5.7; Bageri §5 |
+| Komptid | Overtime is paid in money, or taken as komp time (chosen in the settings and per day). Either an hour off per overtime hour with the supplement paid in money (default, as in most Livs supplements), or 1.5/2 hours off and nothing paid. Komp time taken is paid at the hourly wage; the month view shows the balance | Avtalet §4.3 |
 | Working-time account | Hours taken and, if the hourly payout rate is entered, the amount | Bilaga C |
 | With a schedule | Overtime past the scheduled length (optionally from a minimum per shift); a shift on a day off is overtime; work on a scheduled holiday is overtime plus holiday pay | Avtalet §3.3, §5.1 |
 | Förskjuten tid | 37.07 kr/h (from 1 Apr 2026) for ordinary time outside the schedule when the employer moved the shift (marked on the day) | Bageri §3 |
@@ -164,9 +165,8 @@ and the app warns about it.
 
 ### Not covered
 
-Vacation pay beyond the daily minimum (it depends on the whole earning year),
-time off in lieu, and one-time tax (engångsskatt) on
-irregular payments. Without a schedule, the end of the Sunday/holiday
+One-time tax (engångsskatt) on irregular payments, and absence that still
+earns vacation pay (long sick leave, parental leave) in the vacation pay basis. Without a schedule, the end of the Sunday/holiday
 overtime window uses a configurable "ordinary start" (default 06:00), and sick
 pay without a booked shift is an estimate from up to 13 weeks of logged
 shifts. This is a calculation aid, not a legal assessment.

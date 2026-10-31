@@ -1788,3 +1788,30 @@ input[type='checkbox'] {
   font-size: 0.8em;
   opacity: 0.75;
 }
+
+/* Pay slips of the vacation earning year: one segment per month. */
+.vacation-progress {
+  display: grid;
+  gap: 4px;
+  margin: 6px 0 10px;
+}
+
+.progress-bar {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 3px;
+  height: 14px;
+}
+
+.progress-bar span {
+  border-radius: 3px;
+  background: var(--border);
+}
+
+.progress-bar span.is-covered {
+  background: var(--ok, #2e9d4f);
+}
+
+.vacation-next {
+  margin-top: 14px;
+}

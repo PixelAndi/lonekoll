@@ -11,7 +11,17 @@ export interface StampPair {
   outManual?: boolean;
 }
 
-export type AbsenceType = 'sick' | 'vacation' | 'timebank' | 'holiday' | 'permission' | 'unpaid';
+export type AbsenceType = 'sick' | 'vacation' | 'timebank' | 'komp' | 'holiday' | 'permission' | 'unpaid';
+
+/** How a day's overtime is paid: in money, or as paid time off later (komptid, §4.3). */
+export type OvertimeAs = 'pay' | 'komp';
+
+/**
+ * How overtime turns into komptid, by local agreement:
+ * hour: each overtime hour gives an hour off, and the overtime supplement is paid in money (as in most of Livs's supplements);
+ * supplement: the supplement too is taken as time, 1.5 or 2 hours off per hour, and nothing is paid.
+ */
+export type KompMode = 'hour' | 'supplement';
 
 export interface Absence {
   type: AbsenceType;
@@ -44,6 +54,8 @@ export interface DayRecord {
   absence?: Absence;
   /** This day's schedule when it differs from the regular one; 'off' = day off. */
   scheduleOverride?: ScheduledShift | 'off';
+  /** How this day's overtime is paid; the default is `Settings.overtimeAs`. */
+  overtimeAs?: OvertimeAs;
   /** The employer moved this day's shift (förskjuten tid, Bageri §3). */
   shiftMoved?: boolean;
   note?: string;
@@ -129,6 +141,11 @@ export interface Settings {
   tax: TaxSettings;
   /** Pay slip codes the user has re-classified. */
   codeOverrides: Record<string, string>;
+  /** How overtime is paid unless a day says otherwise. */
+  overtimeAs: OvertimeAs;
+  kompMode: KompMode;
+  /** The first month of the vacation earning year (intjänandeår): 4 = 1 April–31 March, 1 = the calendar year. */
+  vacationYearStartMonth: 1 | 4;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -149,6 +166,9 @@ export const DEFAULT_SETTINGS: Settings = {
   supplements: { ob: true, overtime: true, shiftedTime: true, holidayPay: true },
   shiftForm: 'none',
   tax: { mode: 'municipality', churchMember: false },
+  overtimeAs: 'pay',
+  kompMode: 'hour',
+  vacationYearStartMonth: 4,
 };
 
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;

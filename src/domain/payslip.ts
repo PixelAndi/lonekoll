@@ -20,6 +20,7 @@ export type SlipCategory =
   | 'vacationDays'
   | 'sickHours'
   | 'timebankHours'
+  | 'kompHours'
   | 'shiftedTime'
   | 'obUnknown'
   | 'otUnknown'
@@ -101,6 +102,8 @@ export function classifyLine(text: string, amount: number | undefined, unitPrice
   if (/tjänstledig|föräldraledig|\bvab\b|vård av barn|frånvaroavdrag|frånvaro|löneavdrag|ledig utan lön/.test(t)) return 'absenceDeduction';
   if (t.includes('sjuklön')) return 'sickPay';
   if (t.includes('sjuk')) return amount === undefined ? 'sickHours' : 'sickPay';
+  // Komptid taken (paid time off); komp lines about overtime are its supplement, read as overtime below.
+  if (/komp/.test(t) && !/övertid|ötid/.test(t)) return amount === undefined ? 'kompHours' : 'kompPay';
   if (/övertid|ötid/.test(t)) {
     if (/100|kval/.test(t)) return 'ot100';
     if (/50|enkel/.test(t)) return 'ot50';

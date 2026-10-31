@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../app-context.ts';
 import { deleteEverything, downloadBlob, exportBackup, importBackup } from '../backup.ts';
 import { isPersisted, requestPersistence, saveSettings } from '../db.ts';
-import type { Settings } from '../domain/model.ts';
+import type { KompMode, OvertimeAs, Settings } from '../domain/model.ts';
 import { formatDuration, todayLocal, parseDuration } from '../domain/time.ts';
 import { LANGUAGE_NAMES } from '../i18n.ts';
 import { href } from '../router.ts';
@@ -137,6 +137,30 @@ export function SettingsView() {
           <TimeField label={t('settings.ordinaryStart')} value={settings.ordinaryStart} onChange={(v) => v && save({ ordinaryStart: v })} />
           <span className="field-hint">{t('settings.ordinaryStartHint')}</span>
         </div>
+        <Field label={t('settings.overtimeAs')} hint={<Cited text={t('settings.overtimeAsHint')} />}>
+          <select value={settings.overtimeAs} onChange={(e) => save({ overtimeAs: e.target.value as OvertimeAs })}>
+            {(['pay', 'komp'] as const).map((choice) => (
+              <option key={choice} value={choice}>
+                {t(`overtimeAs.${choice}`)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label={t('settings.kompMode')} hint={<Cited text={t('settings.kompModeHint')} />}>
+          <select value={settings.kompMode} onChange={(e) => save({ kompMode: e.target.value as KompMode })}>
+            {(['hour', 'supplement'] as const).map((mode) => (
+              <option key={mode} value={mode}>
+                {t(`kompMode.${mode}`)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label={t('settings.vacationYear')} hint={<Cited text={t('settings.vacationYearHint')} />}>
+          <select value={settings.vacationYearStartMonth} onChange={(e) => save({ vacationYearStartMonth: Number(e.target.value) as 1 | 4 })}>
+            <option value={4}>{t('vacationYear.april')}</option>
+            <option value={1}>{t('vacationYear.calendar')}</option>
+          </select>
+        </Field>
         <Field label={t('settings.timeBankRate')} hint={t('settings.timeBankHint')}>
           <LazyInput
             type="text"

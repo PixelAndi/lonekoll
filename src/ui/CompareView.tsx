@@ -34,6 +34,8 @@ const SLIP_CATEGORIES: SlipCategory[] = [
   'vacationPay',
   'timebankHours',
   'timebankPay',
+  'kompPay',
+  'kompHours',
   'shiftedTime',
   'other',
 ];

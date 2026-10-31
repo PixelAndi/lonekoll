@@ -11,7 +11,8 @@ import { readPaySlipPdf } from '../pdf/browser.ts';
 import { useTaxData } from '../taxData.ts';
 import { href, navigate } from '../router.ts';
 import { Card, Icon, Notice, Page, Spinner } from './common.tsx';
-import { applyOverrides, countFindings, slipPeriod } from './slipComparison.ts';
+import { applyOverrides, countFindings, slipPeriod, vacationBasisFor } from './slipComparison.ts';
+import { VacationProgress } from './VacationProgress.tsx';
 
 export function SlipsView() {
   const { t, settings } = useApp();
@@ -57,21 +58,23 @@ export function SlipsView() {
       {slips && slips.length === 0 && <p className="muted">{t('slips.empty')}</p>}
       <ul className="slip-list">
         {slips?.map((s) => (
-          <SlipItem key={s.id} record={s} />
+          <SlipItem key={s.id} record={s} all={slips} />
         ))}
       </ul>
+      {slips && <VacationProgress slips={slips} />}
     </Page>
   );
 }
 
-function SlipItem({ record }: { record: SlipRecord }) {
+function SlipItem({ record, all }: { record: SlipRecord; all: SlipRecord[] }) {
   const { t, fmt, days, settings } = useApp();
   const slip = applyOverrides(record.slip, settings.codeOverrides);
   const { start, end } = slipPeriod(slip, record.importedAt);
   const taxYear = Number((slip.payDate ?? end).slice(0, 4));
   const taxData = useTaxData(taxYear);
   const tax = { basis: taxBasis(settings.tax, taxData.rates), tables: taxData.tables, column: taxColumn(settings.birthDate, taxYear) };
-  const findings = countFindings(comparePeriod(calculatePeriod(days, settings, start, end), slip, days, settings, tax));
+  const vacation = vacationBasisFor(slip, all, settings);
+  const findings = countFindings(comparePeriod(calculatePeriod(days, settings, start, end), slip, days, settings, tax, vacation));
   return (
     <li>
       <a className="slip-item" href={href({ name: 'slip', id: record.id })}>

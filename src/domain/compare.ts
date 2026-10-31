@@ -4,6 +4,7 @@ import { hourlyRateOn, hourlySupplement, minimumWageOn, monthlyPayOn, wagePeriod
 import type { PaySlip, SlipCategory, SlipLine } from './payslip.ts';
 import { taxFor, type TaxBasis, type TaxColumn, type TaxTables } from './tax.ts';
 import type { LocalDate } from './time.ts';
+import { vacationPayPerDay, type VacationBasis } from './vacation.ts';
 
 // Lines up the calculated pay for a period with what the pay slip says.
 
@@ -29,6 +30,8 @@ export type NoteCode =
   | 'sick-includes-karens'
   | 'vacation-below-min'
   | 'vacation-pay-unchecked'
+  | 'vacation-pay-checked'
+  | 'komp-earned'
   | 'timebank-rate-unknown'
   | 'ob-missing-level'
   | 'gross-includes-unchecked'
@@ -129,7 +132,11 @@ function moneyRow(
   return row;
 }
 
-export function comparePeriod(period: PeriodResult, slip: PaySlip, days: DayRecord[], settings: Settings, tax?: TaxContext): Comparison {
+/**
+ * `vacation`: the earning year the slip's vacation pay is paid from, when
+ * every month of it has its pay slip (see vacation.ts).
+ */
+export function comparePeriod(period: PeriodResult, slip: PaySlip, days: DayRecord[], settings: Settings, tax?: TaxContext, vacation?: VacationBasis): Comparison {
   const rows: ComparisonRow[] = [];
   const t = period.totals;
   const lines = slip.lines;
@@ -259,7 +266,20 @@ export function comparePeriod(period: PeriodResult, slip: PaySlip, days: DayReco
     const minimum = agreement ? round2((agreement.vacationPayPerDayMin * settings.employmentPercent) / 100) : undefined;
     const lowest = Math.min(...vacPay.prices);
     const below = minimum !== undefined && vacPay.prices.length > 0 && lowest < minimum;
-    rows.push({
+    if (vacation?.complete && vacPay.count) {
+      // A whole earning year of pay slips: 13.2 % of its pay per earned day, at least the minimum.
+      const perDay = vacationPayPerDay(vacation);
+      const expected = round2(perDay * vacPay.count);
+      const diff = round2(vacPay.amount - expected);
+      rows.push({
+        key: 'vacationPay',
+        expected: { amount: expected, count: vacPay.count },
+        slip: { amount: vacPay.amount, count: vacPay.count, prices: vacPay.prices },
+        diff: { amount: diff },
+        status: Math.abs(diff) <= vacPay.count ? 'ok' : 'diff',
+        notes: [{ code: 'vacation-pay-checked', values: { pay: vacation.pay, days: vacation.paidDays, price: perDay, from: vacation.year.start, to: vacation.year.end } }],
+      });
+    } else rows.push({
       key: 'vacationPay',
       expected: {},
       slip: { amount: vacPay.amount, count: vacPay.count, prices: vacPay.prices },
@@ -292,12 +312,29 @@ export function comparePeriod(period: PeriodResult, slip: PaySlip, days: DayReco
     push(row);
   }
 
+  // Komptid: hours earned from overtime (not paid now), and pay for komp days taken.
+  if (period.kompEarnedHours) {
+    rows.push({
+      key: 'kompEarned',
+      expected: { hours: period.kompEarnedHours },
+      slip: { prices: [] },
+      diff: {},
+      status: 'info',
+      notes: [{ code: 'komp-earned', values: { hours: period.kompEarnedHours } }],
+    });
+  }
+  push(moneyRow('kompPay', t.kompPay, sumSlip(lines, ['kompPay']), hourly));
+
   // Gross: lines we can't calculate (vacation pay, other) are taken as printed.
-  const unchecked = lines.filter((l) => ['vacationPay', 'other'].includes(l.category) || (l.category === 'timebankPay' && !t.timebankPay));
+  const checkedVacation = rows.find((r) => r.key === 'vacationPay' && r.expected.amount !== undefined);
+  const vacationChecked = !!checkedVacation;
+  const unchecked = lines.filter(
+    (l) => (l.category === 'vacationPay' && !vacationChecked) || l.category === 'other' || (l.category === 'timebankPay' && !t.timebankPay),
+  );
   const passThrough = round2(unchecked.reduce((s, l) => s + (l.amount ?? 0), 0));
   let totalDifference: number | undefined;
   let netDifference: number | undefined;
-  const expectedGross = round2(period.expectedGross + passThrough);
+  const expectedGross = round2(period.expectedGross + passThrough + (checkedVacation?.expected.amount ?? 0));
   if (slip.gross !== undefined) {
     totalDifference = round2(slip.gross - expectedGross);
     rows.push({

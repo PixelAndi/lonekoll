@@ -4,7 +4,7 @@ import { db, deleteDay, saveDay } from '../db.ts';
 import { agreementFor, OB_LEVELS } from '../domain/agreement.ts';
 import { calculateShifts, type ShiftResult } from '../domain/calc.ts';
 import { isHoliday, specialDay } from '../domain/holidays.ts';
-import type { Absence, AbsenceType, DayRecord, ScheduledShift, StampPair } from '../domain/model.ts';
+import type { Absence, AbsenceType, DayRecord, OvertimeAs, ScheduledShift, StampPair } from '../domain/model.ts';
 import { scheduledShift } from '../domain/schedule.ts';
 import { addDays, formatDuration } from '../domain/time.ts';
 import { goBack, href } from '../router.ts';
@@ -12,7 +12,7 @@ import { Card, Field, Icon, Modal, Notice, Page, PhotoThumb, usePhotoUrl } from 
 import { Cited } from './Cited.tsx';
 import { flushFocusedField, StampRowsEditor, TimeField } from './StampRowsEditor.tsx';
 
-const ABSENCE_TYPES: AbsenceType[] = ['sick', 'vacation', 'timebank', 'holiday', 'permission', 'unpaid'];
+const ABSENCE_TYPES: AbsenceType[] = ['sick', 'vacation', 'komp', 'timebank', 'holiday', 'permission', 'unpaid'];
 
 export function DayEditor({ date }: { date: string }) {
   const { t, fmt, days, settings } = useApp();
@@ -30,6 +30,9 @@ function DayForm({ date, existing, days, t, fmt, settings }: FormProps) {
   const [viewPhoto, setViewPhoto] = useState<string>();
   const [scheduleOverride, setScheduleOverride] = useState<ScheduledShift | 'off' | undefined>(existing?.scheduleOverride);
   const [shiftMoved, setShiftMoved] = useState(existing?.shiftMoved ?? false);
+  const [overtimeAs, setOvertimeAs] = useState<OvertimeAs>(existing?.overtimeAs ?? settings.overtimeAs);
+  // Stored only when it differs from the usual choice in the settings.
+  const ownOvertimeAs = overtimeAs === settings.overtimeAs ? undefined : overtimeAs;
   const fixed = settings.scheduleMode === 'fixed';
   const latestRows = useRef(rows);
   latestRows.current = rows;
@@ -37,9 +40,9 @@ function DayForm({ date, existing, days, t, fmt, settings }: FormProps) {
 
   // Preview the calculation with the edited stamps.
   const preview = useMemo(() => {
-    const edited: DayRecord = { date, rows, absence, scheduleOverride, shiftMoved, photoIds: existing?.photoIds ?? [], updatedAt: 0 };
+    const edited: DayRecord = { date, rows, absence, scheduleOverride, shiftMoved, overtimeAs: ownOvertimeAs, photoIds: existing?.photoIds ?? [], updatedAt: 0 };
     return calculateShifts([...days.filter((d) => d.date !== date), edited], settings);
-  }, [days, date, rows, absence, scheduleOverride, shiftMoved, existing, settings]);
+  }, [days, date, rows, absence, scheduleOverride, shiftMoved, ownOvertimeAs, existing, settings]);
   const shifts = preview.results.filter((r) => r.shift.date === date);
   const continued = preview.results.find((r) => r.shift.date !== date && r.shift.dates.includes(date));
   const issues = preview.issues.filter((i) => i.date === date);
@@ -53,6 +56,7 @@ function DayForm({ date, existing, days, t, fmt, settings }: FormProps) {
       absence,
       scheduleOverride,
       shiftMoved: shiftMoved || undefined,
+      overtimeAs: ownOvertimeAs,
       note: note.trim() || undefined,
       photoIds: existing?.photoIds ?? [],
       ocrConfidence: existing?.ocrConfidence,
@@ -118,7 +122,7 @@ function DayForm({ date, existing, days, t, fmt, settings }: FormProps) {
             ))}
           </select>
         </Field>
-        {(absence?.type === 'timebank' || absence?.type === 'permission') && (
+        {(absence?.type === 'timebank' || absence?.type === 'permission' || absence?.type === 'komp') && (
           <Field label={t('day.hours')}>
             <input
               type="number"
@@ -155,6 +159,21 @@ function DayForm({ date, existing, days, t, fmt, settings }: FormProps) {
         {shifts.map((r) => (
           <ShiftSummary key={r.shift.start} result={r} />
         ))}
+        {settings.supplements.overtime && shifts.some((r) => r.overtime50 + r.overtime100 > 0) && (
+          <div className="field">
+            <span className="field-label">{t('day.overtimeAs')}</span>
+            <div className="segmented" role="group" aria-label={t('day.overtimeAs')}>
+              {(['pay', 'komp'] as const).map((choice) => (
+                <button key={choice} type="button" className={overtimeAs === choice ? 'on' : ''} aria-pressed={overtimeAs === choice} onClick={() => setOvertimeAs(choice)}>
+                  {t(`overtimeAs.${choice}`)}
+                </button>
+              ))}
+            </div>
+            <span className="field-hint">
+              <Cited text={t(overtimeAs === 'komp' ? (settings.kompMode === 'hour' ? 'day.kompHint.hour' : 'day.kompHint.supplement') : 'day.payHint')} />
+            </span>
+          </div>
+        )}
       </Card>
 
       {existing && existing.photoIds.length > 0 && (
@@ -186,6 +205,9 @@ function DayForm({ date, existing, days, t, fmt, settings }: FormProps) {
   );
 }
 
+/** Komptid the shift earns, in minutes. */
+const kompMinutes = (r: ShiftResult) => [...r.byDate.values()].flat().reduce((s, b) => s + (b.category === 'kompEarned' ? b.minutes : 0), 0);
+
 export function ShiftSummary({ result }: { result: ShiftResult }) {
   const { t, settings } = useApp();
   const r = result;
@@ -214,6 +236,12 @@ export function ShiftSummary({ result }: { result: ShiftResult }) {
           <div className="kv-pair">
             <dt>{t('cat.ot100')}</dt>
             <dd>{formatDuration(r.overtime100)}</dd>
+          </div>
+        )}
+        {kompMinutes(r) > 0 && (
+          <div className="kv-pair">
+            <dt>{t('cat.kompEarned')}</dt>
+            <dd>{formatDuration(kompMinutes(r))}</dd>
           </div>
         )}
         {r.shiftedMinutes > 0 && (
