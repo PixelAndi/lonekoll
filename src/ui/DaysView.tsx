@@ -53,9 +53,14 @@ export function DaysView({ month }: { month?: string }) {
       {settings.wages.length === 0 && (
         <Card title={t('setup.title')} className="card-highlight">
           <p>{t('setup.text')}</p>
-          <a className="button button-primary" href={href({ name: 'settings' })}>
-            {t('setup.button')}
-          </a>
+          <div className="button-row">
+            <a className="button button-primary" href={href({ name: 'settings' })}>
+              {t('setup.button')}
+            </a>
+            <a className="button" href={href({ name: 'slips' })}>
+              {t('setup.slipButton')}
+            </a>
+          </div>
         </Card>
       )}
       <div className="actions-stack">

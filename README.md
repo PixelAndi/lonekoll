@@ -94,6 +94,11 @@ report you can go through with your employer.
 - **Report.** An A4 report, saved as PDF in Swedish (for the employer), in the
   user's app language, or both in one file (Swedish first), with the summary,
   explanations, assumptions, the day log and optionally the photos.
+- **Set up from a pay slip.** For a new user's first pay slip (or while no
+  wage is set), the slip's page suggests settings, each with the line it
+  comes from: the hourly wage or monthly salary, the overtime limit per shift
+  that the slip's overtime fits, OB, the tax table and the employer. It shows
+  whether the slip then matches; nothing changes until "Use selected".
 - **Points to go through.** Each difference in the report is a numbered
   point: what differs (calculated and on the slip), a sum to check with a
   calculator (hours × rate = amount), the days and stamps behind it, the rule

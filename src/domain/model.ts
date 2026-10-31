@@ -151,6 +151,8 @@ export interface Settings {
   tax: TaxSettings;
   /** Pay slip codes the user has re-classified. */
   codeOverrides: Record<string, string>;
+  /** Pay slips whose suggested settings the user put aside ("Not now"). */
+  setupDismissed?: string[];
   /** How overtime is paid unless a day says otherwise. */
   overtimeAs: OvertimeAs;
   kompMode: KompMode;

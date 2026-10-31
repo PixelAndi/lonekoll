@@ -7,6 +7,7 @@ import type { Translate } from '../i18n.ts';
 import { goBack, href } from '../router.ts';
 import { Card, Notice, Page, Spinner, StatusBadge } from './common.tsx';
 import { Cited } from './Cited.tsx';
+import { SlipSetupCard } from './SlipSetup.tsx';
 import { PeriodWarnings } from './MonthView.tsx';
 import { SlipNotFound } from './SlipsView.tsx';
 import { diffText, noteText, rowLabel, rowReference, sideText, useSlipComparison } from './slipComparison.ts';
@@ -75,6 +76,7 @@ export function CompareView({ id }: { id: string }) {
         {t('compare.period', { start, end })}
         {slip.payDate && `, ${t('compare.paid', { date: slip.payDate })}`}
       </p>
+      <SlipSetupCard id={id} slip={slip} start={start} end={end} />
       {comparison.coverage.map((c) => (
         <Notice key={c.code} kind="warn">
           {coverageText(c, t, fmt)}
