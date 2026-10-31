@@ -1696,43 +1696,79 @@ input[type='checkbox'] {
   margin: 0;
 }
 
+.forgot-case h3 {
+  font-size: 1rem;
+  margin: 1.2em 0 0.4em;
+}
+
+.forgot-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  counter-reset: step;
+}
+
+/* Each step: the picture, then what to do. */
+.forgot-steps li {
+  display: grid;
+  grid-template-columns: minmax(120px, 160px) 1fr;
+  gap: 12px;
+  align-items: center;
+  counter-increment: step;
+}
+
+.forgot-steps li + li {
+  margin-top: 10px;
+}
+
+.forgot-steps li > span::before {
+  content: counter(step) '. ';
+  font-weight: 700;
+}
+
+/* The clock's buttons, as on its dark screen. */
 .clock-buttons {
   display: block;
   width: 100%;
-  max-width: 320px;
-  margin: 8px auto;
+  background: #121821;
+  border-radius: 10px;
 }
 
-.clock-buttons text {
-  font: 700 26px system-ui, sans-serif;
-  fill: #fff;
+.clock-button-frame {
+  fill: #3a4556;
+  stroke: #cfe9ff;
+  stroke-width: 5;
 }
 
-.clock-button-in {
-  fill: #2e9d4f;
+.clock-icon {
+  fill: #9fb3d1;
+  opacity: 0.75;
 }
 
-.clock-button-out {
-  fill: #c9c9c9;
-  stroke: #d9534f;
+.clock-button-in.is-lit .clock-icon {
+  fill: #6ff2c2;
+  opacity: 1;
+}
+
+.clock-button-out.is-lit .clock-icon {
+  fill: #ff5b5b;
+  opacity: 1;
+}
+
+.clock-button-name {
+  font: 600 17px system-ui, sans-serif;
+  fill: #dbe6f5;
+}
+
+.clock-press circle {
+  fill: #ffd84d;
+  stroke: #121821;
   stroke-width: 3;
-  stroke-dasharray: 6 4;
 }
 
-.clock-taps circle {
-  fill: none;
-  stroke: var(--primary);
-  stroke-width: 3;
-}
-
-.clock-taps circle:first-child {
-  fill: var(--primary);
-  fill-opacity: 0.35;
-}
-
-.clock-buttons .clock-taps-label {
-  fill: var(--primary);
-  font-size: 22px;
+.clock-press text {
+  font: 800 18px system-ui, sans-serif;
+  fill: #121821;
 }
 
 /* The learned digits, as shared */

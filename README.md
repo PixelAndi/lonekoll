@@ -100,9 +100,10 @@ report you can go through with your employer.
   which also explains adding the app to the home screen (with an install
   button where the browser offers one).
 - **Guides.** Help and guides (from Settings, and linked on the days page)
-  also shows how to clock out on the time clock after forgetting to clock in:
-  press the greyed-out red button twice. The scanner repeats the tip when it
-  finds a missing clock-in.
+  also shows, with pictures of the clock's two buttons, how to stamp after
+  forgetting to clock in or out: press the grey button once so it lights up,
+  then once more to stamp. The scanner repeats the tip when it finds a
+  missing stamp.
 
 ## Privacy
 

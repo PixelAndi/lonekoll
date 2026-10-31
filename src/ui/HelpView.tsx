@@ -34,39 +34,89 @@ export function ForgotStampGuide() {
   return (
     <Card title={t('forgot.title')}>
       <p>{t('forgot.intro')}</p>
-      <ClockButtonsSketch />
-      <ol className="guide-steps">
-        <li>{t('forgot.step1')}</li>
-        <li>
-          <strong>{t('forgot.step2')}</strong>
-        </li>
-        <li>{t('forgot.step3')}</li>
-      </ol>
+      <ForgotCase stamp="out" />
+      <ForgotCase stamp="in" />
+      <p className="small">
+        <strong>{t('forgot.dont')}</strong>
+      </p>
+      <p className="small">{t('forgot.after')}</p>
     </Card>
   );
 }
 
-/** The clock's two buttons: stamping in lit up, stamping out grey, and two taps on the grey one. */
-function ClockButtonsSketch() {
+type Button = 'in' | 'out';
+
+/**
+ * Stamping with the button that isn't lit: as it looks, after one press (now
+ * lit), and the second press that stamps.
+ */
+function ForgotCase({ stamp }: { stamp: Button }) {
   const { t } = useApp();
+  const other: Button = stamp === 'in' ? 'out' : 'in';
+  const steps = [
+    { lit: other, taps: 0, text: t(`forgot.${stamp}1`) },
+    { lit: other, taps: 1, text: t(`forgot.${stamp}2`) },
+    { lit: stamp, taps: 2, text: t(`forgot.${stamp}3`) },
+  ];
   return (
-    <svg className="clock-buttons" viewBox="0 0 320 120" role="img" aria-label={t('forgot.step2')} direction="ltr">
-      <rect x="20" y="25" width="120" height="70" rx="12" className="clock-button-in" />
-      <text x="80" y="68" textAnchor="middle">
-        In
-      </text>
-      <rect x="180" y="25" width="120" height="70" rx="12" className="clock-button-out" />
-      <text x="240" y="68" textAnchor="middle">
-        Ut
-      </text>
-      {/* Two taps on the grey button. */}
-      <g className="clock-taps">
-        <circle cx="262" cy="84" r="9" />
-        <circle cx="262" cy="84" r="17" />
-      </g>
-      <text x="300" y="20" textAnchor="end" className="clock-taps-label">
-        2 ×
-      </text>
+    <section className="forgot-case">
+      <h3>{t(stamp === 'out' ? 'forgot.outTitle' : 'forgot.inTitle')}</h3>
+      <ol className="forgot-steps">
+        {steps.map((step, i) => (
+          <li key={i}>
+            <ClockButtons lit={step.lit} press={step.taps ? stamp : undefined} count={step.taps} label={step.text} />
+            <span>{step.text}</span>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+/**
+ * The clock's two buttons as they look on its screen: In (an arrow into a
+ * bracket) and Out (an arrow out of one), the lit one green or red, the other
+ * grey. `press` marks the button being pressed, with how many times so far.
+ */
+function ClockButtons({ lit, press, count, label }: { lit: Button; press?: Button; count: number; label: string }) {
+  const { t } = useApp();
+  // Pressing the grey button once lights it up; the picture shows the result.
+  const shown: Button = press && count >= 1 ? press : lit;
+  return (
+    <svg className="clock-buttons" viewBox="0 0 240 150" role="img" aria-label={label} direction="ltr">
+      {(['in', 'out'] as const).map((button, i) => {
+        const x = 10 + i * 120;
+        const on = button === shown;
+        return (
+          <g key={button} transform={`translate(${x} 10)`} className={`clock-button clock-button-${button}${on ? ' is-lit' : ''}`}>
+            <rect className="clock-button-frame" x="4" y="4" width="92" height="92" rx="10" />
+            {button === 'in' ? (
+              <>
+                {/* ⊐ with an arrow going in */}
+                <path className="clock-icon" d="M40 26 H70 V74 H40 V64 H60 V36 H40 Z" />
+                <path className="clock-icon" d="M22 45 H42 V37 L56 50 L42 63 V55 H22 Z" />
+              </>
+            ) : (
+              <>
+                {/* ⊏ with an arrow going out */}
+                <path className="clock-icon" d="M60 26 H30 V74 H60 V64 H40 V36 H60 Z" />
+                <path className="clock-icon" d="M46 45 H64 V37 L78 50 L64 63 V55 H46 Z" />
+              </>
+            )}
+            <text x="50" y="122" textAnchor="middle" className="clock-button-name">
+              {t(button === 'in' ? 'forgot.inButton' : 'forgot.outButton')}
+            </text>
+            {press === button && count > 0 && (
+              <g className="clock-press">
+                <circle cx="74" cy="78" r="16" />
+                <text x="74" y="84" textAnchor="middle">
+                  {count}
+                </text>
+              </g>
+            )}
+          </g>
+        );
+      })}
     </svg>
   );
 }
