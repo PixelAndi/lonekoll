@@ -1,6 +1,7 @@
 import type { RGBAImage, TableLocation } from './image.ts';
 import type { ClockReading, FoundTable } from './pipeline.ts';
 import type { TesseractEngine } from './tesseract.ts';
+import type { CheckedDay } from './timecard.ts';
 
 // Browser side of photo reading: decode the photo, keep a small JPEG copy as
 // evidence, and run the OCR pipeline with Tesseract served from ./ocr/.
@@ -97,4 +98,59 @@ export async function tableCrop(photo: LoadedPhoto, table: NonNullable<ClockRead
   crop.height = height;
   crop.getContext('2d')!.drawImage(photo.canvas, left, top, width, height, 0, 0, width, height);
   return toBlob(crop, 0.9);
+}
+
+export interface TimecardDayReading extends CheckedDay {
+  /** Ink or words in the Frånvaro box: a note to ask about, with a picture of it. */
+  noteImage?: string;
+}
+
+export interface TimecardReading {
+  from?: string;
+  to?: string;
+  days: TimecardDayReading[];
+}
+
+/** A printed timecard page (photo or rendered PDF page): every day's stamps, checked, and its notes. */
+export async function readTimecardImage(source: HTMLCanvasElement): Promise<TimecardReading> {
+  const [{ cleanTimecard, parseTimecard, checkDay, noteInk, hasNote }, ocr] = await Promise.all([import('./timecard.ts'), getEngine()]);
+  // Read at about 2400 px across: the card's small print is then large enough to read reliably.
+  const canvas = resized(source, TIMECARD_WIDTH);
+  const { width, height } = canvas;
+  const rgba = canvas.getContext('2d')!.getImageData(0, 0, width, height).data;
+  const gray = new Uint8Array(width * height);
+  for (let i = 0; i < gray.length; i++) gray[i] = Math.round(0.299 * rgba[i * 4] + 0.587 * rgba[i * 4 + 1] + 0.114 * rgba[i * 4 + 2]);
+  const clean = cleanTimecard({ width, height, data: gray });
+  const page = parseTimecard(await ocr.recognize(clean, 'find'), width);
+  const ink = noteInk(clean, page);
+  const days = page.days.map((day) => {
+    const checked: TimecardDayReading = checkDay(day);
+    if (hasNote(day, ink.get(day.date))) checked.noteImage = cropOf(canvas, page.notesFrom - width * 0.01, day.top - 6, width * 0.97, day.bottom + 6);
+    return checked;
+  });
+  return { from: page.from, to: page.to, days };
+}
+
+const TIMECARD_WIDTH = 2400;
+
+function resized(source: HTMLCanvasElement, width: number): HTMLCanvasElement {
+  if (source.width === width) return source;
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = Math.round((source.height * width) / source.width);
+  const ctx = canvas.getContext('2d')!;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+  return canvas;
+}
+
+/** A picture of part of the page, for showing what is written there. */
+function cropOf(canvas: HTMLCanvasElement, x0: number, y0: number, x1: number, y1: number): string {
+  const crop = document.createElement('canvas');
+  const x = Math.max(0, Math.round(x0));
+  const y = Math.max(0, Math.round(y0));
+  crop.width = Math.max(1, Math.round(Math.min(canvas.width, x1) - x));
+  crop.height = Math.max(1, Math.round(Math.min(canvas.height, y1) - y));
+  crop.getContext('2d')!.drawImage(canvas, x, y, crop.width, crop.height, 0, 0, crop.width, crop.height);
+  return crop.toDataURL('image/jpeg', 0.85);
 }

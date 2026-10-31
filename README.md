@@ -94,6 +94,17 @@ report you can go through with your employer.
 - **Report.** An A4 report, saved as PDF in Swedish (for the employer), in the
   user's app language, or both in one file (Swedish first), with the summary,
   explanations, assumptions, the day log and optionally the photos.
+- **Printed timecards (tidkort).** A small "Tidkort" button beside the scan
+  button reads the time clock's printout from the employer: photos or PDFs,
+  several pages and months at once. The table's lines are removed before the
+  text is read at about 2400 px across, every date of the period is counted
+  in order (a misread date is put right by the weekday), and each day is
+  checked against the card's own Arb Tid. A misread time is corrected from
+  the card's second reading (Avr In / Avr Ut), a common digit mix-up or the
+  total – only when exactly one correction makes the day add up; otherwise
+  the day is put to the user. Days the app already has with other stamps,
+  and ink in the Frånvaro box (handwritten sick or vacation notes, shown as a
+  picture), are asked about before saving. The card itself is not stored.
 - **Set up from a pay slip.** For a new user's first pay slip (or while no
   wage is set), the slip's page suggests settings, each with the line it
   comes from: the hourly wage or monthly salary, the overtime limit per shift

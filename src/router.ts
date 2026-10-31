@@ -11,7 +11,8 @@ export type Route =
   | { name: 'slip'; id: string }
   | { name: 'report'; id: string }
   | { name: 'settings' }
-  | { name: 'help'; section?: HelpSection };
+  | { name: 'help'; section?: HelpSection }
+  | { name: 'timecard' };
 
 /** The guides under Help, one page each. */
 export const HELP_SECTIONS = ['forgot', 'scan', 'slips', 'komp', 'vacation', 'offline', 'install', 'privacy'] as const;
@@ -35,6 +36,8 @@ export function parseHash(hash: string): Route {
       break;
     case 'settings':
       return { name: 'settings' };
+    case 'timecard':
+      return { name: 'timecard' };
     case 'help':
       return { name: 'help', section: (HELP_SECTIONS as readonly string[]).includes(arg) ? (arg as HelpSection) : undefined };
     case 'days':

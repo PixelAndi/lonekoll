@@ -4,7 +4,7 @@ import { db, learnDigits, newId, saveDay } from '../db.ts';
 import type { DayRecord, StampPair } from '../domain/model.ts';
 import { forgottenStamps } from '../domain/shifts.ts';
 import { todayLocal } from '../domain/time.ts';
-import { navigate } from '../router.ts';
+import { href, navigate } from '../router.ts';
 import { loadPhoto, readPhoto, tableCrop } from '../ocr/browser.ts';
 import type { ClockReading } from '../ocr/pipeline.ts';
 import { Icon, Modal, Notice, Spinner } from './common.tsx';
@@ -48,9 +48,16 @@ export function PhotoImportButton() {
 
   return (
     <>
-      <button type="button" className="button button-primary button-large" onClick={() => setScanning(true)}>
-        <Icon name="camera" /> {t('scan.open')}
-      </button>
+      {/* The daily scan first; printed timecards, needed now and then, beside it. */}
+      <div className="scan-row">
+        <button type="button" className="button button-primary button-large" onClick={() => setScanning(true)}>
+          <Icon name="camera" /> {t('scan.open')}
+        </button>
+        <a className="button timecard-button" href={href({ name: 'timecard' })}>
+          <Icon name="slips" />
+          <span>{t('timecard.button')}</span>
+        </a>
+      </div>
       <button type="button" className="button" onClick={() => input.current?.click()}>
         {t('scan.pickPhotos')}
       </button>

@@ -14,10 +14,11 @@ import { MonthView } from './ui/MonthView.tsx';
 import { ReportView } from './ui/ReportView.tsx';
 import { SettingsView } from './ui/SettingsView.tsx';
 import { HelpView } from './ui/HelpView.tsx';
+import { TimecardImport } from './ui/TimecardImport.tsx';
 import { SlipsView } from './ui/SlipsView.tsx';
 
 const TABS = [
-  { route: { name: 'days' }, icon: 'days', label: 'nav.days', match: ['days', 'day'] },
+  { route: { name: 'days' }, icon: 'days', label: 'nav.days', match: ['days', 'day', 'timecard'] },
   { route: { name: 'month' }, icon: 'month', label: 'nav.month', match: ['month'] },
   { route: { name: 'slips' }, icon: 'slips', label: 'nav.slips', match: ['slips', 'slip'] },
   { route: { name: 'help' }, icon: 'help', label: 'nav.help', match: ['help'] },
@@ -40,6 +41,8 @@ function Screen({ route }: { route: Route }) {
       return <SettingsView />;
     case 'help':
       return <HelpView section={route.section} />;
+    case 'timecard':
+      return <TimecardImport />;
     default:
       return <DaysView month={route.month} />;
   }
