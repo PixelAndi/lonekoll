@@ -6,6 +6,7 @@ import type { TextKey } from '../i18n.ts';
 import { href, type HelpSection } from '../router.ts';
 import { Card, Icon, Notice, Page } from './common.tsx';
 import { Cited } from './Cited.tsx';
+import { GuideArt } from './guideArt.tsx';
 
 // Help and guides: a menu by topic, and each guide on a page of its own, so
 // the one you need isn't buried among the others.
@@ -91,10 +92,13 @@ function StepsGuide({ section, tip }: { section: 'scan' | 'slips' | 'komp' | 'va
   return (
     <Card title={t(TITLES[section])}>
       <p>{t(`guide.${section}.summary`)}</p>
-      <ol className="guide-steps">
+      <ol className="picture-steps">
         {([1, 2, 3, 4] as const).map((n) => (
           <li key={n}>
-            <Cited text={t(`guide.${section}.${n}`)} />
+            <GuideArt name={`${section}${n}`} />
+            <span>
+              <Cited text={t(`guide.${section}.${n}`)} />
+            </span>
           </li>
         ))}
       </ol>
@@ -107,6 +111,7 @@ function PrivacyGuide() {
   const { t } = useApp();
   return (
     <Card title={t('guide.privacy.title')}>
+      <GuideArt name="privacy" />
       <p>{t('privacy.full')}</p>
       <p className="small">{t('slips.privacy')}</p>
     </Card>
@@ -145,7 +150,7 @@ function ForgotCase({ stamp }: { stamp: Button }) {
   return (
     <section className="forgot-case">
       <h3>{t(stamp === 'out' ? 'forgot.outTitle' : 'forgot.inTitle')}</h3>
-      <ol className="forgot-steps">
+      <ol className="picture-steps">
         {steps.map((step, i) => (
           <li key={i}>
             <ClockButtons lit={step.lit} press={step.taps ? stamp : undefined} count={step.taps} label={step.text} />
@@ -217,6 +222,7 @@ function OfflineGuide() {
   };
   return (
     <Card title={t('offline.title')}>
+      <GuideArt name="offline" />
       <p>{t('offline.text')}</p>
       {status === 'ready' ? (
         <Notice kind="ok">{t('offline.ready')}</Notice>
@@ -240,6 +246,7 @@ function InstallGuide() {
   const canInstall = useCanInstall();
   return (
     <Card title={t('install.title')}>
+      <GuideArt name="install" />
       <p>{t('install.text')}</p>
       {isInstalled() ? (
         <Notice kind="ok">{t('install.installed')}</Notice>

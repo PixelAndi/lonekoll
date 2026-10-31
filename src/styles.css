@@ -161,15 +161,21 @@ h3 {
 
 .tabbar a {
   flex: 1;
+  min-width: 0;
   max-width: 190px;
+  text-align: center;
+  line-height: 1.2;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 2px;
-  padding: 8px 4px 10px;
+  padding: 8px 2px 10px;
   color: var(--muted);
   text-decoration: none;
-  font-size: 0.75rem;
+  /* Five tabs on a small phone: the labels shrink a little to fit. */
+  font-size: clamp(0.6rem, 2.7vw, 0.75rem);
+  hyphens: auto;
+  overflow-wrap: break-word;
   min-height: var(--tabbar-height);
 }
 
@@ -1737,27 +1743,38 @@ input[type='checkbox'] {
   margin: 1.2em 0 0.4em;
 }
 
-.forgot-steps {
+.picture-steps {
   list-style: none;
   margin: 0;
   padding: 0;
   counter-reset: step;
 }
 
-/* Each step: the picture, then what to do. */
-.forgot-steps li {
+/* Each step: the picture, then what to do – side by side on wider screens. */
+.picture-steps li {
   display: grid;
-  grid-template-columns: minmax(120px, 160px) 1fr;
-  gap: 12px;
-  align-items: center;
+  gap: 6px;
   counter-increment: step;
 }
 
-.forgot-steps li + li {
-  margin-top: 10px;
+.picture-steps li > svg {
+  width: 100%;
+  max-width: 220px;
 }
 
-.forgot-steps li > span::before {
+@media (min-width: 520px) {
+  .picture-steps li {
+    grid-template-columns: 180px 1fr;
+    gap: 14px;
+    align-items: center;
+  }
+}
+
+.picture-steps li + li {
+  margin-top: 18px;
+}
+
+.picture-steps li > span::before {
   content: counter(step) '. ';
   font-weight: 700;
 }
@@ -1906,4 +1923,168 @@ input[type='checkbox'] {
   margin-bottom: 12px;
   font-weight: 600;
   text-decoration: none;
+}
+
+/* Guide pictures: sketches in the app's colours. */
+.guide-art {
+  display: block;
+  width: 100%;
+  max-width: 180px;
+}
+
+.card > .guide-art {
+  margin: 0 auto 8px;
+}
+
+.art-frame {
+  fill: var(--surface);
+  stroke: var(--muted);
+  stroke-width: 2;
+}
+
+.art-soft {
+  fill: var(--surface-2);
+}
+
+.art-empty {
+  fill: var(--border);
+}
+
+.art-ink {
+  fill: var(--muted);
+}
+
+.art-line {
+  stroke: var(--border);
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+
+.art-accent {
+  fill: var(--primary);
+}
+
+.art-on-accent {
+  fill: var(--primary-text);
+}
+
+.art-accent-stroke,
+.art-ring {
+  fill: none;
+  stroke: var(--primary);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.art-ok {
+  fill: var(--ok);
+}
+
+.art-ok-stroke {
+  fill: none;
+  stroke: var(--ok);
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+
+.art-bad {
+  fill: var(--error);
+}
+
+.art-bad-stroke {
+  stroke: var(--error);
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+
+.art-mark,
+.art-mark-on-accent {
+  fill: none;
+  stroke: var(--surface);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.art-mark-on-accent {
+  stroke: var(--primary-text);
+}
+
+.art-arrow {
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.art-tap circle {
+  fill: none;
+  stroke: #e0a800;
+  stroke-width: 2.5;
+}
+
+.art-tap circle:first-child {
+  fill: #ffd84d;
+}
+
+.art-coin {
+  fill: #e5b53a;
+  stroke: #a77b12;
+  stroke-width: 1.5;
+}
+
+.art-sun {
+  fill: #ffc83d;
+}
+
+.art-sun-ray {
+  stroke: #ffc83d;
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.art-sun-cell {
+  fill: #ffc83d;
+}
+
+.art-cloud {
+  fill: var(--muted);
+}
+
+.art-text {
+  font: 700 10px system-ui, sans-serif;
+  fill: var(--muted);
+}
+
+.art-text-on-color {
+  font: 800 8px system-ui, sans-serif;
+  fill: #fff;
+}
+
+.art-link {
+  font: 700 12px system-ui, sans-serif;
+  fill: var(--primary);
+}
+
+/* The time clock's own screen. */
+.clock-screen {
+  fill: #121821;
+}
+
+.clock-head {
+  fill: #7fdcff;
+}
+
+.clock-head-text {
+  font: 700 8px system-ui, sans-serif;
+  fill: #0d2433;
+}
+
+.clock-sub {
+  fill: #c3a3ff;
+}
+
+.clock-time {
+  fill: #e6f2ff;
 }
