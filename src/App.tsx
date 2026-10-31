@@ -20,7 +20,8 @@ const TABS = [
   { route: { name: 'days' }, icon: 'days', label: 'nav.days', match: ['days', 'day'] },
   { route: { name: 'month' }, icon: 'month', label: 'nav.month', match: ['month'] },
   { route: { name: 'slips' }, icon: 'slips', label: 'nav.slips', match: ['slips', 'slip'] },
-  { route: { name: 'settings' }, icon: 'settings', label: 'nav.settings', match: ['settings', 'help'] },
+  { route: { name: 'help' }, icon: 'help', label: 'nav.help', match: ['help'] },
+  { route: { name: 'settings' }, icon: 'settings', label: 'nav.settings', match: ['settings'] },
 ] as const;
 
 function Screen({ route }: { route: Route }) {

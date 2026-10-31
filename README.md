@@ -99,8 +99,10 @@ report you can go through with your employer.
   or at once with "Make the app available offline" under Help and guides,
   which also explains adding the app to the home screen (with an install
   button where the browser offers one).
-- **Guides.** Help and guides (from Settings, and linked on the days page)
-  also shows, with pictures of the clock's two buttons, how to stamp after
+- **Guides.** A Help tab in the bottom bar lists the guides by topic (the
+  time clock, your pay, the app), each on a page of its own: forgetting to
+  stamp, scanning, checking a pay slip, komp time, vacation pay, installing,
+  offline use and privacy. The forgotten-stamp guide shows, with pictures of the clock's two buttons, how to stamp after
   forgetting to clock in or out: press the grey button once so it lights up,
   then once more to stamp. The scanner repeats the tip when it finds a
   missing stamp.

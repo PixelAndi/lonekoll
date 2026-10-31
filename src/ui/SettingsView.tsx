@@ -5,7 +5,6 @@ import { isPersisted, requestPersistence, saveSettings } from '../db.ts';
 import type { KompMode, OvertimeAs, Settings } from '../domain/model.ts';
 import { formatDuration, todayLocal, parseDuration } from '../domain/time.ts';
 import { LANGUAGE_NAMES } from '../i18n.ts';
-import { href } from '../router.ts';
 import { Card, Field, Notice, Page } from './common.tsx';
 import { Cited } from './Cited.tsx';
 import { decimalText, LazyInput, numberOrUndefined } from './settings/inputs.tsx';
@@ -208,20 +207,6 @@ export function SettingsView() {
         <button type="button" className="button button-danger button-small" onClick={onDeleteAll}>
           {t('settings.deleteAll')}
         </button>
-      </Card>
-
-      <Card title={t('help.title')}>
-        <ul className="help-links">
-          <li>
-            <a href={href({ name: 'help', section: 'forgot' })}>{t('forgot.title')}</a>
-          </li>
-          <li>
-            <a href={href({ name: 'help', section: 'offline' })}>{t('offline.title')}</a>
-          </li>
-          <li>
-            <a href={href({ name: 'help', section: 'install' })}>{t('install.title')}</a>
-          </li>
-        </ul>
       </Card>
 
       <Card title={t('settings.about')}>

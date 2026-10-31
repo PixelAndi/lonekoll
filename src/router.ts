@@ -11,7 +11,11 @@ export type Route =
   | { name: 'slip'; id: string }
   | { name: 'report'; id: string }
   | { name: 'settings' }
-  | { name: 'help'; section?: 'offline' | 'install' | 'forgot' };
+  | { name: 'help'; section?: HelpSection };
+
+/** The guides under Help, one page each. */
+export const HELP_SECTIONS = ['forgot', 'scan', 'slips', 'komp', 'vacation', 'offline', 'install', 'privacy'] as const;
+export type HelpSection = (typeof HELP_SECTIONS)[number];
 
 export function parseHash(hash: string): Route {
   const [name, arg] = hash.replace(/^#\/?/, '').split('/');
@@ -32,7 +36,7 @@ export function parseHash(hash: string): Route {
     case 'settings':
       return { name: 'settings' };
     case 'help':
-      return { name: 'help', section: arg === 'offline' || arg === 'install' || arg === 'forgot' ? arg : undefined };
+      return { name: 'help', section: (HELP_SECTIONS as readonly string[]).includes(arg) ? (arg as HelpSection) : undefined };
     case 'days':
       return { name: 'days', month: arg };
   }

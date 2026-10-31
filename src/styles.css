@@ -1728,12 +1728,6 @@ input[type='checkbox'] {
   margin-top: 6px;
 }
 
-.help-links {
-  margin: 0;
-  padding-inline-start: 1.2rem;
-  line-height: 1.9;
-}
-
 .forgot-tip {
   margin: 0;
 }
@@ -1856,4 +1850,60 @@ input[type='checkbox'] {
 
 .vacation-next {
   margin-top: 14px;
+}
+
+/* Help: guides grouped by topic, each a row to tap. */
+.help-category h2 {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin: 20px 4px 8px;
+}
+
+.help-menu {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.help-menu li + li {
+  border-top: 1px solid var(--border);
+}
+
+.help-menu a {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 14px;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.help-menu a > span {
+  display: grid;
+  gap: 2px;
+  flex: 1;
+}
+
+.help-menu .icon {
+  color: var(--muted);
+}
+
+[dir='rtl'] .help-menu .icon,
+[dir='rtl'] .help-back .icon {
+  transform: scaleX(-1);
+}
+
+.help-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 12px;
+  font-weight: 600;
+  text-decoration: none;
 }

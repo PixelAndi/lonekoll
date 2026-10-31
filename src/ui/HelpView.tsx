@@ -2,30 +2,114 @@ import { useEffect, useState } from 'react';
 import { useApp } from '../app-context.ts';
 import { install, isInstalled, useCanInstall } from '../install.ts';
 import { makeAvailableOffline, offlineStatus, type OfflineStatus } from '../offline.ts';
-import { Card, Notice, Page } from './common.tsx';
+import type { TextKey } from '../i18n.ts';
+import { href, type HelpSection } from '../router.ts';
+import { Card, Icon, Notice, Page } from './common.tsx';
+import { Cited } from './Cited.tsx';
 
-// Guides: using the app without internet, putting it on the home screen, and
-// stamping out on the clock after forgetting to stamp in.
+// Help and guides: a menu by topic, and each guide on a page of its own, so
+// the one you need isn't buried among the others.
 
-export type HelpSection = 'offline' | 'install' | 'forgot';
+type GuideCategory = { title: TextKey; guides: HelpSection[] };
+
+const CATEGORIES: GuideCategory[] = [
+  { title: 'help.cat.clock', guides: ['forgot', 'scan'] },
+  { title: 'help.cat.pay', guides: ['slips', 'komp', 'vacation'] },
+  { title: 'help.cat.app', guides: ['install', 'offline', 'privacy'] },
+];
+
+const TITLES: Record<HelpSection, TextKey> = {
+  forgot: 'forgot.title',
+  scan: 'guide.scan.title',
+  slips: 'guide.slips.title',
+  komp: 'guide.komp.title',
+  vacation: 'guide.vacation.title',
+  offline: 'offline.title',
+  install: 'install.title',
+  privacy: 'guide.privacy.title',
+};
 
 export function HelpView({ section }: { section?: HelpSection }) {
   const { t } = useApp();
-  useEffect(() => {
-    if (section) document.getElementById(`help-${section}`)?.scrollIntoView();
-  }, [section]);
+  if (!section) {
+    return (
+      <Page title={t('help.title')}>
+        <p className="muted">{t('help.intro')}</p>
+        {CATEGORIES.map((category) => (
+          <section key={category.title} className="help-category">
+            <h2>{t(category.title)}</h2>
+            <ul className="help-menu">
+              {category.guides.map((guide) => (
+                <li key={guide}>
+                  <a href={href({ name: 'help', section: guide })}>
+                    <span>
+                      <strong>{t(TITLES[guide])}</strong>
+                      <span className="muted small">{t(`guide.${guide}.summary`)}</span>
+                    </span>
+                    <Icon name="chevronRight" />
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
+      </Page>
+    );
+  }
   return (
     <Page title={t('help.title')}>
-      <div id="help-forgot">
-        <ForgotStampGuide />
-      </div>
-      <div id="help-offline">
-        <OfflineGuide />
-      </div>
-      <div id="help-install">
-        <InstallGuide />
-      </div>
+      <a className="help-back" href={href({ name: 'help' })}>
+        <Icon name="chevronLeft" /> {t('help.all')}
+      </a>
+      <Guide section={section} />
     </Page>
+  );
+}
+
+function Guide({ section }: { section: HelpSection }) {
+  switch (section) {
+    case 'forgot':
+      return <ForgotStampGuide />;
+    case 'offline':
+      return <OfflineGuide />;
+    case 'install':
+      return <InstallGuide />;
+    case 'privacy':
+      return <PrivacyGuide />;
+    case 'scan':
+      return <StepsGuide section="scan" tip="guide.scan.tip" />;
+    case 'slips':
+      return <StepsGuide section="slips" tip="slips.privacy" />;
+    default:
+      return <StepsGuide section={section} />;
+  }
+}
+
+/** A guide of four numbered steps, and an optional tip. */
+function StepsGuide({ section, tip }: { section: 'scan' | 'slips' | 'komp' | 'vacation'; tip?: TextKey }) {
+  const { t } = useApp();
+  return (
+    <Card title={t(TITLES[section])}>
+      <p>{t(`guide.${section}.summary`)}</p>
+      <ol className="guide-steps">
+        {([1, 2, 3, 4] as const).map((n) => (
+          <li key={n}>
+            <Cited text={t(`guide.${section}.${n}`)} />
+          </li>
+        ))}
+      </ol>
+      {tip && <p className="small">{t(tip)}</p>}
+    </Card>
+  );
+}
+
+function PrivacyGuide() {
+  const { t } = useApp();
+  return (
+    <Card title={t('guide.privacy.title')}>
+      <p>{t('privacy.full')}</p>
+      <p className="small">{t('slips.privacy')}</p>
+    </Card>
   );
 }
 
