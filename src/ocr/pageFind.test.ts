@@ -2,15 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { aimAt, findPage } from './pageFind.ts';
 
 /** A grey background with a white sheet (printed lines on it) at the given place, 160 × 284 px. */
-function frame(x: number, y: number, w: number, h: number, background = 150) {
+function frame(x: number, y: number, w: number, h: number, background = 150, step = 8) {
   const W = 160;
   const H = 284;
   const data = new Uint8Array(W * H).fill(background);
   for (let yy = y; yy < y + h; yy++) {
     for (let xx = x; xx < x + w; xx++) {
       if (yy < 0 || yy >= H || xx < 0 || xx >= W) continue;
-      // Table lines every 8 px.
-      data[yy * W + xx] = (yy - y) % 8 === 0 ? 60 : 235;
+      // Table lines every 8 px (or as given).
+      data[yy * W + xx] = (yy - y) % step === 0 ? 60 : 235;
     }
   }
   return { width: W, height: H, data };
@@ -37,7 +37,8 @@ describe('finding the timecard in the camera', () => {
   });
 
   it('asks to move back when the sheet runs off the picture, and says when there is none', () => {
-    expect(aimAt(findPage(frame(-10, -10, 180, 304)), FRAME)).toBe('further');
+    // The sheet fills the picture: its print runs off all round.
+    expect(aimAt(findPage(frame(-10, -10, 180, 304, 150, 3)), FRAME)).toBe('further');
     expect(aimAt(findPage({ width: 160, height: 284, data: new Uint8Array(160 * 284).fill(90) }), FRAME)).toBe('find');
   });
 
@@ -51,5 +52,11 @@ describe('finding the timecard in the camera', () => {
     expect(page.y).toBeGreaterThan(0.18);
     expect(page.y + page.h).toBeLessThan(0.8);
     expect(aimAt(page, FRAME)).toBe('ready');
+  });
+
+  it('says to find the card when pointed at a blank background with a lit band', () => {
+    const img = frame(0, 0, 0, 0, 200);
+    for (let y = 0; y < 40; y++) for (let x = 0; x < 160; x++) img.data[y * 160 + x] = 240;
+    expect(aimAt(findPage(img), FRAME)).toBe('find');
   });
 });

@@ -105,7 +105,8 @@ export function TimecardScanner({ onPage, onClose, test = false }: { onPage: (pa
       const sample = videoSample(v);
       const moved = last.current ? difference(last.current, sample.data) : 1;
       last.current = sample.data;
-      const page = findPage(sample);
+      // The print's rows only show at a finer size (at 160 px across they blur into grey).
+      const page = findPage(sample, videoSample(v, 480));
       found.current = page;
       const aim = aimAt(page, frameShare(v));
       setOutline(page ? { ...onScreen(v, page), ready: aim === 'ready' } : null);
@@ -249,8 +250,7 @@ function viewSize(v: HTMLVideoElement) {
 }
 
 /** A small grey copy of the whole picture (160 px across), to find the sheet and see movement. */
-function videoSample(v: HTMLVideoElement) {
-  const w = 160;
+function videoSample(v: HTMLVideoElement, w = 160) {
   const h = Math.round((w * v.videoHeight) / v.videoWidth);
   const canvas = document.createElement('canvas');
   canvas.width = w;

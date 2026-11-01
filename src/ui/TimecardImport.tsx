@@ -3,6 +3,7 @@ import { useApp } from '../app-context.ts';
 import { saveDay } from '../db.ts';
 import type { AbsenceType, DayRecord, StampPair } from '../domain/model.ts';
 import { loadPhoto, type TimecardDayReading, type TimecardReading } from '../ocr/browser.ts';
+import { twoReadings } from '../ocr/timecard.ts';
 import { goBack, href } from '../router.ts';
 import { Card, Icon, Notice, Page, Spinner } from './common.tsx';
 import { StampRowsEditor } from './StampRowsEditor.tsx';
@@ -73,9 +74,9 @@ export function TimecardImport() {
     if (!month || !days.length) return null;
     setMonths((m) => {
       const next = new Map(m);
-      // Pages of the same month add up; a later reading of a day replaces an empty one.
+      // Pages of the same month add up; a page read again checks the first reading (see twoReadings).
       const byDate = new Map((next.get(month) ?? []).map((d) => [d.date, d]));
-      for (const d of days) if (!byDate.has(d.date) || byDate.get(d.date)!.status === 'empty') byDate.set(d.date, d);
+      for (const d of days) byDate.set(d.date, twoReadings(byDate.get(d.date), d));
       next.set(month, [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date)));
       return next;
     });

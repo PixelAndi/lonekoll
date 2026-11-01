@@ -195,7 +195,7 @@ export function asTime(text: string): string | null {
 /** "8,25", "08.25", "825" or "825|" → 8.25 hours. */
 function asHours(text: string): number | null {
   const t = clean(text);
-  const m = /^(\d{1,2})[,.](\d{2})$/.exec(t) ?? /^(\d{1,2})(\d{2})$/.exec(t);
+  const m = /^(\d{1,2})[,.:](\d{2})$/.exec(t) ?? /^(\d{1,2})(\d{2})$/.exec(t);
   return m ? Number(`${m[1]}.${m[2]}`) : null;
 }
 
@@ -220,6 +220,27 @@ function tilt(words: OcrWord[], width: number): number {
   return slopes.length ? slopes[Math.floor(slopes.length / 2)] : 0;
 }
 
+/**
+ * A row's words with times and hours put back together where the OCR split
+ * them at the colon or point ("12" "58" → "12:58", "07" "45" → "07:45").
+ */
+function joinSplit(row: OcrWord[], width: number): OcrWord[] {
+  const out: OcrWord[] = [];
+  for (const w of row) {
+    const prev = out[out.length - 1];
+    const a = prev && clean(prev.text);
+    const b = clean(w.text);
+    if (prev && /^\d{1,2}$/.test(a) && /^\d{2}$/.test(b) && w.bbox.x0 - prev.bbox.x1 < width * 0.012 && w.bbox.x0 > prev.bbox.x0) {
+      out[out.length - 1] = {
+        text: `${a}:${b}`,
+        confidence: Math.min(prev.confidence, w.confidence),
+        bbox: { x0: prev.bbox.x0, y0: Math.min(prev.bbox.y0, w.bbox.y0), x1: w.bbox.x1, y1: Math.max(prev.bbox.y1, w.bbox.y1) },
+      };
+    } else out.push(w);
+  }
+  return out;
+}
+
 /** Words grouped into printed rows, by their height on the page with the tilt taken out. */
 function lines(words: OcrWord[], width: number): OcrWord[][] {
   const slope = tilt(words, width);
@@ -235,7 +256,7 @@ function lines(words: OcrWord[], width: number): OcrWord[][] {
       line.y = line.words.reduce((s, x) => s + level(x), 0) / line.words.length;
     } else out.push({ y: level(w), words: [w] });
   }
-  return out.map((l) => l.words.sort((a, b) => a.bbox.x0 - b.bbox.x0));
+  return out.map((l) => joinSplit(l.words.sort((a, b) => a.bbox.x0 - b.bbox.x0), width));
 }
 
 /**
@@ -405,7 +426,7 @@ export function parseTimecard(words: OcrWord[], width: number, layout?: Timecard
   return page;
 }
 
-/** A full date ("2021-12-01", read whole and real) and a weekday ("Ons" → 3) among a row's words. */
+/** A full date ("2026-03-01", read whole and real) and a weekday ("Ons" → 3) among a row's words. */
 function dayWords(words: OcrWord[]): { fullDate?: string; weekday?: number } {
   const m = words.map((w) => FULL_DATE.exec(clean(w.text))).find((x) => x);
   const read = m ? `${m[1]}-${m[2]}-${m[3]}` : undefined;
@@ -444,7 +465,14 @@ function byRules(
 ): { date: string; rows: OcrWord[][]; top: number; bottom: number }[] | null {
   if (rules.length < 6) return null;
   const mid = width / 2;
-  const sorted = [...rules].sort((a, b) => ruleY(a, mid) - ruleY(b, mid));
+  // One rule found twice (in pieces, on a photo taken at a slight angle): the longer piece.
+  const sorted: Rule[] = [];
+  for (const r of [...rules].sort((a, b) => ruleY(a, mid) - ruleY(b, mid))) {
+    const prev = sorted[sorted.length - 1];
+    if (prev && ruleY(r, mid) - ruleY(prev, mid) < width * 0.006) {
+      if (r.x1 - r.x0 > prev.x1 - prev.x0) sorted[sorted.length - 1] = r;
+    } else sorted.push(r);
+  }
   // The table's body: the longest run of rules a row's height apart.
   const fits = (gap: number) => gap > width * 0.006 && gap < width * 0.045;
   let run: Rule[] = [];
@@ -469,7 +497,7 @@ function byRules(
       }
     }
   }
-  for (const r of rows) r.sort((a, b) => a.bbox.x0 - b.bbox.x0);
+  for (let i = 0; i < rows.length; i++) rows[i] = joinSplit(rows[i].sort((a, b) => a.bbox.x0 - b.bbox.x0), width);
 
   // Below the header ("Datum Dag Schema …") and above the totals.
   let first = 0;
@@ -496,17 +524,22 @@ function byRules(
   }
   if (!dayRows.length) return null;
 
-  // The period's dates: from Fr o m to T o m, or as the dates read say.
+  // The period's dates: from Fr o m to T o m; without them, the calendar month most dates read are in
+  // (a card is a month; counting back from a date read is thrown off by a row taken for a day).
   let start = from;
-  if (!start) {
-    const votes = new Map<string, number>();
-    dayRows.forEach((r, k) => r.fullDate && votes.set(addDay(r.fullDate, -k), (votes.get(addDay(r.fullDate, -k)) ?? 0) + 1));
-    start = [...votes].sort((a, b) => b[1] - a[1])[0]?.[0];
+  let end = to;
+  if (!start || !end) {
+    const months = new Map<string, number>();
+    for (const r of dayRows) if (r.fullDate) months.set(r.fullDate.slice(0, 7), (months.get(r.fullDate.slice(0, 7)) ?? 0) + 1);
+    const month = (start ?? end)?.slice(0, 7) ?? [...months].sort((a, b) => b[1] - a[1])[0]?.[0];
+    if (!month) return null;
+    start ??= `${month}-01`;
+    // The month's last day: day 0 of the next month.
+    end ??= new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).toISOString().slice(0, 10);
   }
-  if (!start) return null;
-  const end = to && to >= start ? to : addDay(start, dayRows.length - 1);
+  if (end < start) return null;
   const dates: string[] = [];
-  for (let d = start; d <= end && dates.length < 62; d = addDay(d)) dates.push(d);
+  for (let d: string = start; d <= end && dates.length < 62; d = addDay(d)) dates.push(d);
 
   const matched = alignDays(dayRows, dates);
   const out: { date: string; rows: OcrWord[][]; top: number; bottom: number }[] = [];
@@ -582,12 +615,20 @@ export interface CheckedDay {
   note?: string;
 }
 
-/** Digits OCR mixes up on this kind of print, for a time's first digits. */
-const CONFUSED: Record<string, string[]> = { '0': ['2', '8'], '2': ['0', '7'], '1': ['7', '4'], '7': ['1', '2'], '5': ['6', '3'], '6': ['5', '8'], '3': ['8', '5'], '8': ['3', '6', '0'], '4': ['1'] };
+/** Digits OCR mixes up on this kind of print. */
+const CONFUSED: Record<string, string[]> = { '0': ['2', '8', '1'], '2': ['0', '7'], '1': ['7', '4'], '7': ['1', '2'], '5': ['6', '3'], '6': ['5', '8'], '3': ['8', '5'], '8': ['3', '6', '0'], '4': ['1'] };
 
 function variants(time: string): string[] {
   const out: string[] = [];
-  for (const i of [0, 1, 3]) {
+  // A narrow "1" the OCR dropped: "11:47" read as "147", which is 01:47.
+  if (time[0] === '0') {
+    const digits = time[1] + time.slice(3);
+    for (let i = 0; i <= 3; i++) {
+      const v = asTime(`${digits.slice(0, i)}1${digits.slice(i)}`);
+      if (v) out.push(v);
+    }
+  }
+  for (const i of [0, 1, 3, 4]) {
     for (const d of CONFUSED[time[i]] ?? []) {
       const v = `${time.slice(0, i)}${d}${time.slice(i + 1)}`;
       if (asTime(v)) out.push(v);
@@ -642,6 +683,23 @@ export function checkDay(day: TimecardDay): CheckedDay {
     if (solutions.length === 1) return { ...base, pairs: solutions[0], status: 'fixed', corrected: [...new Set([...filledFields, `${i}:${side}`])] };
   }
   return { ...base, pairs: filled, status: 'check', corrected: [] };
+}
+
+/**
+ * A day read twice (the same page scanned again): readings that agree confirm
+ * each other, also where a time had to be corrected; readings that differ
+ * are put to the user, unless just one of them adds up without correcting.
+ */
+export function twoReadings<T extends CheckedDay>(first: T | undefined, second: T): T {
+  if (!first || first.status === 'empty') return second;
+  if (second.status === 'empty') return first;
+  if (JSON.stringify(first.pairs) === JSON.stringify(second.pairs)) {
+    const best = first.status === 'ok' ? first : second;
+    return { ...best, status: 'ok', corrected: [] };
+  }
+  if (first.status === 'ok' && second.status !== 'ok') return first;
+  if (second.status === 'ok' && first.status !== 'ok') return second;
+  return { ...first, status: 'check', corrected: [] };
 }
 
 /**

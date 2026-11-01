@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { OcrWord } from './parse.ts';
-import { alignDays, asTime, checkDay, cleanTimecard, noteInk, parseTimecard, rowHeight, workedHours, type Rule, type TimecardDay } from './timecard.ts';
+import { alignDays, asTime, checkDay, cleanTimecard, noteInk, parseTimecard, rowHeight, twoReadings, workedHours, type Rule, type TimecardDay } from './timecard.ts';
 
 // A made-up timecard as the OCR reads it: words with their boxes, on a page
 // 1500 px wide, slightly tilted (rows rise 1 px per 100 px across).
@@ -165,6 +165,11 @@ describe('rows by the table’s printed rules', () => {
     expect(page.days.map((d) => checkDay(d).status)).toEqual(['empty', 'ok', 'ok', 'ok']);
   });
 
+  it('takes the month from the dates read when the period wasn’t read', () => {
+    const page = parseTimecard(words.filter((w) => w.bbox.y0 > 300), w, { clean, rules });
+    expect(page.days.map((d) => d.date)).toEqual(['2026-03-01', '2026-03-02', '2026-03-03', '2026-03-04']);
+  });
+
   it('knows the row height', () => {
     expect(rowHeight(rules, w)).toBeCloseTo(30);
   });
@@ -188,5 +193,23 @@ describe('matching day-rows to dates', () => {
   });
   it('skips a date whose row was missed', () => {
     expect(alignDays([{ weekday: 7 }, { weekday: 1 }, { weekday: 3 }, { weekday: 4 }], dates)).toEqual(['2026-03-01', '2026-03-02', '2026-03-04', '2026-03-05']);
+  });
+});
+
+describe('a page read twice', () => {
+  const day = (status: 'ok' | 'fixed' | 'check' | 'empty', out: string) => ({ date: '2026-03-02', status, corrected: [], pairs: status === 'empty' ? [] : [{ in: '07:00', out }] });
+  it('confirms a day where both readings agree, even when a time was corrected', () => {
+    expect(twoReadings(day('fixed', '15:00'), day('fixed', '15:00')).status).toBe('ok');
+  });
+  it('takes the reading that adds up without correcting when they differ', () => {
+    expect(twoReadings(day('fixed', '17:00'), day('ok', '15:00')).pairs[0].out).toBe('15:00');
+  });
+  it('asks the user when they differ and neither is certain', () => {
+    expect(twoReadings(day('fixed', '17:00'), day('fixed', '15:00')).status).toBe('check');
+    expect(twoReadings(day('ok', '17:00'), day('ok', '15:00')).status).toBe('check');
+  });
+  it('keeps a reading over an empty one', () => {
+    expect(twoReadings(day('empty', ''), day('ok', '15:00')).status).toBe('ok');
+    expect(twoReadings(day('ok', '15:00'), day('empty', '')).status).toBe('ok');
   });
 });

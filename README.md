@@ -107,7 +107,12 @@ report you can go through with your employer.
   dates and weekdays read deciding where the count doesn't come out even
   (binder holes and shadows at the edge are not taken for a date). A scanned
   picture whose rows are too small to read reliably (under 15 px) is not
-  used: the scanner asks to go closer. Each day is shown with a picture of
+  used: the scanner asks to go closer. The scanner finds the card by its
+  print (in a 480 px copy of the camera picture), so it also works on a
+  background as light as the paper; times the OCR split at the colon are
+  joined, and a dropped narrow "1" (11:47 read as 147) is among the
+  corrections tried. A page scanned twice cross-checks itself: days read
+  the same both times are confirmed, days read differently are asked about. Each day is shown with a picture of
   its rows from the card, and checked against the card's own Arb Tid. A misread time is corrected from
   the card's second reading (Avr In / Avr Ut), a common digit mix-up or the
   total – only when exactly one correction makes the day add up; otherwise
