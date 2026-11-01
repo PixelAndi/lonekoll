@@ -2455,3 +2455,28 @@ input[type='checkbox'] {
   color: var(--primary-text);
   border-color: var(--primary);
 }
+
+/* The timecard scanner's paper frame: A4 upright, the rest of the view dimmed. */
+.tcscan-frame {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 90%;
+  max-height: 92%;
+  aspect-ratio: 210 / 297;
+  transform: translate(-50%, -50%);
+  border: 3px solid #fff;
+  border-radius: 6px;
+  box-shadow: 0 0 0 100vmax rgb(0 0 0 / 0.45);
+  pointer-events: none;
+}
+
+.tcscan-spacer {
+  width: 64px;
+}
+
+.tcscan-error {
+  position: absolute;
+  inset: auto 16px 16px;
+  color: #fff;
+}

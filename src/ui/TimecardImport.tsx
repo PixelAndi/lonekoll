@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useApp } from '../app-context.ts';
 import { saveDay } from '../db.ts';
 import type { AbsenceType, DayRecord, StampPair } from '../domain/model.ts';
@@ -7,6 +7,7 @@ import { goBack, href } from '../router.ts';
 import { Card, Icon, Notice, Page, Spinner } from './common.tsx';
 import { StampRowsEditor } from './StampRowsEditor.tsx';
 import { stampText } from './stamps.ts';
+import { TimecardScanner, type ScannedPage } from './TimecardScanner.tsx';
 
 // Printed timecards (tidkort) from the employer: photos or PDFs, one or more
 // months. Each day is read and checked against the card's own Arb Tid; days
@@ -45,6 +46,24 @@ export function TimecardImport() {
   const fileInput = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<FileState[]>([]);
   const [months, setMonths] = useState<Map<string, TimecardDayReading[]>>(new Map());
+  const [scanning, setScanning] = useState(false);
+
+  /** Pages read (from a file or the scanner) added to their months; returns the month and days read. */
+  const addReadings = useCallback((readings: TimecardReading[]) => {
+    const days = readings.flatMap((r) => r.days);
+    const month = (readings.find((r) => r.from)?.from ?? days[0]?.date)?.slice(0, 7);
+    if (!month || !days.length) return null;
+    setMonths((m) => {
+      const next = new Map(m);
+      // Pages of the same month add up; a later reading of a day replaces an empty one.
+      const byDate = new Map((next.get(month) ?? []).map((d) => [d.date, d]));
+      for (const d of days) if (!byDate.has(d.date) || byDate.get(d.date)!.status === 'empty') byDate.set(d.date, d);
+      next.set(month, [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date)));
+      return next;
+    });
+    return { month, days: days.filter((d) => d.status !== 'empty').length };
+  }, []);
+  const onScanned = useCallback((page: ScannedPage) => void addReadings([page.reading]), [addReadings]);
 
   const add = async (list: FileList | null) => {
     if (!list?.length) return;
@@ -59,21 +78,8 @@ export function TimecardImport() {
         const canvases = /pdf/i.test(file.type) || /\.pdf$/i.test(file.name) ? await (await import('../pdf/browser.ts')).renderPdfPages(file) : [(await loadPhoto(file)).canvas];
         const readings: TimecardReading[] = [];
         for (const canvas of canvases) readings.push(await readTimecardImage(canvas));
-        const days = readings.flatMap((r) => r.days);
-        const month = (readings.find((r) => r.from)?.from ?? days[0]?.date)?.slice(0, 7);
-        if (!month || !days.length) {
-          update({ status: 'none' });
-          continue;
-        }
-        setMonths((m) => {
-          const next = new Map(m);
-          // Pages of the same month add up; a later reading of a day replaces an empty one.
-          const byDate = new Map((next.get(month) ?? []).map((d) => [d.date, d]));
-          for (const d of days) if (!byDate.has(d.date) || byDate.get(d.date)!.status === 'empty') byDate.set(d.date, d);
-          next.set(month, [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date)));
-          return next;
-        });
-        update({ status: 'done', days: days.filter((d) => d.status !== 'empty').length, month });
+        const read = addReadings(readings);
+        update(read ? { status: 'done', ...read } : { status: 'none' });
       } catch {
         update({ status: 'failed' });
       }
@@ -88,8 +94,11 @@ export function TimecardImport() {
       <Card>
         <p>{t('timecard.intro')}</p>
         <div className="button-row">
-          <button type="button" className="button button-primary" onClick={() => photoInput.current?.click()}>
-            <Icon name="camera" /> {t('timecard.photo')}
+          <button type="button" className="button button-primary" onClick={() => setScanning(true)}>
+            <Icon name="camera" /> {t('timecard.scan')}
+          </button>
+          <button type="button" className="button" onClick={() => photoInput.current?.click()}>
+            {t('timecard.photo')}
           </button>
           <button type="button" className="button" onClick={() => fileInput.current?.click()}>
             {t('timecard.files')}
@@ -112,6 +121,7 @@ export function TimecardImport() {
           </ul>
         )}
       </Card>
+      {scanning && <TimecardScanner onPage={onScanned} onClose={() => setScanning(false)} />}
       {[...months.entries()].map(([month, days]) => (
         <MonthReview key={month} month={month} days={days} />
       ))}
