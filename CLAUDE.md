@@ -80,8 +80,18 @@ in Playwright by routing `https://accounts.google.com/gsi/client` and
   camera; `SLIP_GAPS` for slips). The trimmed recognition model is committed
   in `ocr-models/` (`scripts/trim-paddle-rec.py` makes it from the npm model);
   `scripts/copy-ocr-assets.mjs` copies all OCR files to `public/ocr`.
-- `src/ui/SlipScanner.tsx` – the live pay slip scanner; `src/ui/camera.ts`
-  holds the camera helpers it shares with `TimecardScanner.tsx`.
+- `src/ui/SlipScanner.tsx` – the live pay slip scanner (crops to the found
+  print's height but the camera's full width; refuses print wider than tall);
+  `src/ui/camera.ts` holds the camera helpers it shares with
+  `TimecardScanner.tsx`, and `chime()` (tones made with Web Audio, no files;
+  `settings.scanSound`, toggled by the speaker button in both scanners).
+- `src/ui/SlipsView.tsx` – the pay slip page: what was just read, "Att
+  kontrollera" (incomplete readings, uncertain periods, the same slip saved
+  more than once), the slips by year (`Fold`), then wage and vacation pay as
+  folds. A photo read completely (`readCompletely` in SlipCheck.tsx) needs no
+  check; a new reading of a slip already saved (same period and pay day)
+  replaces it only when more complete. In Settings the wage card is one line
+  linking to the pay slip page.
 - `src/pdf/` – pay slip PDFs via pdf.js (bundled).
 - `src/cloud/` – optional Google Drive copy: `google.ts` (only network file;
   OAuth client ID is here), `sync.ts` (upload, data.json for restore/merge,

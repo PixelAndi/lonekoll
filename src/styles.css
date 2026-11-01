@@ -2779,3 +2779,139 @@ input[type='checkbox'] {
   text-align: end;
   white-space: nowrap;
 }
+
+/* A section that opens on a tap (Fold) */
+.fold {
+  padding: 0;
+}
+.fold > summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  padding: 14px 16px;
+  cursor: pointer;
+  list-style: none;
+}
+.fold > summary::-webkit-details-marker {
+  display: none;
+}
+.fold > summary::before {
+  content: '▸';
+  color: var(--muted);
+  transition: transform 0.15s;
+}
+.fold[open] > summary::before {
+  transform: rotate(90deg);
+}
+.fold-title {
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+.fold-sub {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.fold-warn .fold-sub {
+  color: var(--warn);
+}
+.fold-body {
+  padding: 0 16px 14px;
+}
+
+/* Pay slips, a line each */
+.slip-rows {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.slip-rows > li + li {
+  border-top: 1px solid var(--border);
+}
+.slip-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 2px 10px;
+  padding: 10px 0;
+  color: var(--text);
+  text-decoration: none;
+}
+.slip-row-month {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 6px;
+  font-weight: 600;
+}
+.slip-row-month .icon {
+  width: 14px;
+  height: 14px;
+  color: var(--muted);
+}
+.slip-row-net {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  font-weight: 600;
+  text-align: right;
+}
+.slip-row .chip-status {
+  justify-self: end;
+}
+.slip-row-double {
+  grid-template-columns: 1fr auto;
+}
+.chip-status {
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+  background: var(--surface-2);
+  color: var(--muted);
+}
+.chip-status.ok {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+.chip-status.warn {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+.chip-status.diff {
+  background: var(--error-soft);
+  color: var(--error);
+}
+.slip-tocheck {
+  border-color: var(--warn);
+}
+
+/* The wage on the slips against the settings */
+.wage-table td,
+.wage-table th {
+  vertical-align: top;
+}
+.wage-table .wage-more td {
+  padding-top: 0;
+  border-top: none;
+}
+.wage-below td {
+  color: var(--warn);
+  font-weight: 600;
+}
+
+/* Sound on or off, in the scanners */
+.scanner-sound {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 3;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: none;
+  background: rgb(0 0 0 / 0.45);
+  font-size: 1.3rem;
+  line-height: 44px;
+  cursor: pointer;
+}

@@ -15,6 +15,23 @@ export function Page({ title, actions, children }: { title: string; actions?: Re
   );
 }
 
+/**
+ * A section that opens on a tap: its title and a line on how it stands are
+ * always shown; what is inside is only built when open (long lists stay cheap).
+ */
+export function Fold({ title, sub, open: initial = false, warn = false, id, children }: { title: ReactNode; sub?: ReactNode; open?: boolean; warn?: boolean; id?: string; children: ReactNode }) {
+  const [open, setOpen] = useState(initial);
+  return (
+    <details className={`card fold ${warn ? 'fold-warn' : ''}`} open={open} id={id} onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open)}>
+      <summary>
+        <span className="fold-title">{title}</span>
+        {sub && <span className="fold-sub">{sub}</span>}
+      </summary>
+      {open && <div className="fold-body">{children}</div>}
+    </details>
+  );
+}
+
 export function Card({ title, children, className = '' }: { title?: ReactNode; children: ReactNode; className?: string }) {
   return (
     <section className={`card ${className}`}>

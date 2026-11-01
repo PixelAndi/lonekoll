@@ -135,6 +135,14 @@ describe('the pay day on a photo', () => {
 });
 
 describe('the payout block', () => {
+  it('doesn’t take the year’s tax for the month’s when the payout block is cut off', () => {
+    // Only "Totalt i år" left: its Skatt (70 000) is more than the month's gross.
+    const cut = items.filter((i) => !(i.x >= 439 && i.y < 200));
+    const slip = parsePaySlip(cut.concat(row(182.7, [['Bruttolön', 306.1, 28], ['31 275,80', 392.9, 31.1]])));
+    expect(slip.gross).toBe(31275.8);
+    expect(slip.tax).toBeUndefined();
+  });
+
   it('reads a dash as nothing (an extra payout with no tax)', () => {
     const noTax = items.filter((i) => !(i.y === 174.6 && i.x > 500)).concat(row(174.6, [['-', 555, 2.3]]));
     const slip = parsePaySlip(noTax);

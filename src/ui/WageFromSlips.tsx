@@ -1,10 +1,11 @@
 import { useLiveQuery } from 'dexie-react-hooks';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useApp } from '../app-context.ts';
 import { db, saveSettings } from '../db.ts';
 import { wagePeriodOn } from '../domain/model.ts';
-import { applyPaidSupplement, applyPaidWage, paidWageFrom, paidWages, wageChanges, type PaidWage, type SupplementBreakdown } from '../domain/raises.ts';
-import { Card, Notice } from './common.tsx';
+import { applyPaidSupplement, applyPaidWage, paidWageFrom, paidWages, wageChanges, type PaidWage, type SupplementBreakdown, type WageChange } from '../domain/raises.ts';
+import { href } from '../router.ts';
+import { Fold, Notice } from './common.tsx';
 import { applyOverrides } from './slipComparison.ts';
 
 // The wage as paid on the pay slips, period by period: a raise the settings
@@ -18,38 +19,65 @@ export function WageFromSlips({ onlyChanges = false }: { onlyChanges?: boolean }
   const [history, setHistory] = useState(false);
   const paid = useMemo(() => paidWages((records ?? []).map((r) => applyOverrides(r.slip, settings.codeOverrides))), [records, settings.codeOverrides]);
   const changes = useMemo(() => wageChanges(paid, settings), [paid, settings]);
-  if (!paid.length || (onlyChanges && !changes.length)) return null;
+  if (!paid.length) return null;
+  // In the settings: only a line saying the slips pay otherwise, with the way to the details.
+  if (onlyChanges) {
+    if (!changes.length) return null;
+    return (
+      <Notice kind="info">
+        {t('wageSlips.settingsNote', { n: changes.length })}{' '}
+        <a href={`${href({ name: 'slips' })}`}>{t('wageSlips.settingsLink')}</a>
+      </Notice>
+    );
+  }
   const amount = (p: { basis: 'hourly' | 'monthly'; amount: number } | null, n?: number | null) =>
     n === null || !p ? t('wageSlips.none') : t(p.basis === 'hourly' ? 'wageSlips.perHour' : 'wageSlips.perMonth', { amount: fmt.money(n ?? p.amount) });
   const span = (p: PaidWage) => `${fmt.date(p.from, 'numeric')}–${fmt.date(p.to, 'numeric')}`;
+  const other = (c: WageChange) => (c.kind === 'belowMinimum' ? c.minimum : c.settings);
   return (
-    <Card title={t('wageSlips.title')}>
-      {changes.length === 0 && <p className="ok small">✓ {t('wageSlips.allFit')}</p>}
-      {changes.map((c) =>
-        c.kind === 'belowMinimum' ? (
-          <Notice key={c.paid.from} kind="warn">
-            {t('wageSlips.below', { date: fmt.date(c.paid.from, 'long'), paid: amount(c.paid), minimum: amount(c.paid, c.minimum) })}
-          </Notice>
-        ) : (
-          <div key={c.paid.from} className="wage-change">
-            <p>
-              <strong>{t('wageSlips.from', { date: fmt.date(c.paid.from, 'long'), paid: amount(c.paid) })}</strong>{' '}
-              {t('wageSlips.onSlips', { n: c.paid.slips.length, span: span(c.paid) })}
-              <br />
-              <span className="muted small">{t('wageSlips.settingsHave', { set: amount(c.paid, c.settings) })}</span>
-            </p>
-            {c.paid.retro && <p className="small warn-text">{t('wageSlips.retro')}</p>}
-            {c.breakdown ? (
-              <Breakdown b={c.breakdown} paid={c.paid} />
-            ) : (
-              <button type="button" className="button button-primary" onClick={() => void saveSettings({ wages: applyPaidWage(settings, c.paid).wages })}>
-                {t('wageSlips.apply', { date: fmt.date(paidWageFrom(settings, c.paid), 'numeric') })}
-              </button>
-            )}
-          </div>
-        ),
+    <Fold
+      title={t('wageSlips.title')}
+      sub={changes.length ? t('wageSlips.summaryDiffers', { n: changes.length }) : t('wageSlips.summaryOk')}
+      warn={changes.length > 0}
+    >
+      {changes.length === 0 ? <p className="ok small">✓ {t('wageSlips.allFit')}</p> : <p className="small">{t('wageSlips.explain')}</p>}
+      {changes.length > 0 && (
+        <table className="table small wage-table">
+          <thead>
+            <tr>
+              <th>{t('wageSlips.col.period')}</th>
+              <th className="num">{t('wageSlips.col.slip')}</th>
+              <th className="num">{t('wageSlips.col.settings')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {changes.map((c) => (
+              <WageRow key={c.paid.from} change={c} span={span(c.paid)} paid={amount(c.paid)} other={c.kind === 'belowMinimum' ? t('wageSlips.belowShort', { minimum: amount(c.paid, c.minimum) }) : amount(c.paid, other(c))}>
+                {c.kind === 'belowMinimum' ? (
+                  <Notice kind="warn">{t('wageSlips.below', { date: fmt.date(c.paid.from, 'long'), paid: amount(c.paid), minimum: amount(c.paid, c.minimum) })}</Notice>
+                ) : (
+                  <div className="wage-change">
+                    <p className="small">
+                      {t('wageSlips.onSlips', { n: c.paid.slips.length, span: span(c.paid) })}
+                    </p>
+                    {c.paid.retro && <p className="small warn-text">{t('wageSlips.retro')}</p>}
+                    {c.breakdown ? (
+                      <Breakdown b={c.breakdown} paid={c.paid} />
+                    ) : (
+                      <>
+                        <button type="button" className="button button-primary" onClick={() => void saveSettings({ wages: applyPaidWage(settings, c.paid).wages })}>
+                          {t('wageSlips.apply', { date: fmt.date(paidWageFrom(settings, c.paid), 'numeric') })}
+                        </button>
+                        <p className="muted small">{t('wageSlips.caution')}</p>
+                      </>
+                    )}
+                  </div>
+                )}
+              </WageRow>
+            ))}
+          </tbody>
+        </table>
       )}
-      {changes.some((c) => c.kind === 'differs' && !c.breakdown) && <p className="muted small">{t('wageSlips.caution')}</p>}
       <label className="checkbox small">
         <input type="checkbox" checked={history} onChange={(e) => setHistory(e.target.checked)} />
         <span>{t('wageSlips.history')}</span>
@@ -66,7 +94,30 @@ export function WageFromSlips({ onlyChanges = false }: { onlyChanges?: boolean }
           </tbody>
         </table>
       )}
-    </Card>
+    </Fold>
+  );
+}
+
+/** A period whose wage differs: one line, and what can be done about it when tapped. */
+function WageRow({ change, span, paid, other, children }: { change: WageChange; span: string; paid: string; other: string; children: ReactNode }) {
+  const { t } = useApp();
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <tr className={change.kind === 'belowMinimum' ? 'wage-below' : ''}>
+        <td>{span}</td>
+        <td className="num">{paid}</td>
+        <td className="num">{other}</td>
+      </tr>
+      <tr className="wage-more">
+        <td colSpan={3}>
+          <button type="button" className="link-button small" aria-expanded={open} onClick={() => setOpen(!open)}>
+            {open ? t('wageSlips.hide') : t('wageSlips.details')}
+          </button>
+          {open && children}
+        </td>
+      </tr>
+    </>
   );
 }
 

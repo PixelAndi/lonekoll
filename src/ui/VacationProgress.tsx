@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { useApp } from '../app-context.ts';
 import type { SlipRecord } from '../db.ts';
 import { earningYearForVacationOn, earningYearOf, vacationBasis, vacationPayPerDay, type VacationBasis } from '../domain/vacation.ts';
@@ -9,7 +10,8 @@ import { applyOverrides } from './slipComparison.ts';
 // How close the imported pay slips are to a whole earning year, which is what
 // it takes to work out the vacation pay (13.2 % of the year's pay).
 
-export function VacationProgress({ slips }: { slips: SlipRecord[] }) {
+/** How vacation pay stands; `plain` leaves out the card around it (inside a section that has its title). */
+export function VacationProgress({ slips, plain = false }: { slips: SlipRecord[]; plain?: boolean }) {
   const { t, fmt, settings } = useApp();
   const today = todayLocal();
   const all = slips.map((r) => applyOverrides(r.slip, settings.codeOverrides));
@@ -21,7 +23,7 @@ export function VacationProgress({ slips }: { slips: SlipRecord[] }) {
   const month = (date: string) => (settings.language === 'en' ? fmt.month(date) : fmt.month(date).toLocaleLowerCase());
 
   return (
-    <Card title={t('vacation.title')}>
+    <Frame plain={plain} title={t('vacation.title')}>
       <p className="small">
         {t('vacation.intro', {
           from: month(vacationYear.start),
@@ -58,7 +60,7 @@ export function VacationProgress({ slips }: { slips: SlipRecord[] }) {
       <p className="small vacation-next">{t('vacation.next', { from: month(next.year.start), to: month(next.year.end) })}</p>
       <Progress basis={next} />
       <p className="muted small">{t('vacation.caveat')}</p>
-    </Card>
+    </Frame>
   );
 }
 
@@ -84,4 +86,8 @@ function Progress({ basis }: { basis: VacationBasis }) {
       </span>
     </div>
   );
+}
+
+function Frame({ plain, title, children }: { plain: boolean; title: string; children: ReactNode }) {
+  return plain ? <>{children}</> : <Card title={title}>{children}</Card>;
 }

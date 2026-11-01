@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../app-context.ts';
+import { saveSettings } from '../db.ts';
 import type { TimecardReading } from '../ocr/browser.ts';
 import { aimAt, findPage, type Aim, type FoundPage } from '../ocr/pageFind.ts';
 import { addsUpToTotal, combineReadings, type CheckedDay } from '../ocr/timecard.ts';
-import { cropToPage, difference, frameShare, onScreen, picture, sharpness, shrinkBy3, videoSample } from './camera.ts';
+import { chime, cropToPage, difference, frameShare, onScreen, picture, prepareChime, sharpness, shrinkBy3, videoSample } from './camera.ts';
 
 // A live scanner for printed timecards. Hold the whole card in the frame:
 // pictures are taken from the camera's live picture (no separate photo – the
@@ -94,8 +95,11 @@ interface Shot {
 }
 
 export function TimecardScanner({ onPage, onClose }: { onPage: (page: ScannedPage) => void; onClose: () => void }) {
-  const { t, fmt } = useApp();
+  const { t, fmt, settings } = useApp();
   const video = useRef<HTMLVideoElement>(null);
+  const sound = useRef(settings.scanSound);
+  sound.current = settings.scanSound;
+  const ding = (kind: Parameters<typeof chime>[0]) => sound.current && chime(kind);
   const [phase, setPhase] = useState<Phase>({ kind: 'starting' });
   const [error, setError] = useState(false);
   const [card, setCardState] = useState<Card | null>(null);
@@ -158,6 +162,7 @@ export function TimecardScanner({ onPage, onClose }: { onPage: (page: ScannedPag
         timer = window.setInterval(() => void tick(), 150);
         // Start the recognition now, so the first picture isn't kept waiting for it.
         void import('../ocr/browser.ts').then((m) => m.warmUp());
+        if (sound.current) prepareChime();
       } catch {
         setError(true);
       }
@@ -228,6 +233,7 @@ export function TimecardScanner({ onPage, onClose }: { onPage: (page: ScannedPag
         queue.push({ blob, sheet, n: shots });
         setPending(queue.length + (working ? 1 : 0));
         navigator.vibrate?.(30);
+        ding('shot');
         shotsHere.current++;
         if (shotsHere.current >= SHOTS_PER_CARD) {
           // Enough of this card for now (more are taken only if its readings ask for it).
@@ -284,6 +290,7 @@ export function TimecardScanner({ onPage, onClose }: { onPage: (page: ScannedPag
           setList((l) => [...l.filter((c) => c.key !== key), { key, month, done: now.done, unsure: now.unsure }].sort((a, b) => a.key.localeCompare(b.key)));
           if (now.done) {
             navigator.vibrate?.([80, 60, 80]);
+            ding('ok');
             setNote({ text: t('tcscan.cardDone', { month, ok: now.sure }), kind: 'ok' });
             // The card is still in view: no more pictures of it are needed.
             if (shotsHere.current > 0) waiting.current = true;
@@ -346,6 +353,18 @@ export function TimecardScanner({ onPage, onClose }: { onPage: (page: ScannedPag
             aria-hidden="true"
           />
         )}
+        <button
+          type="button"
+          className="scanner-sound"
+          aria-pressed={settings.scanSound}
+          aria-label={t('scan.sound')}
+          onClick={() => {
+            if (!settings.scanSound) prepareChime();
+            void saveSettings({ scanSound: !settings.scanSound });
+          }}
+        >
+          {settings.scanSound ? '🔊' : '🔇'}
+        </button>
         {list.length > 0 && (
           <ul className="tcscan-cards">
             {list.map((c) => (

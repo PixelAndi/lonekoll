@@ -162,6 +162,8 @@ export interface Settings {
   vacationYearStartMonth: 1 | 4;
   /** Keep the pictures of scanned timecards in the app (on this device), to look up the source later. */
   keepTimecards?: boolean;
+  /** Sounds in the scanners (a picture taken, a page read). */
+  scanSound: boolean;
   /** Where the data is kept: on this device only (the default), or also in the user's Google Drive. */
   cloud?: CloudSettings;
 }
@@ -211,6 +213,7 @@ export const DEFAULT_SETTINGS: Settings = {
   kompMode: 'hour',
   vacationYearStartMonth: 4,
   keepTimecards: true,
+  scanSound: true,
 };
 
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;

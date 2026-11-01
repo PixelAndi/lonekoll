@@ -153,3 +153,45 @@ export function cropToPage(canvas: HTMLCanvasElement, page: FoundPage | null): H
   out.getContext('2d')!.drawImage(canvas, x, y, w, h, 0, 0, out.width, out.height);
   return out;
 }
+
+let audio: AudioContext | null = null;
+
+/** Gets the sound ready (on opening a scanner, which the user tapped: the browser then allows it). */
+export function prepareChime(): void {
+  try {
+    audio ??= new AudioContext();
+    if (audio.state === 'suspended') void audio.resume();
+  } catch {
+    // No sound where the browser has none.
+  }
+}
+
+/**
+ * A short sound made on the phone (no sound files): a soft tick when a
+ * picture is taken, two rising notes when a page is read, one lower note when
+ * it was read but should be looked at, two falling low notes when it couldn't be read.
+ */
+export function chime(kind: 'shot' | 'ok' | 'check' | 'fail'): void {
+  try {
+    prepareChime();
+    const ctx = audio!;
+    const notes = kind === 'shot' ? [1500] : kind === 'ok' ? [880, 1320] : kind === 'check' ? [620] : [392, 262];
+    const length = kind === 'shot' ? 0.05 : 0.16;
+    const volume = kind === 'shot' ? 0.08 : 0.22;
+    notes.forEach((frequency, i) => {
+      const at = ctx.currentTime + i * 0.13;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = frequency;
+      gain.gain.setValueAtTime(0.0001, at);
+      gain.gain.exponentialRampToValueAtTime(volume, at + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, at + length);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(at);
+      osc.stop(at + length + 0.02);
+    });
+  } catch {
+    // No sound where the browser has none.
+  }
+}

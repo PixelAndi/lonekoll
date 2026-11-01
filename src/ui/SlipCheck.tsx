@@ -13,8 +13,21 @@ import { decimalText, numberOrUndefined } from './settings/inputs.tsx';
 // the pay day and the totals. A period the app had to work out, or whose
 // year it corrected, is pointed out.
 
-/** Whether a slip should be checked before its comparison is trusted. */
-export const needsCheck = (record: SlipRecord) => !record.slip.checked && (!!record.slip.periodDoubt || /^image\//.test(record.pdf.type));
+/**
+ * A slip read completely: its lines add up to its gross pay, the payout is the
+ * gross less tax and other deductions (to the krona), and its period and pay
+ * day were read, not worked out. Such a reading can be trusted without a look.
+ */
+export function readCompletely(slip: PaySlip): boolean {
+  if (slip.gross === undefined || slip.tax === undefined || slip.net === undefined || !slip.lines.length) return false;
+  const sum = slip.lines.reduce((s, l) => s + (l.amount ?? 0), 0);
+  const net = slip.gross - slip.tax - (slip.otherDeductions ?? 0);
+  return Math.abs(sum - slip.gross) < 0.02 && Math.abs(net - slip.net) <= 1 && !!slip.periodStart && !slip.periodDoubt && !!slip.payDate && slip.payDateFrom !== 'setting';
+}
+
+/** Whether a slip should be checked before its comparison is trusted: a photo not read completely, or an uncertain period. */
+export const needsCheck = (record: SlipRecord) =>
+  !record.slip.checked && (!!record.slip.periodDoubt || (/^image\//.test(record.pdf.type) && !readCompletely(record.slip)));
 
 /** The sum of the slip's pay lines, to set beside its gross pay. */
 const linesSum = (slip: PaySlip) => Math.round(slip.lines.reduce((sum, l) => sum + (l.amount ?? 0), 0) * 100) / 100;

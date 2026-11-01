@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../app-context.ts';
 import type { PaySlip } from '../domain/payslip.ts';
 import { aimAt, findPage, SLIP_GAPS, type Aim, type FoundPage } from '../ocr/pageFind.ts';
-import { cropToPage, difference, frameShare, onScreen, picture, sharpness, shrinkBy3, videoSample } from './camera.ts';
+import { saveSettings } from '../db.ts';
+import { chime, cropToPage, difference, frameShare, onScreen, picture, prepareChime, sharpness, shrinkBy3, videoSample } from './camera.ts';
+import { readCompletely } from './SlipCheck.tsx';
 
 // A live scanner for paper pay slips, like the timecard scanner: hold the
 // slip in the frame and the picture is taken by itself the moment it is
@@ -23,7 +25,7 @@ const ARROWS: Partial<Record<Aim, string>> = { left: '←', right: '→', up: '�
 
 /** What became of a slip read in the scanner (said in its list). */
 export interface SlipOutcome {
-  status: 'saved' | 'duplicate' | 'none';
+  status: 'saved' | 'replaced' | 'duplicate' | 'none';
   period?: string;
   /** Saved but to be checked (its lines don't add up, or its period is uncertain). */
   check?: boolean;
@@ -35,7 +37,6 @@ export function completeness(slip: PaySlip): number {
   const addsUp = slip.gross !== undefined && slip.lines.length > 0 && Math.abs(sum - slip.gross) < 0.02;
   return (addsUp ? 4 : 0) + (slip.periodStart && !slip.periodDoubt ? 2 : 0) + (slip.payDate ? 1 : 0) + Math.min(0.9, slip.lines.length / 100);
 }
-const COMPLETE = 7;
 
 interface Shot {
   blob: Blob;
@@ -45,8 +46,11 @@ interface Shot {
 }
 
 export function SlipScanner({ onSlip, onClose, onCameraFailed }: { onSlip: (slip: PaySlip, picture: Blob) => Promise<SlipOutcome>; onClose: () => void; onCameraFailed: () => void }) {
-  const { t, fmt } = useApp();
+  const { t, fmt, settings } = useApp();
   const video = useRef<HTMLVideoElement>(null);
+  const sound = useRef(settings.scanSound);
+  sound.current = settings.scanSound;
+  const ding = (kind: Parameters<typeof chime>[0]) => sound.current && chime(kind);
   const [phase, setPhase] = useState<Phase>({ kind: 'starting' });
   const [error, setError] = useState(false);
   const [note, setNote] = useState<{ text: string; kind: 'ok' | 'warn' } | null>(null);
@@ -115,6 +119,7 @@ export function SlipScanner({ onSlip, onClose, onCameraFailed }: { onSlip: (slip
     })();
     // The reader gets ready while the camera starts.
     void import('../ocr/browser.ts').then((m) => m.warmUpPaddle());
+    if (sound.current) prepareChime();
 
     const tick = async () => {
       const v = video.current;
@@ -127,7 +132,9 @@ export function SlipScanner({ onSlip, onClose, onCameraFailed }: { onSlip: (slip
       found.current = page;
       const frame = frameShare(v, PAGE_RATIO);
       setFrameOnScreen(onScreen(v, frame));
-      const aim = aimAt(page, frame);
+      // A whole slip is taller than wide: print wider than tall is part of one (the phone too close).
+      const shape = page ? (page.h * v.videoHeight) / (page.w * v.videoWidth) : 1;
+      const aim = page && shape < 1.15 ? 'further' : aimAt(page, frame);
       setOutline(page ? { ...onScreen(v, page), ready: aim === 'ready' } : null);
       missing = page ? 0 : missing + 1;
       if (waiting) {
@@ -165,8 +172,9 @@ export function SlipScanner({ onSlip, onClose, onCameraFailed }: { onSlip: (slip
         // Cut to the page with room to spare above and below: a slip's title is a short line the
         // page finder may not count as print (nor the lines under it), and background doesn't hurt the reading.
         const f = found.current;
+        // The whole width: a column with few figures (Belopp) may not count as print either.
         const top = f ? Math.max(0, f.y - f.h * 0.25) : 0;
-        const roomy = f && { ...f, y: top, h: Math.min(1 - top, f.y + f.h * 1.1 - top) };
+        const roomy = f && { ...f, x: 0, w: 1, y: top, h: Math.min(1 - top, f.y + f.h * 1.1 - top) };
         const canvas = cropToPage(await picture(stream, v, PAGE_RATIO), roomy);
         const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('JPEG failed'))), 'image/jpeg', 0.9));
         lastShot = last;
@@ -175,6 +183,7 @@ export function SlipScanner({ onSlip, onClose, onCameraFailed }: { onSlip: (slip
         queue.push({ blob, canvas, slip: slipNo });
         setPending(queue.length + (working ? 1 : 0));
         navigator.vibrate?.(30);
+        ding('shot');
         setNote({ text: t('slipscan.taken'), kind: 'ok' });
         void work();
       } catch {
@@ -199,8 +208,11 @@ export function SlipScanner({ onSlip, onClose, onCameraFailed }: { onSlip: (slip
             ? { text: t('slipscan.failed'), kind: 'warn' as const }
             : outcome.check
               ? { text: t('slipscan.check', { month }), kind: 'warn' as const }
-              : { text: t('slipscan.read', { month }), kind: 'ok' as const };
+              : outcome.status === 'replaced'
+                ? { text: t('slipscan.replaced', { month }), kind: 'ok' as const }
+                : { text: t('slipscan.read', { month }), kind: 'ok' as const };
       if (outcome.status !== 'none') navigator.vibrate?.(outcome.check ? [40] : [80, 60, 80]);
+      ding(outcome.status === 'none' ? 'fail' : outcome.check ? 'check' : outcome.status === 'duplicate' ? 'check' : 'ok');
       setList((l) => [...l, { key: no, ...item }]);
       setNote(item);
     };
@@ -220,14 +232,17 @@ export function SlipScanner({ onSlip, onClose, onCameraFailed }: { onSlip: (slip
           if (slip.lines.length && (!prev || score > prev.score)) best.set(shot.slip, { slip, blob: shot.blob, score });
           const kept = best.get(shot.slip);
           const stillHere = shot.slip === slipNo && waiting;
-          if (kept && kept.score >= COMPLETE) await save(shot.slip);
+          if (kept && readCompletely(kept.slip)) await save(shot.slip);
           else if (stillHere && (shotsOf.get(shot.slip) ?? 0) < MAX_SHOTS) {
             // Not complete, and the slip is still in view: one more picture of it.
             waiting = false;
             setNote({ text: t('slipscan.again'), kind: 'warn' });
           } else await save(shot.slip);
         } catch {
-          if (alive) setNote({ text: t('slipscan.failed'), kind: 'warn' });
+          if (alive) {
+            setNote({ text: t('slipscan.failed'), kind: 'warn' });
+            ding('fail');
+          }
         }
       }
       working = false;
@@ -277,6 +292,18 @@ export function SlipScanner({ onSlip, onClose, onCameraFailed }: { onSlip: (slip
             aria-hidden="true"
           />
         )}
+        <button
+          type="button"
+          className="scanner-sound"
+          aria-pressed={settings.scanSound}
+          aria-label={t('scan.sound')}
+          onClick={() => {
+            if (!settings.scanSound) prepareChime();
+            void saveSettings({ scanSound: !settings.scanSound });
+          }}
+        >
+          {settings.scanSound ? '🔊' : '🔇'}
+        </button>
         {list.length > 0 && (
           <ul className="tcscan-cards">
             {list.map((c) => (

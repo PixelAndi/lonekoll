@@ -453,6 +453,9 @@ export function parsePaySlip(items: TextItem[], hourlyRate?: number): PaySlip {
   const figure = (v: string) => (/^[-–—]$/.test(v) ? 0 : parseSwedishNumber(v));
   const tax = rightmost(valuesAfter(lines, /^Skatt$/i));
   if (tax) slip.tax = figure(tax.value);
+  // A photo cut off at the right loses the payout block; its "Skatt" is then the year's total
+  // (from "Totalt i år"), more than the month's gross: not the month's tax.
+  if (slip.tax !== undefined && slip.gross !== undefined && slip.tax > slip.gross) slip.tax = undefined;
 
   // The "Skatt beräknad på" block: its Bruttolön is the taxed pay.
   const taxBlock = lines.flat().find((i) => /^Skatt beräknad på$/i.test(i.str.trim()));
