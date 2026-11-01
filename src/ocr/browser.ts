@@ -250,7 +250,7 @@ export function warmUpSlipReading(): void {
  * into the table's cells (see slipPhoto.ts) and given to the same parser.
  */
 export async function readPaySlipImage(file: Blob, hourlyRate?: number): Promise<import('../domain/payslip.ts').PaySlip> {
-  const [{ slipItemsFromWords, lightenDarkBars }, { parsePaySlip }, ocr] = await Promise.all([import('./slipPhoto.ts'), import('../domain/payslip.ts'), getEngine('swe')]);
+  const [{ slipItemsFromWords, findDarkBars, lightenBar }, { parsePaySlip }, ocr] = await Promise.all([import('./slipPhoto.ts'), import('../domain/payslip.ts'), getEngine('swe')]);
   // Scaled to reading size as it is decoded: a phone photo is 12 megapixels, far more than needed.
   const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image', resizeWidth: TIMECARD_WIDTH, resizeQuality: 'high' });
   const canvas = document.createElement('canvas');
@@ -260,8 +260,7 @@ export async function readPaySlipImage(file: Blob, hourlyRate?: number): Promise
   context.drawImage(bitmap, 0, 0);
   bitmap.close();
   // The grey bars (the pay day and payout are printed on one) made readable before the page is cleaned.
-  const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
-  if (lightenDarkBars(pixels.data, canvas.width, canvas.height).length) context.putImageData(pixels, 0, 0);
+  lightenBarsOf(canvas, context, findDarkBars, lightenBar);
   const strips = slipStrips();
   const prepared = await prepare(canvas, strips, Math.round(TIMECARD_WIDTH * 0.03));
   const words = await ocr.recognizeStrips(prepared.strips, 'find');
@@ -271,4 +270,33 @@ export async function readPaySlipImage(file: Blob, hourlyRate?: number): Promise
   // other deductions, rounded up to whole kronor (öresutjämning, as these slips do).
   if (slip.net === undefined && slip.gross !== undefined && slip.tax !== undefined) slip.net = Math.ceil(slip.gross - slip.tax - (slip.otherDeductions ?? 0) - 0.005);
   return slip;
+}
+
+/**
+ * The grey bars of a slip photo lightened (see slipPhoto.ts): found on a
+ * quarter-size copy, then only their rows read and written at full size –
+ * reading and writing the whole picture is what takes the time.
+ */
+function lightenBarsOf(
+  canvas: HTMLCanvasElement,
+  context: CanvasRenderingContext2D,
+  findDarkBars: typeof import('./slipPhoto.ts').findDarkBars,
+  lightenBar: typeof import('./slipPhoto.ts').lightenBar,
+): void {
+  const small = document.createElement('canvas');
+  small.width = Math.round(canvas.width / 4);
+  small.height = Math.round(canvas.height / 4);
+  const smallContext = small.getContext('2d', { willReadFrequently: true })!;
+  smallContext.drawImage(canvas, 0, 0, small.width, small.height);
+  const { bars, dark } = findDarkBars(smallContext.getImageData(0, 0, small.width, small.height).data, small.width, small.height);
+  const scale = canvas.height / small.height;
+  for (const bar of bars) {
+    const from = Math.floor(bar.top * scale);
+    const to = Math.min(canvas.height - 1, Math.ceil((bar.bottom + 1) * scale) - 1);
+    const top = Math.max(0, from - 6);
+    const bottom = Math.min(canvas.height - 1, to + 6);
+    const rows = context.getImageData(0, top, canvas.width, bottom - top + 1);
+    lightenBar(rows.data, canvas.width, bottom - top + 1, { top: from - top, bottom: to - top }, dark);
+    context.putImageData(rows, 0, top);
+  }
 }

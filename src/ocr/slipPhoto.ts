@@ -87,91 +87,110 @@ export function slipItemsFromWords(words: OcrWord[], width: number): TextItem[] 
   return items;
 }
 
-/**
- * The bars a slip prints its headings and payout on ("Utbetalas 2026-10-23
- * … 25 275,80") are grey, with the text darker on them. Cleaned like the
- * rest of the page, a bar turns black and its text is lost. Each bar (a band
- * of rows dark across most of the page, thin – not the table the slip lies
- * on) is lightened so its grey becomes white and its text stays dark. Works
- * on RGBA pixels in place; returns the bars found (rows, for tests).
- */
 /** Where in a bar's brightness its ink ends and its paper starts (shares of its pixels). */
 const BAR_INK = 0.02;
 const BAR_PAPER = 0.35;
 
-export function lightenDarkBars(rgba: Uint8ClampedArray, width: number, height: number): { top: number; bottom: number }[] {
-  const gray = (i: number) => 0.299 * rgba[i * 4] + 0.587 * rgba[i * 4 + 1] + 0.114 * rgba[i * 4 + 2];
+const grayAt = (rgba: Uint8ClampedArray, i: number) => 0.299 * rgba[i * 4] + 0.587 * rgba[i * 4 + 1] + 0.114 * rgba[i * 4 + 2];
+
+/**
+ * The bars a slip prints its headings and payout on ("Utbetalas 2026-10-23
+ * … 25 275,80") are grey, with the text darker on them. Cleaned like the
+ * rest of the page, a bar turns black and its text is lost. A bar is a band
+ * of rows dark across most of the page, and thin – not the table the slip
+ * lies on. Found here (on a small copy will do), with how dark "dark" is.
+ */
+export function findDarkBars(rgba: Uint8ClampedArray, width: number, height: number): { bars: { top: number; bottom: number }[]; dark: number } {
   // The paper's brightness: most of the picture is paper.
   const sample: number[] = [];
-  for (let i = 0; i < width * height; i += 97) sample.push(gray(i));
+  for (let i = 0; i < width * height; i += 97) sample.push(grayAt(rgba, i));
   sample.sort((a, b) => a - b);
-  const paper = sample[Math.floor(sample.length * 0.9)];
-  const dark = paper * 0.75;
+  const dark = sample[Math.floor(sample.length * 0.9)] * 0.75;
   const x0 = Math.round(width * 0.1);
   const x1 = Math.round(width * 0.9);
+  const step = width > 1000 ? 2 : 1;
   const isBarRow = (y: number) => {
     let n = 0;
-    for (let x = x0; x < x1; x += 2) if (gray(y * width + x) < dark) n++;
-    return n > ((x1 - x0) / 2) * 0.5;
+    let all = 0;
+    for (let x = x0; x < x1; x += step, all++) if (grayAt(rgba, y * width + x) < dark) n++;
+    return n > all * 0.5;
   };
   const bars: { top: number; bottom: number }[] = [];
   let start = -1;
   let last = -10;
+  const gap = Math.max(1, Math.round(height * 0.001));
   for (let y = 0; y <= height; y++) {
     if (y < height && isBarRow(y)) {
-      if (y - last > 3) start = y;
+      if (y - last > gap) start = y;
       last = y;
-    } else if (start >= 0 && y - last > 3) {
+    } else if (start >= 0 && y - last > gap) {
       const h = last - start + 1;
       if (h >= height * 0.004 && h <= height * 0.04) bars.push({ top: start, bottom: last });
       start = -1;
     }
   }
-  for (const bar of bars) {
-    const top = Math.max(0, bar.top - 3);
-    const bottom = Math.min(height - 1, bar.bottom + 3);
-    // Where across the bar runs: the columns dark in most of its rows.
-    const cols: number[] = [];
-    for (let x = 0; x < width; x++) {
-      let n = 0;
-      for (let y = bar.top; y <= bar.bottom; y++) if (gray(y * width + x) < dark) n++;
-      if (n > (bar.bottom - bar.top + 1) * 0.5) cols.push(x);
-    }
-    if (!cols.length) continue;
-    const left = Math.max(0, cols[0] - 3);
-    const right = Math.min(width - 1, cols[cols.length - 1] + 3);
-    // The bar's print is a fine dot pattern, and the back of the page shows through: smoothed
-    // (3 × 3) to take the dots out, then stretched so its grey becomes white and its ink black.
-    const w = right - left + 1;
-    const h = bottom - top + 1;
-    const smooth = new Float32Array(w * h);
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        let sum = 0;
-        let n = 0;
-        for (let dy = -1; dy <= 1; dy++) {
-          for (let dx = -1; dx <= 1; dx++) {
-            const yy = top + y + dy;
-            const xx = left + x + dx;
-            if (yy < 0 || yy >= height || xx < 0 || xx >= width) continue;
-            sum += gray(yy * width + xx);
-            n++;
-          }
-        }
-        smooth[y * w + x] = sum / n;
-      }
-    }
-    const values = Array.from(smooth).filter((_, i) => i % 3 === 0).sort((a, b) => a - b);
-    const lo = values[Math.floor(values.length * BAR_INK)];
-    const hi = values[Math.floor(values.length * BAR_PAPER)];
-    if (hi - lo < 10) continue;
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        const i = (top + y) * width + left + x;
-        const v = Math.max(0, Math.min(255, ((smooth[y * w + x] - lo) / (hi - lo)) * 255));
-        rgba[i * 4] = rgba[i * 4 + 1] = rgba[i * 4 + 2] = v;
-      }
+  return { bars, dark };
+}
+
+/**
+ * One bar lightened so its grey becomes white and its ink stays dark: smoothed
+ * (3 × 3) to take out its fine dot pattern and the back of the page showing
+ * through, then stretched. `rgba` may be just the rows around the bar.
+ */
+export function lightenBar(rgba: Uint8ClampedArray, width: number, height: number, bar: { top: number; bottom: number }, dark: number): void {
+  const gray = (i: number) => grayAt(rgba, i);
+  const top = Math.max(0, bar.top - 3);
+  const bottom = Math.min(height - 1, bar.bottom + 3);
+  // Where across the bar runs: the columns dark in most of its rows.
+  let left = -1;
+  let right = -1;
+  for (let x = 0; x < width; x++) {
+    let n = 0;
+    for (let y = bar.top; y <= bar.bottom; y++) if (gray(y * width + x) < dark) n++;
+    if (n > (bar.bottom - bar.top + 1) * 0.5) {
+      if (left < 0) left = x;
+      right = x;
     }
   }
+  if (left < 0) return;
+  left = Math.max(0, left - 3);
+  right = Math.min(width - 1, right + 3);
+  const w = right - left + 1;
+  const h = bottom - top + 1;
+  const smooth = new Float32Array(w * h);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let sum = 0;
+      let n = 0;
+      for (let dy = -1; dy <= 1; dy++) {
+        const yy = top + y + dy;
+        if (yy < 0 || yy >= height) continue;
+        for (let dx = -1; dx <= 1; dx++) {
+          const xx = left + x + dx;
+          if (xx < 0 || xx >= width) continue;
+          sum += gray(yy * width + xx);
+          n++;
+        }
+      }
+      smooth[y * w + x] = sum / n;
+    }
+  }
+  const values = Array.from(smooth).filter((_, i) => i % 3 === 0).sort((a, b) => a - b);
+  const lo = values[Math.floor(values.length * BAR_INK)];
+  const hi = values[Math.floor(values.length * BAR_PAPER)];
+  if (hi - lo < 10) return;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = (top + y) * width + left + x;
+      const v = Math.max(0, Math.min(255, ((smooth[y * w + x] - lo) / (hi - lo)) * 255));
+      rgba[i * 4] = rgba[i * 4 + 1] = rgba[i * 4 + 2] = v;
+    }
+  }
+}
+
+/** Every grey bar on a page lightened (see findDarkBars), in place; returns the bars. */
+export function lightenDarkBars(rgba: Uint8ClampedArray, width: number, height: number): { top: number; bottom: number }[] {
+  const { bars, dark } = findDarkBars(rgba, width, height);
+  for (const bar of bars) lightenBar(rgba, width, height, bar, dark);
   return bars;
 }
