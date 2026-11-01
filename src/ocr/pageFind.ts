@@ -1,6 +1,8 @@
 // Finding the sheet of paper in a camera frame, to guide the aim: the
-// paper is the largest bright area. Works on a small grey copy of the frame
-// (about 160 px across), many times a second.
+// paper is the largest bright area – or, on a background as light as the
+// paper (a white table or sheet), where the print is: the area of fine
+// detail. Works on a small grey copy of the frame (about 160 px across),
+// many times a second.
 
 export interface Gray {
   width: number;
@@ -19,6 +21,15 @@ export interface FoundPage {
 }
 
 export function findPage(img: Gray): FoundPage | null {
+  const paper = findPaper(img);
+  const print = findPrint(img);
+  // The paper merged with a light background: much larger than the print on it, or no paper found.
+  if (print && (!paper || paper.w * paper.h > print.w * print.h * 1.8)) return print;
+  return paper;
+}
+
+/** The largest bright area that fills its box like a sheet of paper. */
+function findPaper(img: Gray): FoundPage | null {
   const { width: w, height: h, data } = img;
   const sorted = Uint8Array.from(data).sort();
   const p95 = sorted[Math.floor(sorted.length * 0.95)];
@@ -78,6 +89,65 @@ export function findPage(img: Gray): FoundPage | null {
     w: bw / w,
     h: bh / h,
     cut: { top: best.y0 === 0, bottom: best.y1 === h - 1, left: best.x0 === 0, right: best.x1 === w - 1 },
+  };
+}
+
+/**
+ * Where the print is: the area of fine detail (lines and text against the
+ * paper; folds and shadows in a background are smooth at this size), widened
+ * by the page's margins.
+ */
+export function findPrint(img: Gray): FoundPage | null {
+  const { width: w, height: h, data } = img;
+  // Detail: how much a pixel differs from its neighbours.
+  const detail = new Uint8Array(w * h);
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const i = y * w + x;
+      const d = Math.abs(2 * data[i] - data[i - 1] - data[i + 1]) + Math.abs(2 * data[i] - data[i - w] - data[i + w]);
+      detail[i] = d > 24 ? 1 : 0;
+    }
+  }
+  const rows = new Array<number>(h).fill(0);
+  const cols = new Array<number>(w).fill(0);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (detail[y * w + x]) rows[y]++;
+  /** The longest run of busy lines (a gap of a few quiet ones allowed), as [first, last]. */
+  const span = (counts: number[], min: number): [number, number] | null => {
+    let best: [number, number] | null = null;
+    let start = -1;
+    let lastBusy = -1;
+    for (let i = 0; i <= counts.length; i++) {
+      const busy = i < counts.length && counts[i] >= min;
+      if (busy) {
+        if (start < 0 || i - lastBusy > 4) start = i;
+        lastBusy = i;
+      }
+      if (start >= 0 && (i === counts.length || i - lastBusy > 4)) {
+        if (!best || lastBusy - start > best[1] - best[0]) best = [start, lastBusy];
+        start = -1;
+      }
+    }
+    return best;
+  };
+  const ys = span(rows, w * 0.1);
+  if (!ys) return null;
+  for (let y = ys[0]; y <= ys[1]; y++) for (let x = 0; x < w; x++) if (detail[y * w + x]) cols[x]++;
+  const xs = span(cols, (ys[1] - ys[0] + 1) * 0.1);
+  if (!xs) return null;
+  const bw = xs[1] - xs[0] + 1;
+  const bh = ys[1] - ys[0] + 1;
+  if (bw < w * 0.15 || bh < h * 0.1) return null;
+  // The page's margins around its print (a tenth of the print's size each way).
+  const x0 = Math.max(0, xs[0] - bw * 0.06);
+  const x1 = Math.min(w - 1, xs[1] + bw * 0.06);
+  const y0 = Math.max(0, ys[0] - bh * 0.06);
+  const y1 = Math.min(h - 1, ys[1] + bh * 0.06);
+  return {
+    x: x0 / w,
+    y: y0 / h,
+    w: (x1 - x0 + 1) / w,
+    h: (y1 - y0 + 1) / h,
+    cut: { top: ys[0] <= 1, bottom: ys[1] >= h - 2, left: xs[0] <= 1, right: xs[1] >= w - 2 },
   };
 }
 

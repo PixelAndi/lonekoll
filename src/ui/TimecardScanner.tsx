@@ -12,8 +12,19 @@ import { aimAt, findPage, type Aim, type FoundPage } from '../ocr/pageFind.ts';
 const FRAME = { width: 0.9, ratio: 297 / 210 };
 /** How long the picture must be steady before it is taken (ms). */
 const STEADY_MS = 900;
+/**
+ * The smallest printed row (pixels in the picture) read reliably: smaller,
+ * and digits are misread in ways that can still add up (tried on real cards:
+ * 16 px read every day right, 13 px read some days wrong without noticing).
+ */
+const MIN_ROW_PIXELS = 15;
 
-type Phase = { kind: 'starting' } | { kind: 'aiming'; hint: Exclude<Aim, 'ready'> | 'steady' } | { kind: 'reading' } | { kind: 'failed' };
+type Phase =
+  | { kind: 'starting' }
+  | { kind: 'aiming'; hint: Exclude<Aim, 'ready'> | 'steady' }
+  | { kind: 'reading' }
+  | { kind: 'failed' }
+  | { kind: 'small' };
 
 const ARROWS: Partial<Record<Aim, string>> = { left: '←', right: '→', up: '↑', down: '↓' };
 
@@ -21,7 +32,21 @@ export interface ScannedPage {
   reading: TimecardReading;
 }
 
-export function TimecardScanner({ onPage, onClose }: { onPage: (page: ScannedPage) => void; onClose: () => void }) {
+/** Saves a file to the phone (test mode: what the scanner saw, to send for troubleshooting). */
+function save(data: Blob, name: string) {
+  const url = URL.createObjectURL(data);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+const stamp = () => new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '');
+
+export function TimecardScanner({ onPage, onClose, test = false }: { onPage: (page: ScannedPage) => void; onClose: () => void; test?: boolean }) {
   const { t } = useApp();
   const video = useRef<HTMLVideoElement>(null);
   const [phase, setPhase] = useState<Phase>({ kind: 'starting' });
@@ -39,6 +64,21 @@ export function TimecardScanner({ onPage, onClose }: { onPage: (page: ScannedPag
     let stream: MediaStream | null = null;
     let timer = 0;
     let alive = true;
+    let shots = 0;
+    // Test mode: a recording of what the camera saw, saved when the scanner closes.
+    let recorder: MediaRecorder | null = null;
+    const chunks: Blob[] = [];
+    const startRecording = (s: MediaStream) => {
+      try {
+        const type = ['video/mp4', 'video/webm'].find((m) => MediaRecorder.isTypeSupported(m));
+        recorder = new MediaRecorder(s, { mimeType: type, videoBitsPerSecond: 6_000_000 });
+        recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+        recorder.onstop = () => chunks.length && save(new Blob(chunks, { type: recorder!.mimeType }), `tidkort-test-video-${stamp()}.${recorder!.mimeType.includes('mp4') ? 'mp4' : 'webm'}`);
+        recorder.start(1000);
+      } catch {
+        recorder = null;
+      }
+    };
     void (async () => {
       try {
         // As many pixels as the camera gives: the card's print is small.
@@ -50,6 +90,7 @@ export function TimecardScanner({ onPage, onClose }: { onPage: (page: ScannedPag
         v.srcObject = stream;
         await v.play();
         if (!alive) return;
+        if (test) startRecording(stream);
         setPhase({ kind: 'aiming', hint: 'find' });
         timer = window.setInterval(() => void tick(), 250);
       } catch {
@@ -91,12 +132,37 @@ export function TimecardScanner({ onPage, onClose }: { onPage: (page: ScannedPag
       setPhase({ kind: 'reading' });
       try {
         const canvas = await fullResolution(stream, v);
-        const page = cropToPage(canvas, found.current);
+        const sheet = found.current;
+        const page = cropToPage(canvas, sheet);
         const { readTimecardImage } = await import('../ocr/browser.ts');
         const reading = await readTimecardImage(page);
         const days = reading.days.filter((d) => d.status !== 'empty').length;
+        const small = reading.rowPixels !== undefined && reading.rowPixels < MIN_ROW_PIXELS;
+        if (test) {
+          // Everything about this picture, to find out what went wrong and why.
+          const name = `tidkort-test-${stamp()}-${++shots}`;
+          canvas.toBlob((b) => b && save(b, `${name}.jpg`), 'image/jpeg', 0.95);
+          const info = {
+            taken: new Date().toISOString(),
+            browser: navigator.userAgent,
+            video: { width: v.videoWidth, height: v.videoHeight },
+            picture: { width: canvas.width, height: canvas.height, via: canvas.dataset.via },
+            view: viewSize(v),
+            frame: frameShare(v),
+            sheet,
+            crop: { width: page.width, height: page.height },
+            rowPixels: reading.rowPixels,
+            accepted: !!days && !small,
+            from: reading.from,
+            to: reading.to,
+            days: reading.days.map(({ rowImage: _r, noteImage: _n, ...d }) => d),
+          };
+          save(new Blob([JSON.stringify(info, null, 1)], { type: 'application/json' }), `${name}.json`);
+        }
         if (!alive) return;
-        if (!days) {
+        if (small) {
+          setPhase({ kind: 'small' });
+        } else if (!days) {
           setPhase({ kind: 'failed' });
         } else {
           navigator.vibrate?.(80);
@@ -118,18 +184,21 @@ export function TimecardScanner({ onPage, onClose }: { onPage: (page: ScannedPag
     return () => {
       alive = false;
       window.clearInterval(timer);
+      if (recorder?.state === 'recording') recorder.stop();
       stream?.getTracks().forEach((track) => track.stop());
     };
-  }, [onPage]);
+  }, [onPage, test]);
 
   const status =
     phase.kind === 'reading'
       ? t('tcscan.reading')
       : phase.kind === 'failed'
         ? t('tcscan.failed')
+        : phase.kind === 'small'
+          ? t('tcscan.small')
         : phase.kind === 'aiming'
           ? `${ARROWS[phase.hint as Aim] ?? ''} ${t(`tcscan.hint.${phase.hint}`)}`.trim()
-          : t('tcscan.starting');
+            : t('tcscan.starting');
 
   return (
     <div className="scanner" role="dialog" aria-modal="true" aria-label={t('tcscan.title')}>
@@ -146,7 +215,8 @@ export function TimecardScanner({ onPage, onClose }: { onPage: (page: ScannedPag
         {error && <p className="scanner-status tcscan-error">{t('tcscan.noCamera')}</p>}
       </div>
       <div className="scanner-status">
-        <div className={`scanner-pill ${phase.kind === 'reading' ? 'scanner-pill-ok' : phase.kind === 'failed' ? 'scanner-pill-warn' : ''}`}>
+        {test && <div className="tcscan-test">{t('tcscan.test')}</div>}
+        <div className={`scanner-pill ${phase.kind === 'reading' ? 'scanner-pill-ok' : phase.kind === 'failed' || phase.kind === 'small' ? 'scanner-pill-warn' : ''}`}>
           {status}
           {pages.length > 0 && <div className="tcscan-count">{t('tcscan.pages', { n: pages.length, days: pages.reduce((s, p) => s + p.days, 0) })}</div>}
         </div>
@@ -224,12 +294,16 @@ async function fullResolution(stream: MediaStream, v: HTMLVideoElement): Promise
   if (Capture && track) {
     try {
       const bitmap = await createImageBitmap(await new Capture(track).takePhoto());
-      return fromSource(bitmap, bitmap.width, bitmap.height, v);
+      const canvas = fromSource(bitmap, bitmap.width, bitmap.height, v);
+      canvas.dataset.via = 'photo';
+      return canvas;
     } catch {
       // Fall back to the video frame.
     }
   }
-  return fromSource(v, v.videoWidth, v.videoHeight, v);
+  const canvas = fromSource(v, v.videoWidth, v.videoHeight, v);
+  canvas.dataset.via = 'video';
+  return canvas;
 }
 
 /** The picture drawn on a canvas, with the paper frame's position for it. */

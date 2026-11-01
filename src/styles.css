@@ -2499,3 +2499,24 @@ input[type='checkbox'] {
 .tcscan-page-ready {
   border: 3px solid #3ddc84;
 }
+
+/* The day's rows on the card, under what was read from them. */
+.timecard-row {
+  display: block;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #fff;
+}
+
+/* Test mode marker in the timecard scanner. */
+.tcscan-test {
+  align-self: center;
+  margin-bottom: 6px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: #b45309;
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 600;
+}

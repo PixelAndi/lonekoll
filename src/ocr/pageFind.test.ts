@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { aimAt, findPage } from './pageFind.ts';
 
 /** A grey background with a white sheet (printed lines on it) at the given place, 160 × 284 px. */
-function frame(x: number, y: number, w: number, h: number) {
+function frame(x: number, y: number, w: number, h: number, background = 150) {
   const W = 160;
   const H = 284;
-  const data = new Uint8Array(W * H).fill(150);
+  const data = new Uint8Array(W * H).fill(background);
   for (let yy = y; yy < y + h; yy++) {
     for (let xx = x; xx < x + w; xx++) {
       if (yy < 0 || yy >= H || xx < 0 || xx >= W) continue;
@@ -39,5 +39,17 @@ describe('finding the timecard in the camera', () => {
   it('asks to move back when the sheet runs off the picture, and says when there is none', () => {
     expect(aimAt(findPage(frame(-10, -10, 180, 304)), FRAME)).toBe('further');
     expect(aimAt(findPage({ width: 160, height: 284, data: new Uint8Array(160 * 284).fill(90) }), FRAME)).toBe('find');
+  });
+
+  it('finds the print when the background is as light as the paper (a white sheet)', () => {
+    // Paper 235 on a background of 228, with a soft fold across it.
+    const img = frame(30, 70, 100, 140, 228);
+    for (let x = 0; x < 160; x++) for (let y = 240; y < 250; y++) img.data[y * 160 + x] = 228 - Math.round(15 * Math.sin(((y - 240) / 10) * Math.PI));
+    const page = findPage(img)!;
+    expect(page.x).toBeGreaterThan(0.1);
+    expect(page.x + page.w).toBeLessThan(0.9);
+    expect(page.y).toBeGreaterThan(0.18);
+    expect(page.y + page.h).toBeLessThan(0.8);
+    expect(aimAt(page, FRAME)).toBe('ready');
   });
 });

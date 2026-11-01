@@ -103,32 +103,42 @@ export async function tableCrop(photo: LoadedPhoto, table: NonNullable<ClockRead
 export interface TimecardDayReading extends CheckedDay {
   /** Ink or words in the Frånvaro box: a note to ask about, with a picture of it. */
   noteImage?: string;
+  /** A picture of the day's rows on the card, to check what was read against. */
+  rowImage?: string;
 }
 
 export interface TimecardReading {
   from?: string;
   to?: string;
   days: TimecardDayReading[];
+  /** The page as captured, for saving (to check a reading, or send it for help). */
+  pageImage?: string;
+  /** How tall a printed row is in the picture as taken (pixels): too small, and digits are misread. */
+  rowPixels?: number;
 }
 
 /** A printed timecard page (photo or rendered PDF page): every day's stamps, checked, and its notes. */
 export async function readTimecardImage(source: HTMLCanvasElement): Promise<TimecardReading> {
-  const [{ cleanTimecard, parseTimecard, checkDay, noteInk, hasNote }, ocr] = await Promise.all([import('./timecard.ts'), getEngine()]);
+  const [{ prepareTimecard, parseTimecard, rowHeight, checkDay, noteInk, hasNote }, ocr] = await Promise.all([import('./timecard.ts'), getEngine()]);
   // Read at about 2400 px across: the card's small print is then large enough to read reliably.
   const canvas = resized(source, TIMECARD_WIDTH);
   const { width, height } = canvas;
   const rgba = canvas.getContext('2d')!.getImageData(0, 0, width, height).data;
   const gray = new Uint8Array(width * height);
   for (let i = 0; i < gray.length; i++) gray[i] = Math.round(0.299 * rgba[i * 4] + 0.587 * rgba[i * 4 + 1] + 0.114 * rgba[i * 4 + 2]);
-  const clean = cleanTimecard({ width, height, data: gray });
-  const page = parseTimecard(await ocr.recognize(clean, 'find'), width);
+  const { clean, rules } = prepareTimecard({ width, height, data: gray });
+  const words = await ocr.recognize(clean, 'find');
+  const page = parseTimecard(words, width, { clean, rules });
   const ink = noteInk(clean, page);
   const days = page.days.map((day) => {
     const checked: TimecardDayReading = checkDay(day);
     if (hasNote(day, ink.get(day.date))) checked.noteImage = cropOf(canvas, page.notesFrom - width * 0.01, day.top - 6, width * 0.97, day.bottom + 6);
+    // The day's rows from the date to Arb Tid (where the stamps are).
+    if (checked.status !== 'empty') checked.rowImage = cropOf(canvas, width * 0.02, day.top - 8, page.notesFrom, day.bottom + 8);
     return checked;
   });
-  return { from: page.from, to: page.to, days };
+  const row = rowHeight(rules, width);
+  return { from: page.from, to: page.to, days, pageImage: source.toDataURL('image/jpeg', 0.9), rowPixels: row === null ? undefined : (row * source.width) / width };
 }
 
 const TIMECARD_WIDTH = 2400;

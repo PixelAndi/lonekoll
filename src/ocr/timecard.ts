@@ -10,10 +10,29 @@ import type { OcrWord } from './parse.ts';
 type Box = OcrWord['bbox'];
 
 /** Black text on white, with the table's lines removed (they confuse the OCR and look like notes). */
-export function cleanTimecard(gray: GrayImage): GrayImage {
+export const cleanTimecard = (gray: GrayImage): GrayImage => prepareTimecard(gray).clean;
+
+/** A printed horizontal rule of the table, y = a + b·x, reaching from x0 to x1. */
+export interface Rule {
+  a: number;
+  b: number;
+  x0: number;
+  x1: number;
+}
+const ruleY = (r: Rule, x: number) => r.a + r.b * x;
+
+/**
+ * The page cleaned for reading (as cleanTimecard), and the table's horizontal
+ * rules: they say for certain where each printed row is, which the height of
+ * the words in a slightly blurred or tilted photo does not.
+ */
+export function prepareTimecard(gray: GrayImage): { clean: GrayImage; rules: Rule[] } {
   const bin = binarize(gray, false, 31, 12);
   const { width: w, height: h } = bin;
   const line = new Uint8Array(w * h);
+  // Where the horizontal lines are (every third column of them, which is plenty).
+  const px: number[] = [];
+  const py: number[] = [];
   // A run of ink longer than a couple of characters is a line, not text.
   const maxRunX = Math.round(w * 0.02);
   const maxRunY = Math.round(h * 0.016);
@@ -23,7 +42,15 @@ export function cleanTimecard(gray: GrayImage): GrayImage {
       const ink = x < w && bin.data[y * w + x] === 0;
       if (ink && start < 0) start = x;
       if (!ink && start >= 0) {
-        if (x - start > maxRunX) for (let i = start; i < x; i++) line[y * w + i] = 1;
+        if (x - start > maxRunX) {
+          for (let i = start; i < x; i++) {
+            line[y * w + i] = 1;
+            if (i % 3 === 0) {
+              px.push(i);
+              py.push(y);
+            }
+          }
+        }
         start = -1;
       }
     }
@@ -53,7 +80,67 @@ export function cleanTimecard(gray: GrayImage): GrayImage {
       }
     }
   }
-  return { width: w, height: h, data: out };
+  return { clean: { width: w, height: h, data: out }, rules: findRules(px, py, w, h) };
+}
+
+/** The height of a printed row (the usual gap between rules), or null without the rules. */
+export function rowHeight(rules: Rule[], width: number): number | null {
+  const ys = rules.map((r) => ruleY(r, width / 2)).sort((a, b) => a - b);
+  const gaps = ys.slice(1).map((y, i) => y - ys[i]).filter((g) => g > width * 0.006 && g < width * 0.045).sort((a, b) => a - b);
+  return gaps.length >= 5 ? gaps[Math.floor(gaps.length / 2)] : null;
+}
+
+/**
+ * The horizontal rules among the line pixels: the slope at which they line up
+ * best, the rows where many of them meet at that slope, and each rule fitted
+ * on its own (a photo taken at a slight angle doesn't have them quite parallel).
+ */
+function findRules(px: number[], py: number[], w: number, h: number): Rule[] {
+  const n = px.length;
+  if (n < w / 3) return [];
+  const cx = w / 2;
+  const pad = Math.ceil(w * 0.06);
+  let best = { score: -1, slope: 0, hist: new Float64Array(0) };
+  for (let k = -100; k <= 100; k++) {
+    const slope = k * 0.0005;
+    const hist = new Float64Array(h + 2 * pad);
+    for (let i = 0; i < n; i++) {
+      const y = Math.round(py[i] - slope * (px[i] - cx)) + pad;
+      if (y >= 0 && y < hist.length) hist[y]++;
+    }
+    let score = 0;
+    for (let y = 0; y < hist.length; y++) score += hist[y] * hist[y];
+    if (score > best.score) best = { score, slope, hist };
+  }
+  const { slope, hist } = best;
+  const near = (y: number) => (hist[y - 1] ?? 0) + hist[y] + (hist[y + 1] ?? 0);
+  // A rule reaches across at least a quarter of the page.
+  const minimum = (w * 0.25) / 3;
+  const peaks: number[] = [];
+  for (let y = 1; y < hist.length - 1; y++) {
+    const v = near(y);
+    if (v < minimum) continue;
+    let top = true;
+    for (let d = -4; d <= 4 && top; d++) if (d && near(y + d) > v) top = false;
+    if (top && (!peaks.length || y - peaks[peaks.length - 1] > 4)) peaks.push(y);
+  }
+  return peaks.map((peak) => {
+    // Least squares over the rule's own pixels.
+    let sx = 0, sy = 0, sxx = 0, sxy = 0, count = 0, x0 = w, x1 = 0;
+    for (let i = 0; i < n; i++) {
+      if (Math.abs(py[i] - slope * (px[i] - cx) + pad - peak) > 3) continue;
+      sx += px[i];
+      sy += py[i];
+      sxx += px[i] * px[i];
+      sxy += px[i] * py[i];
+      count++;
+      x0 = Math.min(x0, px[i]);
+      x1 = Math.max(x1, px[i]);
+    }
+    const div = count * sxx - sx * sx;
+    const b = div > 0 ? (count * sxy - sx * sy) / div : slope;
+    return { a: (sy - b * sx) / count, b, x0, x1 };
+  });
 }
 
 export interface TimecardDay {
@@ -108,7 +195,7 @@ export function asTime(text: string): string | null {
 /** "8,25", "08.25", "825" or "825|" → 8.25 hours. */
 function asHours(text: string): number | null {
   const t = clean(text);
-  const m = /^(\d{1,2})[,.](\d{2})$/.exec(t) ?? /^(\d)(\d{2})$/.exec(t);
+  const m = /^(\d{1,2})[,.](\d{2})$/.exec(t) ?? /^(\d{1,2})(\d{2})$/.exec(t);
   return m ? Number(`${m[1]}.${m[2]}`) : null;
 }
 
@@ -151,8 +238,25 @@ function lines(words: OcrWord[], width: number): OcrWord[][] {
   return out.map((l) => l.words.sort((a, b) => a.bbox.x0 - b.bbox.x0));
 }
 
-/** The x-centres of the time columns (In, Avr In, Ut, Avr Ut), from where times were found. */
-function timeColumns(xs: number[], width: number): number[] {
+/**
+ * The x-centres of the time columns (In, Avr In, Ut, Avr Ut): on rows with
+ * four times or more, the first four are those (Arb Tid and Ord Tim, which
+ * look like times too, come after them). By clustering where times were found
+ * when few rows were read whole.
+ */
+function timeColumns(rows: OcrWord[][], width: number): number[] {
+  const full = rows
+    .map((r) => r.filter((w) => asTime(w.text) && !SCHEDULE.test(clean(w.text)) && centerX(w.bbox) > width * 0.15).sort((a, b) => a.bbox.x0 - b.bbox.x0))
+    .filter((times) => times.length >= 4);
+  if (full.length >= 3) {
+    const median = (xs: number[]) => xs.sort((a, b) => a - b)[Math.floor(xs.length / 2)];
+    const cols = [0, 1, 2, 3].map((k) => median(full.map((times) => centerX(times[k].bbox))));
+    if (cols.every((x, k) => !k || x - cols[k - 1] > width * 0.02)) return cols;
+  }
+  return clusterColumns(rows.flat().filter((w) => asTime(w.text) && !SCHEDULE.test(w.text)).map((w) => centerX(w.bbox)), width);
+}
+
+function clusterColumns(xs: number[], width: number): number[] {
   const sorted = [...xs].sort((a, b) => a - b);
   const groups: number[][] = [];
   for (const x of sorted) {
@@ -183,9 +287,14 @@ function addDay(date: string, n = 1): string {
 }
 const weekdayOf = (date: string) => ((new Date(`${date}T12:00:00Z`).getUTCDay() + 6) % 7) + 1;
 
-export function parseTimecard(words: OcrWord[], width: number): TimecardPage {
+/** The rows as printed, from the table's rules (see prepareTimecard): what lies between each rule and the next. */
+export interface TimecardLayout {
+  clean: GrayImage;
+  rules: Rule[];
+}
+
+export function parseTimecard(words: OcrWord[], width: number, layout?: TimecardLayout): TimecardPage {
   const all = lines(words, width);
-  const header = (re: RegExp) => words.find((w) => re.test(clean(w.text)));
 
   // The period: "Fr o m: 2023-08-01" and "T o m: 2023-08-31".
   let from: string | undefined;
@@ -199,15 +308,14 @@ export function parseTimecard(words: OcrWord[], width: number): TimecardPage {
   }
 
   // Columns: the times from where they were found; Arb Tid, Ord Tim and Frånvaro from the header when it was read.
-  const timeWords = all.flat().filter((w) => asTime(w.text) && !SCHEDULE.test(w.text));
-  const columns = timeColumns(
-    timeWords.map((w) => centerX(w.bbox)),
-    width,
-  );
+  const columns = timeColumns(all, width);
   const afterTimes = (columns[3] ?? width * 0.55) + width * 0.03;
-  const arb = header(/^arb$/i);
-  const ord = header(/^ord$/i);
-  const notesFrom = header(/^fr[åa]nvaro/i)?.bbox.x0 ?? width * 0.82;
+  // The column headers right of the times (the totals box below has an "Arb Tid" too, far left).
+  const rightHeader = (re: RegExp) =>
+    words.filter((w) => re.test(clean(w.text)) && centerX(w.bbox) > afterTimes - width * 0.02).sort((a, b) => a.bbox.y0 - b.bbox.y0)[0];
+  const arb = rightHeader(/^arb$/i);
+  const ord = rightHeader(/^ord$/i);
+  const notesFrom = rightHeader(/^fr[åa]nvaro/i)?.bbox.x0 ?? width * 0.82;
   const column = (w: OcrWord) => {
     if (columns.length !== 4) return -1;
     let best = 0;
@@ -215,42 +323,11 @@ export function parseTimecard(words: OcrWord[], width: number): TimecardPage {
     return Math.abs(centerX(w.bbox) - columns[best]) < width * 0.03 ? best : -1;
   };
   const near = (w: OcrWord, h: OcrWord | undefined) => !!h && Math.abs(w.bbox.x0 - h.bbox.x0) < width * 0.04;
+  /** Where the date, weekday and schedule are: left of the In column. */
+  const dateEnd = columns.length === 4 ? columns[0] - width * 0.035 : width * 0.27;
 
-  const page: TimecardPage = { from, to, days: [], notesFrom };
-  let current: TimecardDay | null = null;
-  for (const line of all) {
-    const texts = line.map((w) => clean(w.text));
-    // The totals below the table end it.
-    if (texts.some((t) => /^totaler$/i.test(t))) break;
-    if (from && line.every((w) => w.bbox.y1 < (words.find((x) => x.text.includes(from!))?.bbox.y1 ?? 0) + 5)) continue;
-
-    const left = line.filter((w) => w.bbox.x0 < width * 0.3);
-    const fullDate = left.map((w) => FULL_DATE.exec(clean(w.text))).find((m) => m);
-    const dateLike = left.some((w) => /\d{2}-\d{2}$|^20\d{2}/.test(clean(w.text)));
-    const weekday = left.map((w) => WEEKDAYS.find(([re]) => re.test(clean(w.text)))?.[1]).find((d) => d);
-    const startsDay = !!fullDate || dateLike || !!weekday || line.some((w) => SCHEDULE.test(clean(w.text)) && w.bbox.x0 < width * 0.3);
-    const top = Math.min(...line.map((w) => w.bbox.y0));
-    const bottom = Math.max(...line.map((w) => w.bbox.y1));
-
-    if (startsDay) {
-      // Every date of the period has a row, in order: count on from the last one, and let a
-      // date that was read whole (within the period, after the last) or the weekday correct it.
-      const expected: string | undefined = current ? addDay(current.date) : from;
-      let date: string | undefined = expected;
-      const read = fullDate ? `${fullDate[1]}-${fullDate[2]}-${fullDate[3]}` : undefined;
-      if (isRealDate(read) && (!current || read > current.date) && (!from || read >= from) && (!to || read <= to)) date = read;
-      else if (weekday && expected && weekdayOf(expected) !== weekday) {
-        for (let k = 1; k <= 3; k++) if (weekdayOf(addDay(expected, k)) === weekday) date = addDay(expected, k);
-      }
-      if (!date || (to && date > to)) continue;
-      current = { date, pairs: [], rounded: [], top, bottom };
-      page.days.push(current);
-    } else if (!current) {
-      continue;
-    }
-    current.bottom = Math.max(current.bottom, bottom);
-
-    // The times in their columns: In, Avr In, Ut, Avr Ut.
+  /** A printed row's words into the day: its times in their columns (In, Avr In, Ut, Avr Ut), Arb Tid, Ord Tim and notes. */
+  const addRow = (day: TimecardDay, line: OcrWord[]) => {
     const cells: (string | null)[] = [null, null, null, null];
     for (const w of line) {
       const time = !SCHEDULE.test(clean(w.text)) ? asTime(w.text) : null;
@@ -260,22 +337,226 @@ export function parseTimecard(words: OcrWord[], width: number): TimecardPage {
         const hours = asHours(w.text);
         if (hours !== null) {
           // Arb Tid comes before Ord Tim; by the header when it was read.
-          const isArb = arb ? near(w, arb) : current.worked === undefined;
-          const isOrd = ord ? near(w, ord) : !isArb && current.ordinary === undefined;
-          if (isArb && current.worked === undefined) current.worked = hours;
-          else if (isOrd && current.ordinary === undefined) current.ordinary = hours;
+          const isArb = arb ? near(w, arb) : day.worked === undefined;
+          const isOrd = ord ? near(w, ord) : !isArb && day.ordinary === undefined;
+          if (isArb && day.worked === undefined) day.worked = hours;
+          else if (isOrd && day.ordinary === undefined) day.ordinary = hours;
         }
       }
       if (w.bbox.x0 >= notesFrom - width * 0.01 && /\p{L}{3,}/u.test(clean(w.text))) {
-        current.note = `${current.note ? `${current.note} ` : ''}${clean(w.text)}`;
+        day.note = `${day.note ? `${day.note} ` : ''}${clean(w.text)}`;
       }
     }
     if (cells.some((c) => c)) {
-      current.pairs.push({ in: cells[0], out: cells[2] });
-      current.rounded.push({ in: cells[1], out: cells[3] });
+      day.pairs.push({ in: cells[0], out: cells[2] });
+      day.rounded.push({ in: cells[1], out: cells[3] });
     }
+  };
+
+  const page: TimecardPage = { from, to, days: [], notesFrom };
+  const ruled = layout && byRules(words, width, layout, { from, to, dateEnd });
+  if (ruled) {
+    for (const { date, rows, top, bottom } of ruled) {
+      const day: TimecardDay = { date, pairs: [], rounded: [], top, bottom };
+      for (const row of rows) addRow(day, row);
+      page.days.push(day);
+    }
+    return page;
+  }
+
+  // Without the rules: rows by the height of their words.
+  let current: TimecardDay | null = null;
+  for (const line of all) {
+    const texts = line.map((w) => clean(w.text));
+    // The totals below the table end it.
+    if (texts.some((t) => /^totaler$/i.test(t))) break;
+    if (from && line.every((w) => w.bbox.y1 < (words.find((x) => x.text.includes(from!))?.bbox.y1 ?? 0) + 5)) continue;
+
+    const left = line.filter((w) => w.bbox.x0 < width * 0.3);
+    const { fullDate, weekday } = dayWords(left);
+    const dateLike = left.some((w) => /\d{2}-\d{2}$|^20\d{2}/.test(clean(w.text)));
+    const startsDay = !!fullDate || dateLike || !!weekday || line.some((w) => SCHEDULE.test(clean(w.text)) && w.bbox.x0 < width * 0.3);
+    const top = Math.min(...line.map((w) => w.bbox.y0));
+    const bottom = Math.max(...line.map((w) => w.bbox.y1));
+
+    if (startsDay) {
+      // Every date of the period has a row, in order: count on from the last one, and let a
+      // date that was read whole (within the period, after the last) or the weekday correct it.
+      const expected: string | undefined = current ? addDay(current.date) : from;
+      let date: string | undefined = expected;
+      if (fullDate && (!current || fullDate > current.date) && (!from || fullDate >= from) && (!to || fullDate <= to)) date = fullDate;
+      else if (weekday && expected && weekdayOf(expected) !== weekday) {
+        for (let k = 1; k <= 3; k++) {
+          if (weekdayOf(addDay(expected, k)) === weekday) {
+            date = addDay(expected, k);
+            break;
+          }
+        }
+      }
+      if (!date || (to && date > to)) continue;
+      current = { date, pairs: [], rounded: [], top, bottom };
+      page.days.push(current);
+    } else if (!current) {
+      continue;
+    }
+    current.bottom = Math.max(current.bottom, bottom);
+    addRow(current, line);
   }
   return page;
+}
+
+/** A full date ("2021-12-01", read whole and real) and a weekday ("Ons" → 3) among a row's words. */
+function dayWords(words: OcrWord[]): { fullDate?: string; weekday?: number } {
+  const m = words.map((w) => FULL_DATE.exec(clean(w.text))).find((x) => x);
+  const read = m ? `${m[1]}-${m[2]}-${m[3]}` : undefined;
+  return {
+    fullDate: isRealDate(read) ? read : undefined,
+    weekday: words.map((w) => WEEKDAYS.find(([re]) => re.test(clean(w.text)))?.[1]).find((d) => d),
+  };
+}
+
+/** The share of dark pixels in a box of the cleaned page. */
+function inkIn(img: GrayImage, x0: number, y0: number, x1: number, y1: number): number {
+  let ink = 0;
+  let all = 0;
+  for (let y = Math.max(0, Math.round(y0)); y < Math.min(img.height, Math.round(y1)); y++) {
+    for (let x = Math.max(0, Math.round(x0)); x < Math.min(img.width, Math.round(x1)); x++) {
+      all++;
+      if (img.data[y * img.width + x] === 0) ink++;
+    }
+  }
+  return all ? ink / all : 0;
+}
+
+/**
+ * The days by the table's printed rows: the rows between the header and the
+ * totals; a row with something in its date part (date, weekday, schedule –
+ * every date of the period has one) starts a day, the rows after it without
+ * are its further stamp pairs. The day-rows are then matched to the period's
+ * dates in order, the dates and weekdays that were read deciding where the
+ * count of rows doesn't come out even. Null when the rules weren't found.
+ */
+function byRules(
+  words: OcrWord[],
+  width: number,
+  { clean: img, rules }: TimecardLayout,
+  { from, to, dateEnd }: { from?: string; to?: string; dateEnd: number },
+): { date: string; rows: OcrWord[][]; top: number; bottom: number }[] | null {
+  if (rules.length < 6) return null;
+  const mid = width / 2;
+  const sorted = [...rules].sort((a, b) => ruleY(a, mid) - ruleY(b, mid));
+  // The table's body: the longest run of rules a row's height apart.
+  const fits = (gap: number) => gap > width * 0.006 && gap < width * 0.045;
+  let run: Rule[] = [];
+  for (let i = 0, start = 0; i < sorted.length; i++) {
+    const next = sorted[i + 1];
+    if (!next || !fits(ruleY(next, mid) - ruleY(sorted[i], mid))) {
+      if (i + 1 - start > run.length) run = sorted.slice(start, i + 1);
+      start = i + 1;
+    }
+  }
+  if (run.length < 6) return null;
+
+  // The words in each row (by their middle, between the row's rules where the word is).
+  const rows: OcrWord[][] = run.slice(0, -1).map(() => []);
+  for (const w of words) {
+    const x = centerX(w.bbox);
+    const y = centerY(w.bbox);
+    for (let i = 0; i < rows.length; i++) {
+      if (y >= ruleY(run[i], x) && y < ruleY(run[i + 1], x)) {
+        rows[i].push(w);
+        break;
+      }
+    }
+  }
+  for (const r of rows) r.sort((a, b) => a.bbox.x0 - b.bbox.x0);
+
+  // Below the header ("Datum Dag Schema …") and above the totals.
+  let first = 0;
+  let last = rows.length;
+  rows.forEach((r, i) => {
+    if (r.some((w) => /^(datum|schema)$/i.test(clean(w.text)))) first = i + 1;
+  });
+  const totals = rows.findIndex((r) => r.some((w) => /^totaler$/i.test(clean(w.text))));
+  if (totals >= first) last = totals;
+
+  // The table's left edge (the rules between a day's own rows don't reach across the date part).
+  const left = run.map((r) => r.x0).sort((a, b) => a - b)[Math.floor(run.length * 0.2)];
+  const dayRows: { index: number; fullDate?: string; weekday?: number }[] = [];
+  // The date part's middle: where its row is measured (a tilted page's rows aren't level).
+  const dateMid = (left + dateEnd) / 2;
+  for (let i = first; i < last; i++) {
+    const top = ruleY(run[i], dateMid);
+    const bottom = ruleY(run[i + 1], dateMid);
+    const pad = (bottom - top) * 0.2;
+    const inDatePart = rows[i].filter((w) => centerX(w.bbox) < dateEnd);
+    // Ink in the weekday and schedule columns (the date's left edge is where binder holes and shadows are).
+    const written = inDatePart.some((w) => clean(w.text).length >= 3) || inkIn(img, left + (dateEnd - left) * 0.4, top + pad, dateEnd, bottom - pad) > 0.03;
+    if (written) dayRows.push({ index: i, ...dayWords(inDatePart) });
+  }
+  if (!dayRows.length) return null;
+
+  // The period's dates: from Fr o m to T o m, or as the dates read say.
+  let start = from;
+  if (!start) {
+    const votes = new Map<string, number>();
+    dayRows.forEach((r, k) => r.fullDate && votes.set(addDay(r.fullDate, -k), (votes.get(addDay(r.fullDate, -k)) ?? 0) + 1));
+    start = [...votes].sort((a, b) => b[1] - a[1])[0]?.[0];
+  }
+  if (!start) return null;
+  const end = to && to >= start ? to : addDay(start, dayRows.length - 1);
+  const dates: string[] = [];
+  for (let d = start; d <= end && dates.length < 62; d = addDay(d)) dates.push(d);
+
+  const matched = alignDays(dayRows, dates);
+  const out: { date: string; rows: OcrWord[][]; top: number; bottom: number }[] = [];
+  dayRows.forEach((r, k) => {
+    const date = matched[k];
+    if (!date) return;
+    // Up to the next row matched to a date: a row matched to none is more of this day's.
+    let next = k + 1;
+    while (next < dayRows.length && !matched[next]) next++;
+    const until = dayRows[next]?.index ?? last;
+    out.push({
+      date,
+      rows: rows.slice(r.index, until),
+      top: ruleY(run[r.index], mid),
+      bottom: ruleY(run[until], mid),
+    });
+  });
+  return out;
+}
+
+/**
+ * Day-rows matched to dates, in order (as in aligning two sequences): each
+ * row to the next date, unless the dates and weekdays read say a row is
+ * extra or a date's row was missed. Undefined for a row that matches no date.
+ */
+export function alignDays(rows: { fullDate?: string; weekday?: number }[], dates: string[]): (string | undefined)[] {
+  const m = rows.length;
+  const n = dates.length;
+  const SKIP_ROW = -3;
+  const SKIP_DATE = -2;
+  const pair = (r: { fullDate?: string; weekday?: number }, d: string) =>
+    1 + (r.fullDate ? (r.fullDate === d ? 6 : -2) : 0) + (r.weekday ? (r.weekday === weekdayOf(d) ? 2 : -2) : 0);
+  const score: number[][] = Array.from({ length: m + 1 }, () => new Array<number>(n + 1).fill(0));
+  for (let i = 1; i <= m; i++) score[i][0] = i * SKIP_ROW;
+  for (let j = 1; j <= n; j++) score[0][j] = j * SKIP_DATE;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      score[i][j] = Math.max(score[i - 1][j - 1] + pair(rows[i - 1], dates[j - 1]), score[i - 1][j] + SKIP_ROW, score[i][j - 1] + SKIP_DATE);
+    }
+  }
+  const out: (string | undefined)[] = new Array(m).fill(undefined);
+  for (let i = m, j = n; i > 0 && j >= 0; ) {
+    if (j > 0 && score[i][j] === score[i - 1][j - 1] + pair(rows[i - 1], dates[j - 1])) {
+      out[i - 1] = dates[j - 1];
+      i--;
+      j--;
+    } else if (score[i][j] === score[i - 1][j] + SKIP_ROW) i--;
+    else j--;
+  }
+  return out;
 }
 
 const minutes = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));

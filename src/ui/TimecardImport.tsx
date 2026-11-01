@@ -19,6 +19,8 @@ interface FileState {
   status: 'reading' | 'done' | 'none' | 'failed';
   days?: number;
   month?: string;
+  /** The pages as read, to save (pictures from the scanner). */
+  images?: string[];
 }
 
 /** What the user decided for a day. */
@@ -47,6 +49,22 @@ export function TimecardImport() {
   const [files, setFiles] = useState<FileState[]>([]);
   const [months, setMonths] = useState<Map<string, TimecardDayReading[]>>(new Map());
   const [scanning, setScanning] = useState(false);
+  // Test mode (for troubleshooting the scanner): it saves what it saw to the phone.
+  const [test, setTest] = useState(() => {
+    try {
+      return localStorage.getItem('tcscan-test') === '1';
+    } catch {
+      return false;
+    }
+  });
+  const toggleTest = (on: boolean) => {
+    setTest(on);
+    try {
+      localStorage.setItem('tcscan-test', on ? '1' : '0');
+    } catch {
+      // Remembered only for now.
+    }
+  };
 
   /** Pages read (from a file or the scanner) added to their months; returns the month and days read. */
   const addReadings = useCallback((readings: TimecardReading[]) => {
@@ -63,7 +81,16 @@ export function TimecardImport() {
     });
     return { month, days: days.filter((d) => d.status !== 'empty').length };
   }, []);
-  const onScanned = useCallback((page: ScannedPage) => void addReadings([page.reading]), [addReadings]);
+  const onScanned = useCallback(
+    (page: ScannedPage) => {
+      const read = addReadings([page.reading]);
+      setFiles((f) => [
+        ...f,
+        { name: t('timecard.scannedPage', { n: f.filter((x) => x.images).length + 1 }), status: read ? 'done' : 'none', ...read, images: page.reading.pageImage ? [page.reading.pageImage] : [] },
+      ]);
+    },
+    [addReadings, t],
+  );
 
   const add = async (list: FileList | null) => {
     if (!list?.length) return;
@@ -107,6 +134,12 @@ export function TimecardImport() {
         <input ref={photoInput} type="file" accept="image/*" capture="environment" hidden onChange={(e) => void add(e.target.files)} />
         <input ref={fileInput} type="file" accept="image/*,application/pdf,.pdf" multiple hidden onChange={(e) => void add(e.target.files)} />
         <p className="muted small">{t('timecard.privacy')}</p>
+        <label className="checkbox small">
+          <input type="checkbox" checked={test} onChange={(e) => toggleTest(e.target.checked)} />
+          <span>
+            {t('timecard.testMode')} <span className="muted">{t('timecard.testModeHelp')}</span>
+          </span>
+        </label>
         {files.length > 0 && (
           <ul className="timecard-files">
             {files.map((f, i) => (
@@ -116,12 +149,17 @@ export function TimecardImport() {
                 {f.status === 'done' && <span className="ok">✓ {t('timecard.read', { n: f.days ?? 0 })}</span>}
                 {f.status === 'none' && <span className="warn-text">{t('timecard.noTable')}</span>}
                 {f.status === 'failed' && <span className="warn-text">{t('timecard.failed')}</span>}
+                {f.images?.map((src, j) => (
+                  <a key={j} className="small" href={src} download={`tidkort-${f.month ?? 'sida'}-${j + 1}.jpg`}>
+                    {t('timecard.saveImage')}
+                  </a>
+                ))}
               </li>
             ))}
           </ul>
         )}
       </Card>
-      {scanning && <TimecardScanner onPage={onScanned} onClose={() => setScanning(false)} />}
+      {scanning && <TimecardScanner test={test} onPage={onScanned} onClose={() => setScanning(false)} />}
       {[...months.entries()].map(([month, days]) => (
         <MonthReview key={month} month={month} days={days} />
       ))}
@@ -196,6 +234,7 @@ function MonthReview({ month, days }: { month: string; days: TimecardDayReading[
                   {d.status === 'check' && <span className="warn-text">!</span>}
                 </span>
               </div>
+              {d.rowImage && <img className="timecard-row" src={d.rowImage} alt="" />}
               {d.worked !== undefined && <div className="muted small">{t('timecard.worked', { hours: fmt.number(d.worked) })}</div>}
               {d.status === 'fixed' && d.corrected.length > 0 && <div className="muted small">{t('timecard.fixed')}</div>}
               {d.status === 'check' && (

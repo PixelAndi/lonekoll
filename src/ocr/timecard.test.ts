@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { OcrWord } from './parse.ts';
-import { asTime, checkDay, cleanTimecard, noteInk, parseTimecard, workedHours, type TimecardDay } from './timecard.ts';
+import { alignDays, asTime, checkDay, cleanTimecard, noteInk, parseTimecard, rowHeight, workedHours, type Rule, type TimecardDay } from './timecard.ts';
 
 // A made-up timecard as the OCR reads it: words with their boxes, on a page
 // 1500 px wide, slightly tilted (rows rise 1 px per 100 px across).
@@ -124,5 +124,69 @@ describe('notes written by hand', () => {
     ] });
     expect(ink.get('a')!).toBeGreaterThan(0.02);
     expect(ink.get('b')).toBe(0);
+  });
+});
+
+describe('rows by the table’s printed rules', () => {
+  // A made-up card: rules 30 px apart, a header row, then 1–4 March 2026 (Sun 1st),
+  // the 2nd with two stamp pairs. The words of a row aren't level (a blurred photo):
+  // the date sits higher than the times, as OCR boxes often do.
+  const w = 1500;
+  const rules: Rule[] = Array.from({ length: 8 }, (_, i) => ({ a: 400 + i * 30, b: 0.002, x0: 100, x1: 1400 }));
+  const at = (text: string, x: number, row: number, dy = 0): OcrWord => {
+    const y = 400 + row * 30 + 15 + 0.002 * x + dy;
+    return { text, confidence: 90, bbox: { x0: x, y0: y - 6, x1: x + text.length * 10, y1: y + 6 } };
+  };
+  const words: OcrWord[] = [
+    at('Fr', 1200, -4), at('o', 1225, -4), at('m:', 1240, -4), at('2026-03-01', 1280, -4),
+    at('T', 1200, -3), at('o', 1225, -3), at('m:', 1240, -3), at('2026-03-04', 1280, -3),
+    at('Datum', 115, 0), at('Arb', 990, 0), at('Ord', 1110, 0),
+    at('2O26-O3-O1', 115, 1), at('Sön', 245, 1), at('08:00-08:00', 315, 1),
+    at('2026-03-02', 115, 2, -9), at('Mån', 245, 2, -9), at('08:00-08:00', 315, 2, -9),
+    at('06:58', 467, 2, 5), at('06:58', 530, 2, 5), at('11:30', 704, 2, 5), at('11:30', 767, 2, 5), at('8.05', 994, 2), at('8.05', 1113, 2),
+    at('12:00', 467, 3), at('12:00', 530, 3), at('15:31', 704, 3), at('15:31', 767, 3),
+    // The 3rd: date unreadable, a weekday and schedule there all the same.
+    at('~~', 115, 4), at('Tis', 245, 4), at('08:00-08:00', 315, 4),
+    at('07:00', 467, 4), at('07:00', 530, 4), at('11:00', 704, 4), at('11:00', 767, 4), at('4.00', 994, 4),
+    at('2026-03-04', 115, 5), at('Ons', 245, 5), at('08:00-08:00', 315, 5),
+    at('07:00', 467, 5), at('07:00', 530, 5), at('09:00', 704, 5), at('09:00', 767, 5), at('2.00', 994, 5),
+    // The totals box below the table has an "Arb Tid" too, far left.
+    at('Arb', 110, 12), at('Tid', 150, 12),
+  ];
+  const clean = { width: w, height: 900, data: new Uint8Array(w * 900).fill(255) };
+
+  it('puts each row’s words together by its rules, and every day on its date', () => {
+    const page = parseTimecard(words, w, { clean, rules });
+    expect(page.days.map((d) => d.date)).toEqual(['2026-03-01', '2026-03-02', '2026-03-03', '2026-03-04']);
+    expect(page.days[1].pairs).toEqual([{ in: '06:58', out: '11:30' }, { in: '12:00', out: '15:31' }]);
+    expect(page.days[1].worked).toBe(8.05);
+    expect(page.days[2].pairs).toEqual([{ in: '07:00', out: '11:00' }]);
+    expect(page.days[3].worked).toBe(2);
+    expect(page.days.map((d) => checkDay(d).status)).toEqual(['empty', 'ok', 'ok', 'ok']);
+  });
+
+  it('knows the row height', () => {
+    expect(rowHeight(rules, w)).toBeCloseTo(30);
+  });
+});
+
+describe('matching day-rows to dates', () => {
+  const dates = ['2026-03-01', '2026-03-02', '2026-03-03', '2026-03-04', '2026-03-05'];
+  it('takes them in order when the count comes out even', () => {
+    expect(alignDays([{}, {}, {}, {}, {}], dates)).toEqual(dates);
+  });
+  it('leaves out a row that isn’t a day, by the dates and weekdays read', () => {
+    // An extra row before the 3rd (Tue): the rows after it are read as Tue, Wed, Thu.
+    expect(alignDays([{ weekday: 7 }, { weekday: 1 }, {}, { weekday: 2 }, { weekday: 3 }, { fullDate: '2026-03-05' }], dates)).toEqual([
+      '2026-03-01',
+      '2026-03-02',
+      undefined,
+      '2026-03-03',
+      '2026-03-04',
+      '2026-03-05',
+    ]);
+  });
+  it('skips a date whose row was missed', () => {
+    expect(alignDays([{ weekday: 7 }, { weekday: 1 }, { weekday: 3 }, { weekday: 4 }], dates)).toEqual(['2026-03-01', '2026-03-02', '2026-03-04', '2026-03-05']);
   });
 });

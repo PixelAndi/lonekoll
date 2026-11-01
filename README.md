@@ -98,15 +98,26 @@ report you can go through with your employer.
   button reads the time clock's printout from the employer: scanned live
   (the page in a paper-shaped frame is captured at full resolution when steady
   and sharp, page after page), photos or PDFs,
-  several pages and months at once. The table's lines are removed before the
-  text is read at about 2400 px across, every date of the period is counted
-  in order (a misread date is put right by the weekday), and each day is
-  checked against the card's own Arb Tid. A misread time is corrected from
+  several pages and months at once. The table's printed rules are found
+  first (fitted one by one, so a tilted or slightly angled photo still works)
+  and say where each row is; the lines are then removed before the text is
+  read at about 2400 px across. A row with something in its weekday and
+  schedule columns starts a day, the rows after it are its further stamp
+  pairs, and the day-rows are matched to the period's dates in order, the
+  dates and weekdays read deciding where the count doesn't come out even
+  (binder holes and shadows at the edge are not taken for a date). A scanned
+  picture whose rows are too small to read reliably (under 15 px) is not
+  used: the scanner asks to go closer. Each day is shown with a picture of
+  its rows from the card, and checked against the card's own Arb Tid. A misread time is corrected from
   the card's second reading (Avr In / Avr Ut), a common digit mix-up or the
   total – only when exactly one correction makes the day add up; otherwise
   the day is put to the user. Days the app already has with other stamps,
   and ink in the Frånvaro box (handwritten sick or vacation notes, shown as a
   picture), are asked about before saving. The card itself is not stored.
+  A test mode (off by default, for troubleshooting the scanner) saves every
+  picture the scanner takes, what it read and a video of the camera to the
+  phone's Downloads – nothing is sent anywhere; the user can choose to share
+  the files.
 - **Set up from a pay slip.** For a new user's first pay slip (or while no
   wage is set), the slip's page suggests settings, each with the line it
   comes from: the hourly wage or monthly salary, the overtime limit per shift
