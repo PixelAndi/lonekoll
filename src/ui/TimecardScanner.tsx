@@ -132,12 +132,10 @@ export function TimecardScanner({ onPage, onClose }: { onPage: (page: ScannedPag
         {error && <p className="scanner-status tcscan-error">{t('tcscan.noCamera')}</p>}
       </div>
       <div className="scanner-status">
-        <div className={`scanner-pill ${phase.kind === 'reading' ? 'scanner-pill-ok' : phase.kind === 'failed' ? 'scanner-pill-warn' : ''}`}>{status}</div>
-        {pages.length > 0 && (
-          <div className="scanner-result">
-            {t('tcscan.pages', { n: pages.length, days: pages.reduce((s, p) => s + p.days, 0) })}
-          </div>
-        )}
+        <div className={`scanner-pill ${phase.kind === 'reading' ? 'scanner-pill-ok' : phase.kind === 'failed' ? 'scanner-pill-warn' : ''}`}>
+          {status}
+          {pages.length > 0 && <div className="tcscan-count">{t('tcscan.pages', { n: pages.length, days: pages.reduce((s, p) => s + p.days, 0) })}</div>}
+        </div>
       </div>
       <div className="scanner-controls">
         <button type="button" className="button" onClick={onClose}>

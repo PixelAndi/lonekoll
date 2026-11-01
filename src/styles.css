@@ -2480,3 +2480,9 @@ input[type='checkbox'] {
   inset: auto 16px 16px;
   color: #fff;
 }
+
+.tcscan-count {
+  font-size: 0.85em;
+  font-weight: 600;
+  opacity: 0.85;
+}

@@ -95,7 +95,9 @@ report you can go through with your employer.
   user's app language, or both in one file (Swedish first), with the summary,
   explanations, assumptions, the day log and optionally the photos.
 - **Printed timecards (tidkort).** A small "Tidkort" button beside the scan
-  button reads the time clock's printout from the employer: photos or PDFs,
+  button reads the time clock's printout from the employer: scanned live
+  (the page in a paper-shaped frame is captured at full resolution when steady
+  and sharp, page after page), photos or PDFs,
   several pages and months at once. The table's lines are removed before the
   text is read at about 2400 px across, every date of the period is counted
   in order (a misread date is put right by the weekday), and each day is
