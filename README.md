@@ -309,7 +309,8 @@ Under Settings › *Var dina data sparas* the user picks *Bara på telefonen*
 | Working-time account | Hours taken and, if the hourly payout rate is entered, the amount | Bilaga C |
 | With a schedule | Overtime past the scheduled length (optionally from a minimum per shift); a shift on a day off is overtime; work on a scheduled holiday is overtime plus holiday pay | Avtalet §3.3, §5.1 |
 | Förskjuten tid | 37.07 kr/h (from 1 Apr 2026) for ordinary time outside the schedule when the employer moved the shift (marked on the day) | Bageri §3 |
-| Skiftformstillägg | 5.3 % (two-shift, discontinuous three-shift, permanent night) or 11.1 % (continuous three-shift) of the hourly wage, not on overtime | Avtalet §4.4 |
+| Skiftformstillägg | 5.3 % (two-shift, discontinuous three-shift, permanent night) or 11.1 % (continuous three-shift) of the hourly wage, not on overtime; from a set date. Permanent night work (≥ 3 h between 00 and 05 as a rule) is spotted in the stamps and asked about; a slip missing the supplement is an agreement finding | Avtalet §4.4 |
+| Ordinary week for shift/night work | 38 h (two-shift, discontinuous three-shift, permanent night), 36 h (continuous three-shift): kept whole by skiftformstillägg (hourly) or the unchanged monthly salary (Bilaga F §4) – explained in Help | Avtalet §3.1.1 |
 | Tax | Table = municipal + regional tax + burial fee (+ church fee for members), 32.50 → 32 and 32.51 → 33; monthly table, column 1 (column 3 from 66) | Skatteverket |
 
 Amounts change every 1 April; the agreement years in the app are in

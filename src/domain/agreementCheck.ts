@@ -1,7 +1,7 @@
-import { AGREEMENT_PERIODS, agreementFor, payShare, type ObLevel } from './agreement.ts';
+import { AGREEMENT_PERIODS, agreementFor, payShare, RULES, type ObLevel } from './agreement.ts';
 import { ageOn, minimumWageOn, monthlyPayOn, type Settings } from './model.ts';
 import type { PaySlip, SlipLine } from './payslip.ts';
-import { addDays, type LocalDate } from './time.ts';
+import { addDays, daysBetween, type LocalDate } from './time.ts';
 
 // The pay slips checked against the collective agreement on their own – no
 // clock data needed, so every month with a slip is checked: the hourly wage
@@ -11,7 +11,7 @@ import { addDays, type LocalDate } from './time.ts';
 // agreement and the law set. Each finding says what was paid, what is due,
 // on which slips, and roughly how much it comes to.
 
-export type FindingRule = 'minimum' | 'lowestRaise' | 'ob' | 'overtime' | 'sickPay' | 'holidayPay';
+export type FindingRule = 'minimum' | 'lowestRaise' | 'ob' | 'overtime' | 'sickPay' | 'holidayPay' | 'shiftForm';
 
 /** Why a wage is below the minimum: the step after a year's employment not given, a 1 April revision not applied, or neither. */
 export type MinimumCause = 'oneYear' | 'revision' | 'below';
@@ -141,6 +141,39 @@ function pricesOnSlip(slip: PaySlip, settings: Settings): Seen[] {
 }
 
 /**
+ * Skiftformstillägg (§4.4) for shift or permanent night work, set in the settings (from the date
+ * set): the slip's ordinary hours × the percentage of its hourly wage, against what it paid for it.
+ * Hours paid as overtime ("Timlön vid övertid") get none. Not for a monthly salary (Bilaga F §4).
+ */
+function shiftFormOnSlip(slip: PaySlip, settings: Settings): Seen[] {
+  const pct = RULES.shiftFormPercent[settings.shiftForm] ?? 0;
+  const start = slip.periodStart!;
+  const end = slip.periodEnd ?? monthEnd(start);
+  const from = settings.shiftFormFrom;
+  if (!pct || (from && end < from) || monthlyPayOn(settings, end) !== null) return [];
+  const rate = slipHourlyRate(slip);
+  if (!rate) return [];
+  let hours = 0;
+  let estimate = false;
+  for (const l of slip.lines) {
+    if (l.category !== 'wage' || !l.quantity || l.quantity <= 0 || !HOURS.test(l.unit ?? '') || RETRO.test(l.text) || /övertid/i.test(l.text)) continue;
+    const [a, b] = lineDates(l, slip);
+    if (from && b < from) continue;
+    if (from && a < from) {
+      // A summed line that starts before the date: its share of the days after it.
+      hours += l.quantity * ((daysBetween(from, b) + 1) / (daysBetween(a, b) + 1));
+      estimate = true;
+    } else hours += l.quantity;
+  }
+  if (hours <= 0) return [];
+  const due = round2(rate * pct);
+  const paidAmount = slip.lines.filter((l) => l.category === 'shiftForm').reduce((sum, l) => sum + (l.amount ?? 0), 0);
+  const owed = round2(hours * due - paidAmount);
+  if (owed <= Math.max(1, hours * due * 0.01)) return [];
+  return [{ rule: 'shiftForm', level: Math.round(pct * 1000) / 10, month: start, from: from && from > start ? from : start, paid: round2(paidAmount / hours), due, hours: round2(hours), amount: owed, estimate }];
+}
+
+/**
  * The lowest raise (Bilaga J) at each revision, for a wage above the minimum: the rate on the last
  * slip before the revision against the rates after it. (At the minimum, the minimum's own rise
  * applies, and a shortfall shows as below the minimum.)
@@ -172,7 +205,7 @@ function lowestRaises(slips: PaySlip[], settings: Settings): Seen[] {
 /** Every finding on each slip, before slips in a row are joined. */
 function allSeen(slips: PaySlip[], settings: Settings): Seen[] {
   const dated = slips.filter((s) => s.periodStart);
-  return [...dated.flatMap((s) => [...minimumOnSlip(s, settings), ...pricesOnSlip(s, settings)]), ...lowestRaises(dated, settings)];
+  return [...dated.flatMap((s) => [...minimumOnSlip(s, settings), ...pricesOnSlip(s, settings), ...shiftFormOnSlip(s, settings)]), ...lowestRaises(dated, settings)];
 }
 
 /**
@@ -216,7 +249,7 @@ export function checkAgainstAgreement(slips: PaySlip[], settings: Settings): Agr
 /** The findings on one slip (the lowest raise needs the slips around it). */
 export function slipFindings(slip: PaySlip, all: PaySlip[], settings: Settings): AgreementFinding[] {
   if (!slip.periodStart) return [];
-  const own = [...minimumOnSlip(slip, settings), ...pricesOnSlip(slip, settings)];
+  const own = [...minimumOnSlip(slip, settings), ...pricesOnSlip(slip, settings), ...shiftFormOnSlip(slip, settings)];
   const around = all.includes(slip) ? all : [...all, slip];
   const raises = lowestRaises(around.filter((s) => s.periodStart), settings).filter((s) => s.month === slip.periodStart);
   return [...own, ...raises].map(({ month, ...rest }) => ({ ...rest, months: [month], byMonth: { [month]: rest.amount }, corrections: correctionsAfter(all, month, rest.amount) }));

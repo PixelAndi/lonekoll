@@ -15,7 +15,7 @@ type GuideCategory = { title: TextKey; guides: HelpSection[] };
 
 const CATEGORIES: GuideCategory[] = [
   { title: 'help.cat.clock', guides: ['forgot', 'scan'] },
-  { title: 'help.cat.pay', guides: ['slips', 'komp', 'vacation'] },
+  { title: 'help.cat.pay', guides: ['slips', 'komp', 'vacation', 'night'] },
   { title: 'help.cat.app', guides: ['install', 'offline', 'privacy'] },
 ];
 
@@ -25,6 +25,7 @@ const TITLES: Record<HelpSection, TextKey> = {
   slips: 'guide.slips.title',
   komp: 'guide.komp.title',
   vacation: 'guide.vacation.title',
+  night: 'guide.night.title',
   offline: 'offline.title',
   install: 'install.title',
   privacy: 'guide.privacy.title',
@@ -81,6 +82,8 @@ function Guide({ section }: { section: HelpSection }) {
       return <StepsGuide section="scan" tip="guide.scan.tip" />;
     case 'slips':
       return <StepsGuide section="slips" tip="slips.privacy" />;
+    case 'night':
+      return <NightGuide />;
     default:
       return <StepsGuide section={section} />;
   }
@@ -103,6 +106,36 @@ function StepsGuide({ section, tip }: { section: 'scan' | 'slips' | 'komp' | 'va
         ))}
       </ol>
       {tip && <p className="small">{t(tip)}</p>}
+    </Card>
+  );
+}
+
+/** Shift and night work: the shorter week, and how it is paid. */
+function NightGuide() {
+  const { t } = useApp();
+  return (
+    <Card title={t('guide.night.title')}>
+      <p>{t('guide.night.summary')}</p>
+      <table className="table small">
+        <tbody>
+          {(['day', 'twoShift', 'threeShift', 'continuous', 'night'] as const).map((k) => (
+            <tr key={k}>
+              <td>{t(`guide.night.kind.${k}`)}</td>
+              <td className="num">{t(`guide.night.hours.${k}`)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p>
+        <Cited text={t('guide.night.1')} />
+      </p>
+      <p>
+        <Cited text={t('guide.night.2')} />
+      </p>
+      <p>
+        <Cited text={t('guide.night.3')} />
+      </p>
+      <p className="small">{t('guide.night.4')}</p>
     </Card>
   );
 }

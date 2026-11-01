@@ -109,6 +109,11 @@ in Playwright by routing `https://accounts.google.com/gsi/client` and
   estimate); unsure/unanswered → the report's wage point is a question
   (`wage-agreement`) and a "Lönen" section explains it. Answers in
   `settings.wageAnswers` (key: pattern's first day + wage).
+- `src/domain/night.ts` – permanent night work in the stamps (≥ 3 h between
+  00 and 05 in three of four shifts, latest stretch, ≥ 8 shifts); asked once
+  (`NightWork.tsx`, `settings.nightAsked`); yes sets `shiftForm` from the
+  stretch's first night (`settings.shiftFormFrom`, used by calc and by the
+  agreement check's `shiftForm` rule). Help section `night` (38/36 h weeks).
 - `src/domain/owed.ts` + `src/ui/Owed.tsx` – the rough owed estimate: card at
   the top of the pay slip page, one line on the Days tab, only when there is
   something. "Troligen för lite betalt" = agreement findings only; "Att utreda"

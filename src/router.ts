@@ -16,7 +16,7 @@ export type Route =
   | { name: 'missing' };
 
 /** The guides under Help, one page each. */
-export const HELP_SECTIONS = ['forgot', 'scan', 'slips', 'komp', 'vacation', 'offline', 'install', 'privacy'] as const;
+export const HELP_SECTIONS = ['forgot', 'scan', 'slips', 'komp', 'vacation', 'night', 'offline', 'install', 'privacy'] as const;
 export type HelpSection = (typeof HELP_SECTIONS)[number];
 
 export function parseHash(hash: string): Route {

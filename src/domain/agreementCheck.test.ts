@@ -108,3 +108,20 @@ describe('around the findings', () => {
     expect(uncheckedMonths(slips, settings('2025-05-10'))).toEqual({ missing: ['2025-05-01', '2025-07-01'], unread: ['2025-08-01'] });
   });
 });
+
+describe('skiftformstillägg', () => {
+  const night: Settings = { ...settings('2020-01-01'), shiftForm: 'two-shift', shiftFormFrom: '2025-06-16' };
+
+  it('finds it missing on the hours from the date it applies, overtime hours left out', () => {
+    const slips = [slip('2025-06', [line('wage', 150, 200), line('wage', 10, 200, 'Timlön vid övertid')])];
+    const [f] = checkAgainstAgreement(slips, night);
+    // 15 of June's 30 days: half the 150 ordinary hours.
+    expect(f).toMatchObject({ rule: 'shiftForm', level: 5.3, due: 10.6, paid: 0, hours: 75, amount: 795, estimate: true, from: '2025-06-16' });
+  });
+
+  it('accepts it paid in full, and asks nothing without the setting', () => {
+    const paid = slip('2025-07', [line('wage', 150, 200), line('shiftForm', 150, 10.6, 'Skiftformstillägg')]);
+    expect(checkAgainstAgreement([paid], night)).toEqual([]);
+    expect(checkAgainstAgreement([slip('2025-07', [line('wage', 150, 200)])], settings('2020-01-01'))).toEqual([]);
+  });
+});

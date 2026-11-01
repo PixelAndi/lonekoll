@@ -3,6 +3,7 @@ import { saveSettings } from '../../db.ts';
 import type { ShiftForm, Supplements } from '../../domain/model.ts';
 import { Card, Field } from '../common.tsx';
 import { Cited } from '../Cited.tsx';
+import { href } from '../../router.ts';
 import { LazyInput, numberOrUndefined } from './inputs.tsx';
 
 const KEYS: (keyof Supplements)[] = ['ob', 'overtime', 'shiftedTime', 'holidayPay'];
@@ -33,6 +34,14 @@ export function SupplementSettings() {
           ))}
         </select>
       </Field>
+      {settings.shiftForm !== 'none' && (
+        <Field label={t('settings.shiftFormFrom')} hint={t('settings.shiftFormFromHint')}>
+          <input type="date" value={settings.shiftFormFrom ?? ''} onChange={(e) => void saveSettings({ shiftFormFrom: e.target.value || null })} />
+        </Field>
+      )}
+      <p className="small">
+        <a href={href({ name: 'help', section: 'night' })}>{t('night.more')}</a>
+      </p>
       <Field label={t('settings.minOvertime')} hint={t('settings.minOvertimeHint')}>
         <LazyInput
           type="number"

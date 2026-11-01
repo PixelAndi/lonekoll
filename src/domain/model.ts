@@ -150,6 +150,10 @@ export interface Settings {
   schedule: Schedule;
   supplements: Supplements;
   shiftForm: ShiftForm;
+  /** The shift form applies from this date (empty: always). */
+  shiftFormFrom: LocalDate | null;
+  /** The user has answered the question about permanent night work found in the stamps. */
+  nightAsked: boolean;
   tax: TaxSettings;
   /** Pay slip codes the user has re-classified. */
   codeOverrides: Record<string, string>;
@@ -218,6 +222,8 @@ export const DEFAULT_SETTINGS: Settings = {
   schedule: { startMonday: '2026-01-05', weeks: [[null, null, null, null, null, null, null]] },
   supplements: { ob: true, overtime: true, shiftedTime: true, holidayPay: true },
   shiftForm: 'none',
+  shiftFormFrom: null,
+  nightAsked: false,
   tax: { mode: 'municipality', churchMember: false },
   overtimeAs: 'pay',
   kompMode: 'hour',

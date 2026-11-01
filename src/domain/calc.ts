@@ -212,7 +212,7 @@ function classify(intervals: { start: number; end: number }[], settings: Setting
         shifted++;
       }
       // §4.4: not paid for hours that got overtime pay, nor with a monthly salary (Bilaga F §4).
-      if (shiftFormPercent > 0 && !monthly && (ordinary || !settings.supplements.overtime)) {
+      if (shiftFormPercent > 0 && !monthly && (ordinary || !settings.supplements.overtime) && !(settings.shiftFormFrom && date < settings.shiftFormFrom)) {
         const shiftRate = round2(hourly * shiftFormPercent);
         addToBucket(list, 'shiftForm', shiftRate);
         earnings += shiftRate / 60;
