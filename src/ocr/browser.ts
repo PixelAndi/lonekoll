@@ -1,7 +1,7 @@
 import type { RGBAImage, TableLocation } from './image.ts';
 import type { ClockReading, FoundTable } from './pipeline.ts';
 import type { TesseractEngine } from './tesseract.ts';
-import type { CheckedDay } from './timecard.ts';
+import type { CheckedDay, TimecardHint } from './timecard.ts';
 
 // Browser side of photo reading: decode the photo, keep a small JPEG copy as
 // evidence, and run the OCR pipeline with Tesseract served from ./ocr/.
@@ -115,10 +115,12 @@ export interface TimecardReading {
   pageImage?: string;
   /** How tall a printed row is in the picture as taken (pixels): too small, and digits are misread. */
   rowPixels?: number;
+  /** When the card was printed (with the period, which card this is). */
+  printed?: string;
 }
 
 /** A printed timecard page (photo or rendered PDF page): every day's stamps, checked, and its notes. */
-export async function readTimecardImage(source: HTMLCanvasElement): Promise<TimecardReading> {
+export async function readTimecardImage(source: HTMLCanvasElement, hint?: TimecardHint): Promise<TimecardReading> {
   const [{ prepareTimecard, parseTimecard, rowHeight, checkDay, noteInk, hasNote }, ocr] = await Promise.all([import('./timecard.ts'), getEngine()]);
   // Read at about 2400 px across: the card's small print is then large enough to read reliably.
   const canvas = resized(source, TIMECARD_WIDTH);
@@ -128,7 +130,7 @@ export async function readTimecardImage(source: HTMLCanvasElement): Promise<Time
   for (let i = 0; i < gray.length; i++) gray[i] = Math.round(0.299 * rgba[i * 4] + 0.587 * rgba[i * 4 + 1] + 0.114 * rgba[i * 4 + 2]);
   const { clean, rules } = prepareTimecard({ width, height, data: gray });
   const words = await ocr.recognize(clean, 'find');
-  const page = parseTimecard(words, width, { clean, rules });
+  const page = parseTimecard(words, width, { clean, rules }, hint);
   const ink = noteInk(clean, page);
   const days = page.days.map((day) => {
     const checked: TimecardDayReading = checkDay(day);
@@ -138,7 +140,7 @@ export async function readTimecardImage(source: HTMLCanvasElement): Promise<Time
     return checked;
   });
   const row = rowHeight(rules, width);
-  return { from: page.from, to: page.to, days, pageImage: source.toDataURL('image/jpeg', 0.9), rowPixels: row === null ? undefined : (row * source.width) / width };
+  return { from: page.from, to: page.to, printed: page.printed, days, pageImage: source.toDataURL('image/jpeg', 0.9), rowPixels: row === null ? undefined : (row * source.width) / width };
 }
 
 const TIMECARD_WIDTH = 2400;

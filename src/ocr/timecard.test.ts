@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { OcrWord } from './parse.ts';
-import { alignDays, asTime, checkDay, cleanTimecard, noteInk, parseTimecard, rowHeight, twoReadings, workedHours, type Rule, type TimecardDay } from './timecard.ts';
+import { alignDays, asTime, checkDay, cleanTimecard, noteInk, parseTimecard, rowHeight, combineReadings, workedHours, type CheckedDay, type Rule, type TimecardDay } from './timecard.ts';
 
 // A made-up timecard as the OCR reads it: words with their boxes, on a page
 // 1500 px wide, slightly tilted (rows rise 1 px per 100 px across).
@@ -196,20 +196,72 @@ describe('matching day-rows to dates', () => {
   });
 });
 
+const combine2 = <T extends Parameters<typeof combineReadings>[0][number]>(a: T, b: T) => combineReadings([a, b]);
+
 describe('a page read twice', () => {
   const day = (status: 'ok' | 'fixed' | 'check' | 'empty', out: string) => ({ date: '2026-03-02', status, corrected: [], pairs: status === 'empty' ? [] : [{ in: '07:00', out }] });
   it('confirms a day where both readings agree, even when a time was corrected', () => {
-    expect(twoReadings(day('fixed', '15:00'), day('fixed', '15:00')).status).toBe('ok');
+    expect(combine2(day('fixed', '15:00'), day('fixed', '15:00')).status).toBe('ok');
   });
   it('takes the reading that adds up without correcting when they differ', () => {
-    expect(twoReadings(day('fixed', '17:00'), day('ok', '15:00')).pairs[0].out).toBe('15:00');
+    expect(combine2(day('fixed', '17:00'), day('ok', '15:00')).pairs[0].out).toBe('15:00');
   });
   it('asks the user when they differ and neither is certain', () => {
-    expect(twoReadings(day('fixed', '17:00'), day('fixed', '15:00')).status).toBe('check');
-    expect(twoReadings(day('ok', '17:00'), day('ok', '15:00')).status).toBe('check');
+    expect(combine2(day('fixed', '17:00'), day('fixed', '15:00')).status).toBe('check');
+    expect(combine2(day('ok', '17:00'), day('ok', '15:00')).status).toBe('check');
   });
   it('keeps a reading over an empty one', () => {
-    expect(twoReadings(day('empty', ''), day('ok', '15:00')).status).toBe('ok');
-    expect(twoReadings(day('ok', '15:00'), day('empty', '')).status).toBe('ok');
+    expect(combine2(day('empty', ''), day('ok', '15:00')).status).toBe('ok');
+    expect(combine2(day('ok', '15:00'), day('empty', '')).status).toBe('ok');
+  });
+});
+
+describe('a day read several times', () => {
+  const day = (status: 'ok' | 'fixed' | 'check', out: string): CheckedDay => ({ date: '2026-03-02', status, corrected: [], pairs: [{ in: '07:00', out }] });
+  it('goes with the majority, and says how many agreed', () => {
+    const d = combineReadings([day('fixed', '15:00'), day('check', '17:00'), day('fixed', '15:00')]);
+    expect(d.pairs[0].out).toBe('15:00');
+    expect(d.status).toBe('ok');
+    expect([d.reads, d.agree]).toEqual([3, 2]);
+  });
+  it('doesn’t let corrected readings outvote one that adds up as read', () => {
+    expect(combineReadings([day('fixed', '15:00'), day('fixed', '15:00'), day('ok', '17:00')]).status).toBe('check');
+  });
+  it('keeps a single reading as it was', () => {
+    expect(combineReadings([day('fixed', '15:00')]).status).toBe('fixed');
+  });
+});
+
+describe('a close-up of part of the card', () => {
+  // Rules 30 px apart; rows for 10–13 March 2026 (Tue–Fri), no period or header in view.
+  const w = 1500;
+  const rules: Rule[] = Array.from({ length: 5 }, (_, i) => ({ a: 100 + i * 30, b: 0, x0: 50, x1: 1450 }));
+  const at = (text: string, x: number, row: number): OcrWord => ({ text, confidence: 90, bbox: { x0: x, y0: 100 + row * 30 + 9, x1: x + text.length * 10, y1: 100 + row * 30 + 21 } });
+  const words = [
+    at('2026-03-10', 80, 0), at('Tis', 230, 0), at('08:00-08:00', 300, 0), at('07:00', 560, 0), at('07:00', 680, 0), at('15:00', 900, 0), at('15:00', 1020, 0), at('8.00', 1300, 0),
+    at('2026-03-11', 80, 1), at('Ons', 230, 1), at('08:00-08:00', 300, 1), at('06:00', 560, 1), at('06:00', 680, 1), at('12:00', 900, 1), at('12:00', 1020, 1), at('6.00', 1300, 1),
+    at('2026-O3-1Z', 80, 2), at('Tor', 230, 2), at('08:00-08:00', 300, 2),
+    at('2026-03-13', 80, 3), at('Fre', 230, 3), at('08:00-08:00', 300, 3), at('07:00', 560, 3), at('07:00', 680, 3), at('11:00', 900, 3), at('11:00', 1020, 3), at('4.00', 1300, 3),
+  ];
+  const clean = { width: w, height: 400, data: new Uint8Array(w * 400).fill(255) };
+  const march = (near: { from: string; to: string }) => ({ from: '2026-03-01', to: '2026-03-31', near });
+
+  it('matches its rows to the dates read on them, without a header', () => {
+    const page = parseTimecard(words, w, { clean, rules }, march({ from: '2026-03-06', to: '2026-03-20' }));
+    expect(page.days.map((d) => d.date)).toEqual(['2026-03-10', '2026-03-11', '2026-03-12', '2026-03-13']);
+    // Arb Tid is the last column in view: read, not taken for a note.
+    expect(page.days.map((d) => checkDay(d).status)).toEqual(['ok', 'ok', 'empty', 'ok']);
+  });
+
+  it('goes by the dates read when another part was in view than the one aimed at', () => {
+    const page = parseTimecard(words, w, { clean, rules }, march({ from: '2026-03-16', to: '2026-03-31' }));
+    expect(page.days[0].date).toBe('2026-03-10');
+  });
+
+  it('takes the part aimed at when the dates couldn’t be read', () => {
+    const blurred = words.map((x) => (/^2026/.test(x.text) ? { ...x, text: '2O2G-O3-??' } : x));
+    const page = parseTimecard(blurred, w, { clean, rules }, march({ from: '2026-03-08', to: '2026-03-20' }));
+    // Weekdays Tue–Fri from the 8th on: the 10th–13th.
+    expect(page.days.map((d) => d.date)).toEqual(['2026-03-10', '2026-03-11', '2026-03-12', '2026-03-13']);
   });
 });

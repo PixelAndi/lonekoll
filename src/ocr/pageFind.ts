@@ -175,12 +175,30 @@ export type Aim = 'find' | 'closer' | 'further' | 'left' | 'right' | 'up' | 'dow
  */
 export function aimAt(page: FoundPage | null, frame: { x: number; y: number; w: number; h: number }): Aim {
   if (!page) return 'find';
-  // Running off both sides, or larger than the frame (no margin left around it).
-  if ((page.cut.top && page.cut.bottom) || (page.cut.left && page.cut.right) || page.w > frame.w * 1.05 || page.h > frame.h * 1.05) return 'further';
+  // The photo takes in the camera's whole view, more than the screen shows (the sides are cut off
+  // to fill it): larger than the frame is fine, only print running off the picture is not.
+  if ((page.cut.top && page.cut.bottom) || (page.cut.left && page.cut.right)) return 'further';
+  if (page.cut.left || page.cut.right) return page.cut.left ? 'left' : 'right';
+  if (page.cut.top || page.cut.bottom) return page.cut.top ? 'up' : 'down';
   const cx = page.x + page.w / 2 - (frame.x + frame.w / 2);
   const cy = page.y + page.h / 2 - (frame.y + frame.h / 2);
-  if (Math.abs(cx) > 0.08 || page.cut.left !== page.cut.right) return (page.cut.left ? -1 : page.cut.right ? 1 : cx) < 0 ? 'left' : 'right';
-  if (Math.abs(cy) > 0.08 || page.cut.top !== page.cut.bottom) return (page.cut.top ? -1 : page.cut.bottom ? 1 : cy) < 0 ? 'up' : 'down';
+  if (Math.abs(cx) > 0.12) return cx < 0 ? 'left' : 'right';
+  if (Math.abs(cy) > 0.12) return cy < 0 ? 'up' : 'down';
   if (page.h < frame.h * 0.75 && page.w < frame.w * 0.75) return 'closer';
+  return 'ready';
+}
+
+/**
+ * How to move for a close-up of part of the card (some of its rows, Datum to
+ * Arb Tid): the print runs on above and below, so only its sides are checked
+ * and that it fills the frame across. Which rows are in view is known only
+ * once they are read.
+ */
+export function aimAtPart(page: FoundPage | null, frame: { x: number; y: number; w: number; h: number }): Aim {
+  if (!page) return 'find';
+  // The dates are at the left edge and must be in view; columns after Arb Tid may run off the right.
+  if (page.cut.left) return 'left';
+  const cx = page.x + page.w / 2 - (frame.x + frame.w / 2);
+  if (page.w < frame.w * 0.7) return Math.abs(cx) > 0.15 ? (cx < 0 ? 'left' : 'right') : 'closer';
   return 'ready';
 }

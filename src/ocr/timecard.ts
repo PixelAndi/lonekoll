@@ -166,6 +166,22 @@ export interface TimecardPage {
   days: TimecardDay[];
   /** Where the Frånvaro column starts (x): notes, also handwritten, are looked for right of it. */
   notesFrom: number;
+  /** When the card was printed ("2026-04-02 09:15", top right): with the period, which card this is. */
+  printed?: string;
+}
+
+/**
+ * What is known of the card before a close-up of part of it is read: its
+ * period, and the part aimed at (with a few days either side). A close-up
+ * has no header: the period isn't on it, and it ends at Arb Tid. Its rows
+ * are matched to the whole period, by the dates and weekdays read on them –
+ * the part aimed at is only taken for granted when too few could be read
+ * (the user may have aimed elsewhere, and is then told so).
+ */
+export interface TimecardHint {
+  from: string;
+  to: string;
+  near?: { from: string; to: string };
 }
 
 const WEEKDAYS: [RegExp, number][] = [
@@ -314,7 +330,7 @@ export interface TimecardLayout {
   rules: Rule[];
 }
 
-export function parseTimecard(words: OcrWord[], width: number, layout?: TimecardLayout): TimecardPage {
+export function parseTimecard(words: OcrWord[], width: number, layout?: TimecardLayout, hint?: TimecardHint): TimecardPage {
   const all = lines(words, width);
 
   // The period: "Fr o m: 2023-08-01" and "T o m: 2023-08-31".
@@ -327,6 +343,12 @@ export function parseTimecard(words: OcrWord[], width: number, layout?: Timecard
     if (isRealDate(f)) from ??= f;
     if (isRealDate(t)) to ??= t;
   }
+  // When it was printed: the date and time beside "Sida".
+  let printed: string | undefined;
+  for (const line of all) {
+    const m = /(20\d{2}-\d{2}-\d{2})\s+(\d{1,2})[:.](\d{2})\s+sida/i.exec(line.map((w) => w.text).join(' '));
+    if (m && isRealDate(m[1])) printed ??= `${m[1]} ${m[2].padStart(2, '0')}:${m[3]}`;
+  }
 
   // Columns: the times from where they were found; Arb Tid, Ord Tim and Frånvaro from the header when it was read.
   const columns = timeColumns(all, width);
@@ -336,7 +358,8 @@ export function parseTimecard(words: OcrWord[], width: number, layout?: Timecard
     words.filter((w) => re.test(clean(w.text)) && centerX(w.bbox) > afterTimes - width * 0.02).sort((a, b) => a.bbox.y0 - b.bbox.y0)[0];
   const arb = rightHeader(/^arb$/i);
   const ord = rightHeader(/^ord$/i);
-  const notesFrom = rightHeader(/^fr[åa]nvaro/i)?.bbox.x0 ?? width * 0.82;
+  // A close-up ends at Arb Tid: no Frånvaro column unless its header was read.
+  const notesFrom = rightHeader(/^fr[åa]nvaro/i)?.bbox.x0 ?? (hint ? width : width * 0.82);
   const column = (w: OcrWord) => {
     if (columns.length !== 4) return -1;
     let best = 0;
@@ -374,8 +397,8 @@ export function parseTimecard(words: OcrWord[], width: number, layout?: Timecard
     }
   };
 
-  const page: TimecardPage = { from, to, days: [], notesFrom };
-  const ruled = layout && byRules(words, width, layout, { from, to, dateEnd });
+  const page: TimecardPage = { from, to, days: [], notesFrom, printed };
+  const ruled = layout && byRules(words, width, layout, { from, to, dateEnd, hint });
   if (ruled) {
     for (const { date, rows, top, bottom } of ruled) {
       const day: TimecardDay = { date, pairs: [], rounded: [], top, bottom };
@@ -384,6 +407,8 @@ export function parseTimecard(words: OcrWord[], width: number, layout?: Timecard
     }
     return page;
   }
+  // A close-up starts anywhere in the month: counting on from the first date needs the rules.
+  if (hint) return page;
 
   // Without the rules: rows by the height of their words.
   let current: TimecardDay | null = null;
@@ -461,9 +486,9 @@ function byRules(
   words: OcrWord[],
   width: number,
   { clean: img, rules }: TimecardLayout,
-  { from, to, dateEnd }: { from?: string; to?: string; dateEnd: number },
+  { from, to, dateEnd, hint }: { from?: string; to?: string; dateEnd: number; hint?: TimecardHint },
 ): { date: string; rows: OcrWord[][]; top: number; bottom: number }[] | null {
-  if (rules.length < 6) return null;
+  if (rules.length < 4) return null;
   const mid = width / 2;
   // One rule found twice (in pieces, on a photo taken at a slight angle): the longer piece.
   const sorted: Rule[] = [];
@@ -483,7 +508,7 @@ function byRules(
       start = i + 1;
     }
   }
-  if (run.length < 6) return null;
+  if (run.length < 4) return null;
 
   // The words in each row (by their middle, between the row's rules where the word is).
   const rows: OcrWord[][] = run.slice(0, -1).map(() => []);
@@ -526,8 +551,9 @@ function byRules(
 
   // The period's dates: from Fr o m to T o m; without them, the calendar month most dates read are in
   // (a card is a month; counting back from a date read is thrown off by a row taken for a day).
-  let start = from;
-  let end = to;
+  // A close-up: the dates it can show.
+  let start = hint?.from ?? from;
+  let end = hint?.to ?? to;
   if (!start || !end) {
     const months = new Map<string, number>();
     for (const r of dayRows) if (r.fullDate) months.set(r.fullDate.slice(0, 7), (months.get(r.fullDate.slice(0, 7)) ?? 0) + 1);
@@ -541,7 +567,13 @@ function byRules(
   const dates: string[] = [];
   for (let d: string = start; d <= end && dates.length < 62; d = addDay(d)) dates.push(d);
 
-  const matched = alignDays(dayRows, dates);
+  let matched = alignDays(dayRows, dates);
+  // A close-up where hardly a date was read: the part aimed at.
+  const confirmed = matched.filter((d, k) => d && dayRows[k].fullDate === d).length;
+  if (hint?.near && confirmed < 2) {
+    const near = dates.filter((d) => d >= hint.near!.from && d <= hint.near!.to);
+    if (near.length) matched = alignDays(dayRows, near);
+  }
   const out: { date: string; rows: OcrWord[][]; top: number; bottom: number }[] = [];
   dayRows.forEach((r, k) => {
     const date = matched[k];
@@ -581,8 +613,10 @@ export function alignDays(rows: { fullDate?: string; weekday?: number }[], dates
     }
   }
   const out: (string | undefined)[] = new Array(m).fill(undefined);
+  // Back from the end; where two matchings score the same (no dates read, weekdays a week apart), the earlier dates.
   for (let i = m, j = n; i > 0 && j >= 0; ) {
-    if (j > 0 && score[i][j] === score[i - 1][j - 1] + pair(rows[i - 1], dates[j - 1])) {
+    if (j > 0 && score[i][j] === score[i][j - 1] + SKIP_DATE) j--;
+    else if (j > 0 && score[i][j] === score[i - 1][j - 1] + pair(rows[i - 1], dates[j - 1])) {
       out[i - 1] = dates[j - 1];
       i--;
       j--;
@@ -613,6 +647,9 @@ export interface CheckedDay {
   corrected: string[];
   worked?: number;
   note?: string;
+  /** Read this many times (the same card scanned again, or in close-ups), this many of them alike. */
+  reads?: number;
+  agree?: number;
 }
 
 /** Digits OCR mixes up on this kind of print. */
@@ -686,20 +723,29 @@ export function checkDay(day: TimecardDay): CheckedDay {
 }
 
 /**
- * A day read twice (the same page scanned again): readings that agree confirm
- * each other, also where a time had to be corrected; readings that differ
- * are put to the user, unless just one of them adds up without correcting.
+ * A day read several times (the same card scanned again, close-ups of its
+ * rows): the readings are put to a vote. Readings alike confirm each other,
+ * also where a time had to be corrected; a reading that adds up without
+ * correcting counts half a vote more. The day is certain when one reading
+ * leads – but never over a rival that adds up uncorrected while it doesn't.
+ * Otherwise it is put to the user.
  */
-export function twoReadings<T extends CheckedDay>(first: T | undefined, second: T): T {
-  if (!first || first.status === 'empty') return second;
-  if (second.status === 'empty') return first;
-  if (JSON.stringify(first.pairs) === JSON.stringify(second.pairs)) {
-    const best = first.status === 'ok' ? first : second;
-    return { ...best, status: 'ok', corrected: [] };
-  }
-  if (first.status === 'ok' && second.status !== 'ok') return first;
-  if (second.status === 'ok' && first.status !== 'ok') return second;
-  return { ...first, status: 'check', corrected: [] };
+export function combineReadings<T extends CheckedDay>(readings: T[]): T {
+  const read = readings.filter((r) => r.status !== 'empty');
+  if (!read.length) return { ...readings[readings.length - 1], reads: 0, agree: 0 };
+  const groups = new Map<string, T[]>();
+  for (const r of read) groups.set(JSON.stringify(r.pairs), [...(groups.get(JSON.stringify(r.pairs)) ?? []), r]);
+  const ranked = [...groups.values()]
+    .map((g) => ({ g, sure: g.some((r) => r.status === 'ok') }))
+    .map((x) => ({ ...x, score: x.g.length + (x.sure ? 0.5 : 0) }))
+    .sort((a, b) => b.score - a.score);
+  const [top, rival] = ranked;
+  // The latest reading of the winning kind: a close-up's picture of the rows is the clearest.
+  const pick = top.g[top.g.length - 1];
+  const counts = { reads: read.length, agree: top.g.length };
+  if (!rival) return top.g.length >= 2 ? { ...pick, ...counts, status: 'ok', corrected: [] } : { ...pick, ...counts };
+  if (top.score - rival.score >= 0.5 && !(rival.sure && !top.sure)) return { ...pick, ...counts, status: 'ok', corrected: [] };
+  return { ...pick, ...counts, status: 'check', corrected: [] };
 }
 
 /**

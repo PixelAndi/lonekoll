@@ -96,8 +96,15 @@ report you can go through with your employer.
   explanations, assumptions, the day log and optionally the photos.
 - **Printed timecards (tidkort).** A small "Tidkort" button beside the scan
   button reads the time clock's printout from the employer: scanned live
-  (the page in a paper-shaped frame is captured at full resolution when steady
-  and sharp, page after page), photos or PDFs,
+  in three steps – the whole page (the month, which card it is, a first
+  reading of every day), then close-ups of its top and bottom half, Datum to
+  Arb Tid, where the digits come out larger. A map of the card shows which
+  part to aim at and which days are certain (green) or not yet (orange); a
+  close-up of another part than the one asked for is still used, and the
+  scanner says where to move. A card scanned again is known by its period
+  and print time. Every reading of a day is put to the vote: readings alike
+  confirm each other, one that adds up uncorrected counts a little more, and
+  days the readings disagree on are put to the user. Photos or PDFs work too,
   several pages and months at once. The table's printed rules are found
   first (fitted one by one, so a tilted or slightly angled photo still works)
   and say where each row is; the lines are then removed before the text is

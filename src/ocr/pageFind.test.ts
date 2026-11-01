@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { aimAt, findPage } from './pageFind.ts';
+import { aimAt, aimAtPart, findPage } from './pageFind.ts';
 
 /** A grey background with a white sheet (printed lines on it) at the given place, 160 × 284 px. */
 function frame(x: number, y: number, w: number, h: number, background = 150, step = 8) {
@@ -58,5 +58,15 @@ describe('finding the timecard in the camera', () => {
     const img = frame(0, 0, 0, 0, 200);
     for (let y = 0; y < 40; y++) for (let x = 0; x < 160; x++) img.data[y * 160 + x] = 240;
     expect(aimAt(findPage(img), FRAME)).toBe('find');
+  });
+
+  it('guides a close-up by the sides only: the rows run on above and below', () => {
+    const band = { x: 0.05, y: 0.3, w: 0.9, h: 0.4 };
+    // Rows from top to bottom of the picture, the dates' edge in view: ready.
+    expect(aimAtPart(findPage(frame(8, -10, 170, 304, 150, 3)), band)).toBe('ready');
+    // The left edge (the dates) cut off.
+    expect(aimAtPart(findPage(frame(-20, -10, 200, 304, 150, 3)), band)).toBe('left');
+    // Too far away: the print is narrow.
+    expect(aimAtPart(findPage(frame(50, 60, 60, 160, 150, 3)), band)).toBe('closer');
   });
 });

@@ -2459,16 +2459,16 @@ input[type='checkbox'] {
 /* The timecard scanner's paper frame: A4 upright, the rest of the view dimmed. */
 .tcscan-frame {
   position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 90%;
-  max-height: 92%;
-  aspect-ratio: 210 / 297;
-  transform: translate(-50%, -50%);
   border: 3px solid #fff;
   border-radius: 6px;
   box-shadow: 0 0 0 100vmax rgb(0 0 0 / 0.45);
   pointer-events: none;
+  transition: all 0.3s;
+}
+
+/* A close-up: a wide band for half the card's rows. */
+.tcscan-frame-part {
+  border-color: #60a5fa;
 }
 
 .tcscan-spacer {
@@ -2519,4 +2519,97 @@ input[type='checkbox'] {
   color: #fff;
   font-size: 0.8rem;
   font-weight: 600;
+}
+
+/* The scanner's steps, along the top. */
+.tcscan-steps {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 110px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.78rem;
+  color: #fff;
+}
+
+.tcscan-steps li {
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 0.55);
+  opacity: 0.75;
+}
+
+.tcscan-steps .tcscan-step-now {
+  background: #2563eb;
+  opacity: 1;
+  font-weight: 600;
+}
+
+.tcscan-steps .tcscan-step-done {
+  background: #15803d;
+  opacity: 1;
+}
+
+/* The card in miniature, top right: which part to aim at, which days are certain. */
+.tcscan-map {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 4px;
+  border-radius: 6px;
+  background: rgb(0 0 0 / 0.55);
+  color: #fff;
+  font-size: 0.68rem;
+  pointer-events: none;
+}
+
+.tcscan-map svg {
+  display: block;
+}
+
+.tcscan-map-key {
+  display: flex;
+  gap: 6px;
+  margin-top: 3px;
+}
+
+.tcscan-map-key i {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 3px;
+  border-radius: 2px;
+}
+
+/* What to do now, and what the last picture gave. */
+.tcscan-do {
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: rgb(20 20 22 / 0.72);
+  color: #fff;
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.tcscan-note {
+  align-self: center;
+  margin-bottom: 6px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  color: #fff;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.tcscan-note-ok {
+  background: #15803d;
+}
+
+.tcscan-note-warn {
+  background: #b45309;
 }

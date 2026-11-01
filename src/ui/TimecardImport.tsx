@@ -1,9 +1,9 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useApp } from '../app-context.ts';
 import { saveDay } from '../db.ts';
 import type { AbsenceType, DayRecord, StampPair } from '../domain/model.ts';
 import { loadPhoto, type TimecardDayReading, type TimecardReading } from '../ocr/browser.ts';
-import { twoReadings } from '../ocr/timecard.ts';
+import { combineReadings } from '../ocr/timecard.ts';
 import { goBack, href } from '../router.ts';
 import { Card, Icon, Notice, Page, Spinner } from './common.tsx';
 import { StampRowsEditor } from './StampRowsEditor.tsx';
@@ -48,7 +48,12 @@ export function TimecardImport() {
   const photoInput = useRef<HTMLInputElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<FileState[]>([]);
-  const [months, setMonths] = useState<Map<string, TimecardDayReading[]>>(new Map());
+  // Every reading of each day (pages, close-ups, the same card scanned again), put to the vote below.
+  const [readings, setReadings] = useState<Map<string, Map<string, TimecardDayReading[]>>>(new Map());
+  const months = useMemo(
+    () => new Map([...readings].map(([month, byDate]) => [month, [...byDate.values()].map((r) => combineReadings(r)).sort((a, b) => a.date.localeCompare(b.date))])),
+    [readings],
+  );
   const [scanning, setScanning] = useState(false);
   // Test mode (for troubleshooting the scanner): it saves what it saw to the phone.
   const [test, setTest] = useState(() => {
@@ -72,12 +77,12 @@ export function TimecardImport() {
     const days = readings.flatMap((r) => r.days);
     const month = (readings.find((r) => r.from)?.from ?? days[0]?.date)?.slice(0, 7);
     if (!month || !days.length) return null;
-    setMonths((m) => {
+    setReadings((m) => {
       const next = new Map(m);
-      // Pages of the same month add up; a page read again checks the first reading (see twoReadings).
-      const byDate = new Map((next.get(month) ?? []).map((d) => [d.date, d]));
-      for (const d of days) byDate.set(d.date, twoReadings(byDate.get(d.date), d));
-      next.set(month, [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date)));
+      // Pages of the same month add up; a day read again is checked against its earlier readings.
+      const byDate = new Map(next.get(month) ?? []);
+      for (const d of days) byDate.set(d.date, [...(byDate.get(d.date) ?? []), d]);
+      next.set(month, byDate);
       return next;
     });
     return { month, days: days.filter((d) => d.status !== 'empty').length };
@@ -85,9 +90,19 @@ export function TimecardImport() {
   const onScanned = useCallback(
     (page: ScannedPage) => {
       const read = addReadings([page.reading]);
+      const dates = page.reading.days.map((d) => d.date).sort();
+      const day = (d: string | undefined) => (d ? String(Number(d.slice(8))) : '');
       setFiles((f) => [
         ...f,
-        { name: t('timecard.scannedPage', { n: f.filter((x) => x.images).length + 1 }), status: read ? 'done' : 'none', ...read, images: page.reading.pageImage ? [page.reading.pageImage] : [] },
+        {
+          name:
+            page.step === 'page'
+              ? t('timecard.scannedPage', { n: f.filter((x) => x.images).length + 1 })
+              : t('timecard.closeUp', { from: day(dates[0]), to: day(dates[dates.length - 1]) }),
+          status: read ? 'done' : 'none',
+          ...read,
+          images: page.reading.pageImage ? [page.reading.pageImage] : [],
+        },
       ]);
     },
     [addReadings, t],
@@ -237,6 +252,7 @@ function MonthReview({ month, days }: { month: string; days: TimecardDayReading[
               </div>
               {d.rowImage && <img className="timecard-row" src={d.rowImage} alt="" />}
               {d.worked !== undefined && <div className="muted small">{t('timecard.worked', { hours: fmt.number(d.worked) })}</div>}
+              {(d.reads ?? 0) > 1 && <div className="muted small">{t('timecard.reads', { reads: d.reads ?? 0, agree: d.agree ?? 0 })}</div>}
               {d.status === 'fixed' && d.corrected.length > 0 && <div className="muted small">{t('timecard.fixed')}</div>}
               {d.status === 'check' && (
                 <>
