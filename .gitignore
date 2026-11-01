@@ -3,3 +3,5 @@ dist
 *.local.test.ts
 *.tsbuildinfo
 public/ocr
+*.log
+/*.png
