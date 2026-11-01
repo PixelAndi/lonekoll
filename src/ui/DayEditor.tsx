@@ -141,7 +141,7 @@ function DayForm({ date, existing, days, t, fmt, settings }: FormProps) {
               <TimeField label={t('day.in')} value={absence.bookedStart ?? null} onChange={(v) => patchAbsence({ bookedStart: v ?? undefined })} />
               <TimeField label={t('day.out')} value={absence.bookedEnd ?? null} onChange={(v) => patchAbsence({ bookedEnd: v ?? undefined })} />
             </div>
-            <p className="muted small"><Cited text={t(absence.type === 'sick' ? 'day.bookedHint.sick' : 'day.bookedHint.holiday')} /></p>
+            <p className="muted small"><Cited date={date} text={t(absence.type === 'sick' ? 'day.bookedHint.sick' : 'day.bookedHint.holiday')} /></p>
           </>
         )}
         <Field label={t('day.note')}>
@@ -170,7 +170,7 @@ function DayForm({ date, existing, days, t, fmt, settings }: FormProps) {
               ))}
             </div>
             <span className="field-hint">
-              <Cited text={t(overtimeAs === 'komp' ? (settings.kompMode === 'hour' ? 'day.kompHint.hour' : 'day.kompHint.supplement') : 'day.payHint')} />
+              <Cited date={date} text={t(overtimeAs === 'komp' ? (settings.kompMode === 'hour' ? 'day.kompHint.hour' : 'day.kompHint.supplement') : 'day.payHint')} />
             </span>
           </div>
         )}
@@ -178,7 +178,7 @@ function DayForm({ date, existing, days, t, fmt, settings }: FormProps) {
         {shifts.flatMap((r) =>
           r.warnings.map((w) => (
             <Notice key={`${r.shift.start}-${w}`} kind="warn">
-              <Cited text={t(`warn.${w}`)} />
+              <Cited date={date} text={t(`warn.${w}`)} />
             </Notice>
           )),
         )}
@@ -259,7 +259,7 @@ export function ShiftSummary({ result }: { result: ShiftResult }) {
           </div>
         )}
       </dl>
-      {r.overtimeReason && <p className="muted small">{t('day.overtime')}: <Cited text={t(`day.overtimeReason.${r.overtimeReason}`, { limit })} /></p>}
+      {r.overtimeReason && <p className="muted small">{t('day.overtime')}: <Cited date={r.shift.date} text={t(`day.overtimeReason.${r.overtimeReason}`, { limit })} /></p>}
     </div>
   );
 }
@@ -347,7 +347,7 @@ function ScheduleCard({
             <input type="checkbox" checked={moved} onChange={(e) => onMoved(e.target.checked)} />
             {t('day.shiftMoved')}
           </label>
-          {shiftedRate !== undefined && <p className="muted small"><Cited text={t('day.shiftMovedHint', { rate: fmt.number(shiftedRate) })} /></p>}
+          {shiftedRate !== undefined && <p className="muted small"><Cited date={date} text={t('day.shiftMovedHint', { rate: fmt.number(shiftedRate) })} /></p>}
         </>
       )}
     </Card>

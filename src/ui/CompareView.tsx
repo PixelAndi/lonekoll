@@ -111,11 +111,11 @@ export function CompareView({ id }: { id: string }) {
             </dl>
             {row.notes.map((n, i) => (
               <p key={i} className="note">
-                <Cited text={noteText(n, t, fmt)} />
+                <Cited date={end} text={noteText(n, t, fmt)} />
               </p>
             ))}
             <p className="muted small">
-              <Cited text={rowReference(row, t, settings, end, taxYear, fmt)} />
+              <Cited date={end} text={rowReference(row, t, settings, end, taxYear, fmt)} />
             </p>
           </Card>
         ))}

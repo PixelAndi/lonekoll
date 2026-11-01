@@ -462,7 +462,7 @@ export const pl: Record<TextKey, string> = {
   'settings.addWage': 'Dodaj zmianę wynagrodzenia',
   'settings.rules': 'Zasady',
   'settings.ordinaryShift': 'Nadgodziny po (h:mm na zmianę)',
-  'settings.ordinaryShiftHint': 'Większość zakładów ma lokalne porozumienie: 8:00. Bez lokalnego porozumienia o czasie pracy obowiązuje 9:15 z układu (§3.1.2).',
+  'settings.ordinaryShiftHint': 'Większość zakładów ma lokalne porozumienie: 8:00. Bez lokalnego porozumienia o czasie pracy obowiązuje 9:15 z układu (§3.1.2) – w układzie 2020–2023 było to 9:00.',
   'settings.maxShifts': 'Maks. zwykłych zmian w tygodniu (0 = wył.)',
   'settings.ordinaryStart': 'Zwykły czas pracy zaczyna się',
   'settings.ordinaryStartHint': 'Nadgodziny niedzielne i świąteczne trwają do rozpoczęcia zwykłego czasu pracy w następny dzień roboczy. Bez grafiku używana jest ta godzina.',

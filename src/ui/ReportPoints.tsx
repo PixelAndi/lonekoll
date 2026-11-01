@@ -175,19 +175,20 @@ export function PointCard({ point: p, comparison, settings, end, taxYear, t, fmt
             <p key={r.level} className="point-quote">
               <Cited
                 t={t}
+                date={end}
                 text={t('point.obTable', { from: fmt.date(r.from, 'numeric'), label: t(`cat.ob${r.level}`), rate: fmt.money(r.rate) })}
               />
             </p>
           ))}
           {p.quotes.map((q, i) => (
-            <QuoteBlock key={i} quote={q} t={t} />
+            <QuoteBlock key={i} quote={q} t={t} date={end} />
           ))}
           <p className="report-ref">
-            <Cited t={t} text={rowReference(lead, t, settings, end, taxYear, fmt)} />
+            <Cited t={t} date={end} text={rowReference(lead, t, settings, end, taxYear, fmt)} />
           </p>
           {rows.flatMap((r) => r.notes).map((n, i) => (
             <p key={i} className="report-ref">
-              <Cited t={t} text={noteText(n, t, fmt)} />
+              <Cited t={t} date={end} text={noteText(n, t, fmt)} />
             </p>
           ))}
         </dd>
@@ -216,13 +217,13 @@ export function PointCard({ point: p, comparison, settings, end, taxYear, t, fmt
 }
 
 /** A passage quoted word for word, with a link to where it stands. */
-function QuoteBlock({ quote, t }: { quote: Quote; t: Translate }) {
+function QuoteBlock({ quote, t, date }: { quote: Quote; t: Translate; date: string }) {
   const name = quote.source === 'sickPayAct' ? 'Sjuklönelagen' : SOURCE_NAMES[quote.source];
   return (
     <figure className="point-quote">
       <blockquote lang="sv">”{quote.text}”</blockquote>
       <figcaption>
-        <Cited t={t} text={`${name} §${quote.section}`} />
+        <Cited t={t} date={date} text={`${name} §${quote.section}`} />
       </figcaption>
     </figure>
   );

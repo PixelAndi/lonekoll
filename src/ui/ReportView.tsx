@@ -259,7 +259,7 @@ function ReportPage({
           <ul>
             {monthlyPay && (
               <li>
-                <Cited t={t} text={`${t('settings.monthlyRates', { perHour: fmt.number(monthlyPay.perHour), perDay: fmt.number(monthlyPay.perDay) })} ${t('report.monthlyLocal')}`} />
+                <Cited t={t} date={end} text={`${t('settings.monthlyRates', { perHour: fmt.number(monthlyPay.perHour), perDay: fmt.number(monthlyPay.perDay) })} ${t('report.monthlyLocal')}`} />
               </li>
             )}
             {settings.scheduleMode === 'fixed' ? (
@@ -268,7 +268,7 @@ function ReportPage({
               <>
                 <li>{t('report.scheduleNone')}</li>
                 <li>
-                  <Cited t={t} text={t('report.overtimeRule', { limit: formatDuration(settings.ordinaryShiftMinutes) })} />
+                  <Cited t={t} date={end} text={t('report.overtimeRule', { limit: formatDuration(settings.ordinaryShiftMinutes) })} />
                 </li>
               </>
             )}
@@ -352,7 +352,7 @@ function ReportPage({
         )}
 
         <footer className="report-disclaimer">
-          <Cited t={t} text={t('report.disclaimer')} />
+          <Cited t={t} date={end} text={t('report.disclaimer')} />
         </footer>
       </article>
   );

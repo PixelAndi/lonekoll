@@ -89,14 +89,16 @@ describe('privacy: nothing leaves the device', () => {
 
   it('the links to the agreement and the law carry nothing from the app', () => {
     const code = readFileSync(path.join(root, 'src', 'domain', 'sources.ts'), 'utf8');
-    // Exactly two addresses: the agreement as published by the union, and the Sick Pay Act at the Riksdag.
+    // Exactly three addresses: the agreement (2025 and 2020 editions) as published by the union, and the Sick Pay Act at the Riksdag.
     expect(code.match(/https?:\/\/[^'\s]+/g)).toEqual([
       'https://www.livs.se/globalassets/livs.se/arbetsplats--och-avtalsfragor/kollektivavtal/livsmedelsavtalet-2025.pdf',
+      'https://www.livs.se/globalassets/livs.se/arbetsplats--och-avtalsfragor/kollektivavtal/livsmedelsavtalet-2020-2023.pdf',
       'https://www.riksdagen.se/sv/dokument-och-lagar/dokument/svensk-forfattningssamling/lag-19911047-om-sjuklon_sfs-1991-1047/',
     ]);
     // A link adds only a page or a paragraph, never anything the user entered…
     const links = [...code.matchAll(/href: (?!string;)(.*) };$/gm)].map((m) => m[1].trim());
-    expect(links).toEqual(['paragraph ? `${SICK_PAY_ACT_URL}#P${paragraph}` : SICK_PAY_ACT_URL', '`${AGREEMENT_URL}#page=${page}`']);
+    expect(links).toEqual(['paragraph ? `${SICK_PAY_ACT_URL}#P${paragraph}` : SICK_PAY_ACT_URL', '`${info.url}#page=${page}`']);
+    expect([...code.matchAll(/url: (\w+),/g)].map((m) => m[1])).toEqual(['AGREEMENT_URL', 'AGREEMENT_2020_URL']);
     // …and is opened only by a tap, without telling the other site where it came from.
     const cited = readFileSync(path.join(root, 'src', 'ui', 'Cited.tsx'), 'utf8');
     expect(cited).toContain('rel="noopener noreferrer"');

@@ -197,8 +197,15 @@ hosts the app. This is a design rule, and it is enforced:
 | Skiftformstillägg | 5.3 % (two-shift, discontinuous three-shift, permanent night) or 11.1 % (continuous three-shift) of the hourly wage, not on overtime | Avtalet §4.4 |
 | Tax | Table = municipal + regional tax + burial fee (+ church fee for members), 32.50 → 32 and 32.51 → 33; monthly table, column 1 (column 3 from 66) | Skatteverket |
 
-Amounts change every 1 April; both agreement years are in
-`src/domain/agreement.ts`. Add a new period there when a new agreement is
+Amounts change every 1 April; the agreement years in the app are in
+`src/domain/agreement.ts`: 1 November 2020 – 31 March 2023 (two periods,
+from the 2020 edition's bakery supplement: minimum wages, OB, förskjuten tid,
+lowest vacation pay) and 1 April 2025 – 31 March 2027. Dates from 1 April 2023
+to 31 March 2025 aren't in the app yet and are warned about. Citations link to
+the edition in force on the day (the 2020 edition has its own pages, and its
+shift-form supplement is §4.5). Under the 2020 edition the working day without
+a local agreement was at most 9 hours (9 h 15 min from 2025). Tax tables and
+municipal rates are bundled for 2021–2026. Add a new period there when a new agreement is
 signed. Until then, a wage tied to the minimum keeps the last known minimum
 and the app warns about it.
 

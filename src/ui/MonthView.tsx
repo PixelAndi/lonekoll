@@ -161,6 +161,7 @@ export function PeriodWarnings({ period }: { period: PeriodResult }) {
       {period.warnings.map((w, i) => (
         <Notice key={`p${i}`} kind="warn">
           <Cited
+            date={w.date ?? period.end}
             text={t(`warn.${w.code}`, {
               ...Object.fromEntries(Object.entries(w.values ?? {}).map(([k, v]) => [k, typeof v === 'number' ? fmt.number(v) : v])),
               date: w.date ? fmt.date(w.date) : '',
@@ -176,7 +177,7 @@ export function PeriodWarnings({ period }: { period: PeriodResult }) {
         ))}
         {shiftWarnings.map(({ date, w }) => (
           <li key={`${date}${w}`}>
-            <a href={href({ name: 'day', date })}>{fmt.date(date)}</a>: <Cited text={t(`warn.${w}`)} />
+            <a href={href({ name: 'day', date })}>{fmt.date(date)}</a>: <Cited date={date} text={t(`warn.${w}`)} />
           </li>
         ))}
       </ul>

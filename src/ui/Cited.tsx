@@ -1,5 +1,5 @@
 import { useApp } from '../app-context.ts';
-import { splitCitations } from '../domain/sources.ts';
+import { editionOn, splitCitations } from '../domain/sources.ts';
 import type { Translate } from '../i18n.ts';
 
 /**
@@ -7,12 +7,13 @@ import type { Translate } from '../i18n.ts';
  * can be read in full. The agreement opens at the section's page; the page
  * is also shown, for phones that open a PDF at its first page.
  */
-export function Cited({ text, t: translate }: { text: string; t?: Translate }) {
+/** `date`: the day or period the text is about, so it links to the edition of the agreement in force then. */
+export function Cited({ text, t: translate, date }: { text: string; t?: Translate; date?: string }) {
   const app = useApp();
   const t = translate ?? app.t;
   return (
     <>
-      {splitCitations(text).map((part, i) => {
+      {splitCitations(text, editionOn(date)).map((part, i) => {
         if (typeof part === 'string') return part;
         const { href, page } = part.citation;
         return (

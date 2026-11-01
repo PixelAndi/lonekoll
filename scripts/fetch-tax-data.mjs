@@ -1,6 +1,7 @@
 // Downloads Skatteverket's tax tables (monthly pay, columns 1 and 3) and the
 // municipal tax rates for a year, and writes them to src/domain/tax-data/.
-// Run once a year when the new tables are out (December):
+// Run once a year when the new tables are out (December), or for an earlier year
+// (behind a proxy: NODE_USE_ENV_PROXY=1):
 //   node scripts/fetch-tax-data.mjs 2027
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -49,10 +50,31 @@ function titleCase(name) {
     .join(' ');
 }
 
+/** Earlier years' rates are no longer linked from the tables page: Skatteverket's open data has them. */
+const RATES_API = 'https://skatteverket.entryscape.net/rowstore/dataset/c67b320b-ffee-4876-b073-dd9236cd2a99/json';
+
+async function fetchRatesFromApi() {
+  const rows = [];
+  for (let offset = 0; ; offset += 500) {
+    const page = await getJson(`${RATES_API}?%C3%A5r=${year}&_limit=500&_offset=${offset}`);
+    rows.push(...page.results);
+    if (rows.length >= page.resultCount || page.results.length === 0) break;
+  }
+  if (rows.length === 0) throw new Error(`No municipal tax rates for ${year}`);
+  const byName = new Map();
+  for (const r of rows) {
+    const name = titleCase(r.kommun.trim());
+    const m = byName.get(name) ?? { name, rate: Number(r['summa, exkl. kyrkoavgift']), parishes: [] };
+    m.parishes.push({ name: titleCase(r['församling'].trim()), fee: Number(r.kyrkoavgift) });
+    byName.set(name, m);
+  }
+  return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name, 'sv'));
+}
+
 async function fetchRates() {
   const page = await (await fetch(TABLES_PAGE)).text();
   const link = page.match(new RegExp(`href="([^"]*skattesatser-kommuner-${year}[^"]*\\.txt)"`))?.[1];
-  if (!link) throw new Error(`No municipal tax rate file for ${year} on ${TABLES_PAGE}`);
+  if (!link) return fetchRatesFromApi();
   const text = await (await fetch(new URL(link, TABLES_PAGE))).text();
   const [header, ...lines] = text.split(/\r?\n/).filter(Boolean).map((l) => l.split('\t'));
   const col = (name) => header.findIndex((h) => h.trim().toLowerCase() === name);
