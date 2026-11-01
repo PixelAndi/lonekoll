@@ -89,31 +89,14 @@ function standing(card: Card) {
   return { unsure, addsUp, sure, done: unsure === 0 && addsUp };
 }
 
-/** Saves a file to the phone (test mode: what the scanner saw, to send for troubleshooting). */
-function save(data: Blob, name: string) {
-  const url = URL.createObjectURL(data);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = name;
-  document.body.append(a);
-  a.click();
-  a.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
-}
-
-const stamp = () => new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '');
-
 /** A picture taken, waiting to be read. */
 interface Shot {
   blob: Blob;
   sheet: FoundPage | null;
   n: number;
-  /** For test mode. */
-  info: Record<string, unknown>;
-  full?: Blob;
 }
 
-export function TimecardScanner({ onPage, onClose, test = false }: { onPage: (page: ScannedPage) => void; onClose: () => void; test?: boolean }) {
+export function TimecardScanner({ onPage, onClose }: { onPage: (page: ScannedPage) => void; onClose: () => void }) {
   const { t, fmt } = useApp();
   const video = useRef<HTMLVideoElement>(null);
   const [phase, setPhase] = useState<Phase>({ kind: 'starting' });
@@ -163,20 +146,6 @@ export function TimecardScanner({ onPage, onClose, test = false }: { onPage: (pa
     let shots = 0;
     const queue: Shot[] = [];
     let working = false;
-    // Test mode: a recording of what the camera saw, saved when the scanner closes.
-    let recorder: MediaRecorder | null = null;
-    const chunks: Blob[] = [];
-    const startRecording = (s: MediaStream) => {
-      try {
-        const type = ['video/mp4', 'video/webm'].find((m) => MediaRecorder.isTypeSupported(m));
-        recorder = new MediaRecorder(s, { mimeType: type, videoBitsPerSecond: 6_000_000 });
-        recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data);
-        recorder.onstop = () => chunks.length && save(new Blob(chunks, { type: recorder!.mimeType }), `tidkort-test-video-${stamp()}.${recorder!.mimeType.includes('mp4') ? 'mp4' : 'webm'}`);
-        recorder.start(1000);
-      } catch {
-        recorder = null;
-      }
-    };
     void (async () => {
       try {
         // As many pixels as the camera gives: the card's print is small.
@@ -188,7 +157,6 @@ export function TimecardScanner({ onPage, onClose, test = false }: { onPage: (pa
         v.srcObject = stream;
         await v.play();
         if (!alive) return;
-        if (test) startRecording(stream);
         setPhase({ kind: 'aiming', hint: 'find' });
         timer = window.setInterval(() => void tick(), 150);
         // Start the recognition now, so the first picture isn't kept waiting for it.
@@ -260,17 +228,7 @@ export function TimecardScanner({ onPage, onClose, test = false }: { onPage: (pa
         const blob = await new Promise<Blob>((resolve, reject) => crop.toBlob((b) => (b ? resolve(b) : reject(new Error('JPEG failed'))), 'image/jpeg', 0.92));
         lastShot.current = last.current;
         shots++;
-        const info = {
-          taken: new Date().toISOString(),
-          browser: navigator.userAgent,
-          video: { width: v.videoWidth, height: v.videoHeight },
-          picture: { width: canvas.width, height: canvas.height, via: canvas.dataset.via },
-          view: viewSize(v),
-          sheet,
-          crop: { width: crop.width, height: crop.height },
-        };
-        const full = test ? await new Promise<Blob | null>((r) => canvas.toBlob(r, 'image/jpeg', 0.95)) : null;
-        queue.push({ blob, sheet, n: shots, info, full: full ?? undefined });
+        queue.push({ blob, sheet, n: shots });
         setPending(queue.length + (working ? 1 : 0));
         navigator.vibrate?.(30);
         shotsHere.current++;
@@ -304,13 +262,6 @@ export function TimecardScanner({ onPage, onClose, test = false }: { onPage: (pa
           crop.getContext('2d')!.drawImage(bitmap, 0, 0);
           bitmap.close();
           const reading = await readTimecardImage(crop);
-          if (test) {
-            // Everything about this picture, to find out what went wrong and why.
-            const name = `tidkort-test-${stamp()}-${shot.n}`;
-            if (shot.full) save(shot.full, `${name}.jpg`);
-            const json = { ...shot.info, rowPixels: reading.rowPixels, from: reading.from, to: reading.to, printed: reading.printed, totalWorked: reading.totalWorked, days: reading.days.map(({ rowImage: _r, noteImage: _n, ...d }) => d) };
-            save(new Blob([JSON.stringify(json, null, 1)], { type: 'application/json' }), `${name}.json`);
-          }
           if (!alive) break;
           const read = reading.days.filter((d) => d.status !== 'empty').length;
           if (reading.rowPixels !== undefined && reading.rowPixels < MIN_ROW_PIXELS) {
@@ -360,11 +311,10 @@ export function TimecardScanner({ onPage, onClose, test = false }: { onPage: (pa
     return () => {
       alive = false;
       window.clearInterval(timer);
-      if (recorder?.state === 'recording') recorder.stop();
       stream?.getTracks().forEach((track) => track.stop());
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onPage, test]);
+  }, [onPage]);
 
   // "Done" with pictures still being read: read them first, then close.
   const finish = () => {
@@ -412,7 +362,6 @@ export function TimecardScanner({ onPage, onClose, test = false }: { onPage: (pa
         <CardMap card={card} t={t} />
         {error && <p className="scanner-status tcscan-error">{t('tcscan.noCamera')}</p>}
         <div className="scanner-status">
-          {test && <div className="tcscan-test">{t('tcscan.test')}</div>}
           {note && <div className={`tcscan-note tcscan-note-${note.kind}`}>{note.text}</div>}
           {!card && !pending && <div className="tcscan-do">{t('tcscan.do.page')}</div>}
           <div className={`scanner-pill ${phase.kind === 'failed' || phase.kind === 'small' ? 'scanner-pill-warn' : ''}`}>

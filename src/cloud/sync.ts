@@ -49,6 +49,7 @@ type Item =
 const keyOf = (i: Item) => `${i.kind}:${i.record.id}`;
 const blobOf = (i: Item) => (i.kind === 'slip' ? i.record.pdf : i.record.blob);
 const placeOf = (i: Item): DrivePlace => (i.kind === 'photo' ? photoPlace(i.record) : i.kind === 'card' ? cardPlace(i.record) : slipPlace(i.record));
+const placeText = (p: DrivePlace) => [...p.folders, p.name].join('/');
 const createdOf = (i: Item) => (i.kind === 'photo' ? i.record.createdAt : i.kind === 'card' ? i.record.takenAt : i.record.importedAt);
 
 async function allItems(): Promise<Item[]> {
@@ -120,10 +121,22 @@ async function run(cloud: CloudSettings) {
     const parent = await drive.folder([ROOT, ...place.folders]);
     const sent = await drive.upload({ parent, name: place.name, mime: place.mime, blob });
     if (sent.size !== blob.size) throw new Error(`${place.name}: Drive stored ${sent.size} of ${blob.size} bytes`);
-    const record: CloudFileRecord = { key: keyOf(item), driveId: sent.id, size: sent.size, at: Date.now() };
+    const record: CloudFileRecord = { key: keyOf(item), driveId: sent.id, size: sent.size, at: Date.now(), place: placeText(place) };
     await db.cloud.put(record);
     done.set(record.key, record);
     setStatus({ phase: 'syncing', pending: todo.length - ++count, done: count });
+  }
+
+  // Files whose place changed (a pay slip's period corrected): moved to where they now belong.
+  for (const item of items) {
+    const copy = done.get(keyOf(item));
+    if (!copy || item.kind !== 'slip') continue;
+    const place = placeOf(item);
+    if (copy.place === placeText(place)) continue;
+    await drive.move(copy.driveId, await drive.folder([ROOT, ...place.folders]), place.name);
+    const moved = { ...copy, place: placeText(place) };
+    await db.cloud.put(moved);
+    done.set(moved.key, moved);
   }
 
   // 3. The app's data, for restoring.

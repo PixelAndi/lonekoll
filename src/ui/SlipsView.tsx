@@ -14,6 +14,7 @@ import { Card, Icon, Notice, Page, Spinner } from './common.tsx';
 import { applyOverrides, countFindings, slipPeriod, vacationBasisFor } from './slipComparison.ts';
 import { VacationProgress } from './VacationProgress.tsx';
 import { WageFromSlips } from './WageFromSlips.tsx';
+import { needsCheck } from './SlipCheck.tsx';
 
 export function SlipsView() {
   const { t, fmt, settings } = useApp();
@@ -146,9 +147,13 @@ function SlipItem({ record, all }: { record: SlipRecord; all: SlipRecord[] }) {
         <span className="slip-amounts">
           {t('slips.gross')} {fmt.money(slip.gross)} · {t('slips.net')} {fmt.money(slip.net)}
         </span>
-        <span className={`badge ${findings ? 'badge-diff' : 'badge-ok'}`}>
-          {findings ? t('slips.differences', { n: findings }) : t('slips.matches')}
-        </span>
+        {needsCheck(record) ? (
+          <span className="badge badge-diff">{t('slipCheck.badge')}</span>
+        ) : (
+          <span className={`badge ${findings ? 'badge-diff' : 'badge-ok'}`}>
+            {findings ? t('slips.differences', { n: findings }) : t('slips.matches')}
+          </span>
+        )}
       </a>
     </li>
   );

@@ -78,22 +78,6 @@ export function TimecardImport() {
     [readings],
   );
   const [scanning, setScanning] = useState(false);
-  // Test mode (for troubleshooting the scanner): it saves what it saw to the phone.
-  const [test, setTest] = useState(() => {
-    try {
-      return localStorage.getItem('tcscan-test') === '1';
-    } catch {
-      return false;
-    }
-  });
-  const toggleTest = (on: boolean) => {
-    setTest(on);
-    try {
-      localStorage.setItem('tcscan-test', on ? '1' : '0');
-    } catch {
-      // Remembered only for now.
-    }
-  };
 
   /** Pages read (from a file or the scanner) added to their months; returns the month and days read. */
   const addReadings = useCallback((readings: TimecardReading[]) => {
@@ -181,12 +165,6 @@ export function TimecardImport() {
             {t('timecard.keep')} <span className="muted">{t('timecard.keepHelp')}</span>
           </span>
         </label>
-        <label className="checkbox small">
-          <input type="checkbox" checked={test} onChange={(e) => toggleTest(e.target.checked)} />
-          <span>
-            {t('timecard.testMode')} <span className="muted">{t('timecard.testModeHelp')}</span>
-          </span>
-        </label>
         {files.length > 0 && (
           <ul className="timecard-files">
             {files.map((f, i) => (
@@ -206,7 +184,7 @@ export function TimecardImport() {
           </ul>
         )}
       </Card>
-      {scanning && <TimecardScanner test={test} onPage={onScanned} onClose={() => setScanning(false)} />}
+      {scanning && <TimecardScanner onPage={onScanned} onClose={() => setScanning(false)} />}
       {[...months.entries()].map(([month, days]) => (
         <MonthReview key={month} month={month} days={days} pages={pages.get(month) ?? []} />
       ))}

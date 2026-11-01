@@ -141,10 +141,7 @@ report you can go through with your employer.
   the picture of each card, shown under the month's sources, and each day's
   rows cut from it beside the day (also in the report's sources), with the
   whole card a tap away; they are in the backup, and the app asks the browser
-  to keep its storage. A test mode (off by default, for troubleshooting the scanner) saves every
-  picture the scanner takes, what it read and a video of the camera to the
-  phone's Downloads – nothing is sent anywhere; the user can choose to share
-  the files.
+  to keep its storage.
 - **Months at a glance.** Tapping the month's name opens every month from
   the first with days to now: how many days each has, the months in between
   with none (a gap, also warned about on the days page with links to them),
@@ -324,6 +321,19 @@ earns vacation pay (long sick leave, parental leave) in the vacation pay basis. 
 overtime window uses a configurable "ordinary start" (default 06:00), and sick
 pay without a booked shift is an estimate from up to 13 weeks of logged
 shifts. This is a calculation aid, not a legal assessment.
+
+### Checking a pay slip
+
+A photographed slip, and any slip whose pay period wasn't printed or
+readable, gets a *Kontrollera* badge and a check card above its comparison:
+the period, pay day, gross, tax and payout as read (editable), the photo
+beside them, the lines read, and a warning when the lines don't add up to
+the gross pay. The period is never taken from the day of import: it is read
+from "Löneperiod" (on the same line or under it, with photo misreadings
+allowed for), its year checked against the slip's other dates, and otherwise
+worked out from the lines' dates or the pay day and marked as a guess. Any
+slip's period and amounts can be changed later; its copy in Google Drive
+moves to the right month.
 
 ## Using it
 

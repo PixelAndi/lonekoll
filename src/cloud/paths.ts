@@ -37,7 +37,8 @@ export function cardPlace(c: CardRecord): DrivePlace {
 
 export function slipPlace(s: SlipRecord): DrivePlace {
   const month = (s.periodStart || '').slice(0, 7);
-  const photo = isImage(s.pdf);
+  // Kept as a preview, the slip is a picture on the phone whatever its original was: its file name tells.
+  const photo = s.archived ? !/\.pdf$/i.test(s.fileName) : isImage(s.pdf);
   return {
     folders: monthFolders(s.periodStart || ''),
     name: `Lönebesked ${month || 'utan datum'} ${short(s.id)}.${photo ? 'jpg' : 'pdf'}`,

@@ -106,3 +106,47 @@ describe('classifyLine', () => {
     expect(classifyLine('Friskvård', 500, undefined)).toBe('other');
   });
 });
+
+describe('the pay period', () => {
+  const withPeriod = (cells: [string, number, number][], payout = 'Utbetalas 2026-10-23') =>
+    items.map((i) => i).filter((i) => i.y !== 736.5 && i.y !== 66.7).concat(row(736.5, cells), row(66.7, [[payout, 306.1, 96.2], ['25 275,80', 512.8, 44.5]]));
+
+  it('is read as printed', () => {
+    const slip = parsePaySlip(items);
+    expect([slip.periodStart, slip.periodEnd, slip.periodDoubt]).toEqual(['2026-09-01', '2026-09-30', undefined]);
+  });
+
+  it('is read from a photo with stray spaces, a colon or an OCR slip in the label', () => {
+    const slip = parsePaySlip(withPeriod([['Loneperiod:', 56.7, 43.5], ['2026 -09-01-2026-09-30', 141.7, 89]]));
+    expect([slip.periodStart, slip.periodEnd]).toEqual(['2026-09-01', '2026-09-30']);
+  });
+
+  it('is read under its heading', () => {
+    const slip = parsePaySlip(items.filter((i) => i.y !== 736.5).concat(row(745, [['Löneperiod', 56.7, 43.5]]), row(736.5, [['2026-09-01 - 2026-09-30', 56.7, 89]])));
+    expect([slip.periodStart, slip.periodEnd]).toEqual(['2026-09-01', '2026-09-30']);
+  });
+
+  it('takes the year of every other date on the slip when its own was misread, and says so', () => {
+    const slip = parsePaySlip(withPeriod([['Löneperiod', 56.7, 43.5], ['2028-09-01 - 2028-09-30', 141.7, 89]]));
+    expect([slip.periodStart, slip.periodEnd, slip.periodDoubt]).toEqual(['2026-09-01', '2026-09-30', 'yearFixed']);
+  });
+
+  it('keeps a December period paid in January', () => {
+    const december = items.filter((i) => i.y < 700 && i.y > 570 ? false : true).concat(row(687.4, [['1106', 65.7, 17.8], ['Timlön', 99.2, 24], ['120,50', 357.1, 24.5], ['Timmar', 388.3, 27.1], ['180,00', 456.3, 24.5], ['21 690,00', 501.9, 35.6]]));
+    const slip = parsePaySlip(
+      december.filter((i) => i.y !== 736.5 && i.y !== 66.7).concat(row(736.5, [['Löneperiod', 56.7, 43.5], ['2025-12-01 - 2025-12-31', 141.7, 89]]), row(66.7, [['Utbetalas 2026-01-23', 306.1, 96.2]])),
+    );
+    expect([slip.periodStart, slip.periodDoubt]).toEqual(['2025-12-01', undefined]);
+  });
+
+  it('is worked out from the pay lines when not readable, and marked as a guess – never today’s month', () => {
+    const slip = parsePaySlip(withPeriod([['Löneperiod', 56.7, 43.5], ['2O26-O9-?1', 141.7, 89]]));
+    expect([slip.periodStart, slip.periodEnd, slip.periodDoubt]).toEqual(['2026-09-01', '2026-09-30', 'guessed']);
+  });
+
+  it('is the month before the pay day when nothing else is dated', () => {
+    const plain = items.filter((i) => i.y !== 736.5 && !/^\d{6} - \d{6}$/.test(i.str));
+    const slip = parsePaySlip(plain);
+    expect([slip.periodStart, slip.periodEnd, slip.periodDoubt]).toEqual(['2026-09-01', '2026-09-30', 'guessed']);
+  });
+});

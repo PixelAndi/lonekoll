@@ -180,6 +180,18 @@ export async function upload(file: { parent: string; name: string; mime: string;
   return { id: done.id, size: Number(done.size ?? file.blob.size) };
 }
 
+/** Moves a file to another folder under another name (a pay slip whose period was corrected). */
+export async function move(id: string, parent: string, name: string): Promise<void> {
+  const r = await call(`${API}/files/${encodeURIComponent(id)}?fields=parents`);
+  const { parents = [] } = (await r.json()) as { parents?: string[] };
+  const params = new URLSearchParams({ fields: 'id', addParents: parent, removeParents: parents.filter((p) => p !== parent).join(',') });
+  await call(`${API}/files/${encodeURIComponent(id)}?${params}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+}
+
 export async function download(id: string): Promise<Blob> {
   return (await call(`${API}/files/${encodeURIComponent(id)}?alt=media`)).blob();
 }

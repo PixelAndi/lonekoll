@@ -38,6 +38,8 @@ export interface CloudFileRecord {
   driveId: string;
   size: number;
   at: number;
+  /** Where it is in Drive ("2026/2026-09 september/Lönebesked …pdf"), to move it if that changes. */
+  place?: string;
 }
 
 export interface SlipRecord {

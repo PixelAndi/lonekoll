@@ -42,6 +42,15 @@ export interface PaySlip {
   employer?: string;
   periodStart?: LocalDate;
   periodEnd?: LocalDate;
+  /**
+   * Where the period came from when it was not read as printed: worked out
+   * from the dates of the pay lines or the pay day ('guessed'), or printed but
+   * its year read differently from every other date on the slip ('yearFixed').
+   * Either way the user is asked to check it.
+   */
+  periodDoubt?: 'guessed' | 'yearFixed';
+  /** The user has looked at the period and the main figures and confirmed them. */
+  checked?: boolean;
   payDate?: LocalDate;
   lines: SlipLine[];
   gross?: number;
@@ -74,6 +83,91 @@ export function parseSwedishNumber(s: string): number | undefined {
 function toIsoDate(s: string): LocalDate {
   if (/^\d{6}$/.test(s)) return `20${s.slice(0, 2)}-${s.slice(2, 4)}-${s.slice(4, 6)}`;
   return s;
+}
+
+const isRealDate = (y: number, m: number, d: number) => {
+  const date = new Date(Date.UTC(y, m - 1, d));
+  return y >= 2000 && y <= 2099 && date.getUTCMonth() === m - 1 && date.getUTCDate() === d;
+};
+
+/** The dates in a text, as read from a PDF or (with stray spaces or dots) from a photo: "2026-09-01", "2026 -09-01", "2026.09.01", "20260901". */
+export function datesIn(text: string): LocalDate[] {
+  const out: LocalDate[] = [];
+  for (const m of text.matchAll(/(?<!\d)(20\d{2})\s*[-–.]?\s*(\d{2})\s*[-–.]?\s*(\d{2})(?!\d)/g)) {
+    const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+    if (isRealDate(y, mo, d)) out.push(`${m[1]}-${m[2]}-${m[3]}`);
+  }
+  return out;
+}
+
+const daysBetween = (a: LocalDate, b: LocalDate) => (Date.parse(b) - Date.parse(a)) / 86_400_000;
+const lastOfMonth = (ym: string) => {
+  const [y, m] = ym.split('-').map(Number);
+  return `${ym}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, '0')}`;
+};
+const previousMonth = (ym: string) => {
+  const [y, m] = ym.split('-').map(Number);
+  return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, '0')}`;
+};
+
+/**
+ * The pay period: printed after (or under) "Löneperiod". A photo can misread
+ * a digit, so its year is checked against the slip's other dates (the pay
+ * lines' and the pay day); when it is not printed or not readable, it is
+ * worked out from those dates and marked as a guess.
+ */
+function findPeriod(lines: TextItem[][], slip: PaySlip) {
+  // OCR can read the ö or the e wrong.
+  const label = /^l.n.?period:?$/i;
+  let printed: [LocalDate, LocalDate] | undefined;
+  lines.forEach((line, n) => {
+    line.forEach((item, i) => {
+      if (printed) return;
+      const own = item.str.trim();
+      const startsWithLabel = /^l.n.?period\b/i.test(own);
+      if (!label.test(own) && !startsWithLabel) return;
+      const right = line.slice(i + 1).filter((x) => x.x > item.x + item.width - 1);
+      // The dates on the same line, or (a slip with the value under its heading) on the next.
+      const below = (lines[n + 1] ?? []).filter((x) => x.x > item.x - 30 && x.x < item.x + 250);
+      for (const texts of [[own, ...right.map((x) => x.str)], below.map((x) => x.str)]) {
+        const dates = datesIn(texts.join(' '));
+        if (dates.length >= 2 && dates[0] <= dates[1] && daysBetween(dates[0], dates[1]) <= 62) {
+          printed = [dates[0], dates[1]];
+          return;
+        }
+      }
+    });
+  });
+
+  // The other dates on the slip: the pay lines' and the pay day.
+  const others = [...slip.lines.flatMap((l) => [l.from, l.to]), slip.payDate].filter((d): d is LocalDate => !!d);
+  if (printed) {
+    const [start, end] = printed;
+    const year = start.slice(0, 4);
+    const years = new Set(others.map((d) => d.slice(0, 4)));
+    // Every other date says another year (a misread digit): theirs, unless the period is near the turn of the year.
+    if (others.length >= 2 && !years.has(year) && years.size === 1) {
+      const theirs = [...years][0];
+      const crossesYear = others.every((d) => Math.abs(daysBetween(`${theirs}${start.slice(4)}`, d)) <= 70);
+      if (crossesYear) {
+        slip.periodStart = `${theirs}${start.slice(4)}`;
+        slip.periodEnd = `${theirs}${end.slice(4)}`;
+        slip.periodDoubt = 'yearFixed';
+        return;
+      }
+    }
+    [slip.periodStart, slip.periodEnd] = printed;
+    return;
+  }
+  // Not printed or not readable: the month most of the pay lines are in, or the month before the pay day.
+  const lineDates = slip.lines.map((l) => l.from).filter((d): d is LocalDate => !!d);
+  const counts = new Map<string, number>();
+  for (const d of lineDates) counts.set(d.slice(0, 7), (counts.get(d.slice(0, 7)) ?? 0) + 1);
+  const month = [...counts].sort((a, b) => b[1] - a[1])[0]?.[0] ?? (slip.payDate ? previousMonth(slip.payDate.slice(0, 7)) : undefined);
+  if (!month) return;
+  slip.periodStart = `${month}-01`;
+  slip.periodEnd = lastOfMonth(month);
+  slip.periodDoubt = 'guessed';
 }
 
 function groupLines(items: TextItem[]): TextItem[][] {
@@ -210,19 +304,19 @@ export function parsePaySlip(items: TextItem[], hourlyRate?: number): PaySlip {
   }
 
   slip.employer = lines[0]?.[0]?.str.trim();
-  const period = valuesAfter(lines, /^Löneperiod$/i)[0]?.value.match(/(\d{4}-\d{2}-\d{2})\s*-\s*(\d{4}-\d{2}-\d{2})/);
-  if (period) [, slip.periodStart, slip.periodEnd] = period;
 
   // "Utbetalas 2026-10-23" with the amount paid out further right.
   for (const line of lines) {
     const idx = line.findIndex((i) => /^Utbetalas\b/i.test(i.str.trim()));
     if (idx < 0) continue;
     // The date in the same text, or (a photographed slip) the next cell.
-    const date = line[idx].str.match(/\d{4}-\d{2}-\d{2}/)?.[0] ?? line[idx + 1]?.str.trim().match(/^\d{4}-\d{2}-\d{2}$/)?.[0];
+    const date = datesIn(line[idx].str)[0] ?? (line[idx + 1] && datesIn(line[idx + 1].str)[0]);
     if (date) slip.payDate = date;
     const amount = line.slice(idx + 1).find((i) => NUMBER.test(i.str.trim()));
     if (amount) slip.net = parseSwedishNumber(amount.str);
   }
+
+  findPeriod(lines, slip);
 
   // Bruttolön/Skatt appear in several summary blocks; the payout block is rightmost.
   const gross = rightmost(valuesAfter(lines, /^Bruttolön$/i));
