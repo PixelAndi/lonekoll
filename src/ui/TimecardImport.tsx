@@ -133,17 +133,16 @@ function MonthReview({ month, days }: { month: string; days: TimecardDayReading[
   const { t, fmt, days: logged } = useApp();
   const existing = new Map(logged.map((d) => [d.date, d]));
   const shown = days.filter((d) => d.status !== 'empty' || d.noteImage || d.note);
-  const [decisions, setDecisions] = useState<Map<string, Decision>>(
-    () =>
-      new Map(
-        shown.map((d) => [
-          d.date,
-          { pairs: d.pairs.map((p) => ({ in: p.in, out: p.out })), useCard: true, absence: d.noteImage || d.note ? guessAbsence(d.note) : undefined },
-        ]),
-      ),
-  );
+  const [chosen, setDecisions] = useState<Map<string, Decision>>(new Map());
+  // A day not yet decided on (also one from a page scanned after the review opened) starts from what was read.
+  const initial = (d: TimecardDayReading): Decision => ({
+    pairs: d.pairs.map((p) => ({ in: p.in, out: p.out })),
+    useCard: true,
+    absence: d.noteImage || d.note ? guessAbsence(d.note) : undefined,
+  });
+  const decisions = { get: (date: string) => chosen.get(date) ?? initial(shown.find((d) => d.date === date)!) };
   const [saved, setSaved] = useState<number | null>(null);
-  const decide = (date: string, patch: Partial<Decision>) => setDecisions((m) => new Map(m).set(date, { ...m.get(date)!, ...patch }));
+  const decide = (date: string, patch: Partial<Decision>) => setDecisions((m) => new Map(m).set(date, { ...decisions.get(date), ...patch }));
 
   const ok = shown.filter((d) => d.status === 'ok' || d.status === 'fixed').length;
   const toCheck = shown.filter((d) => d.status === 'check').length;
@@ -152,7 +151,7 @@ function MonthReview({ month, days }: { month: string; days: TimecardDayReading[
   const save = async () => {
     let n = 0;
     for (const d of shown) {
-      const choice = decisions.get(d.date)!;
+      const choice = decisions.get(d.date);
       const before = existing.get(d.date);
       const rows = choice.pairs.filter((p) => p.in || p.out);
       const differs = before && before.rows.length > 0 && stampText(before.rows) !== stampText(rows);
@@ -181,7 +180,7 @@ function MonthReview({ month, days }: { month: string; days: TimecardDayReading[
       </p>
       <ul className="timecard-days">
         {shown.map((d) => {
-          const choice = decisions.get(d.date)!;
+          const choice = decisions.get(d.date);
           const before = existing.get(d.date);
           const rows = choice.pairs.filter((p) => p.in || p.out);
           const differs = !!before && before.rows.length > 0 && rows.length > 0 && stampText(before.rows) !== stampText(rows);

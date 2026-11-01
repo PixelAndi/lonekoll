@@ -169,6 +169,13 @@ function timeColumns(xs: number[], width: number): number[] {
     .sort((a, b) => a - b);
 }
 
+/** A real calendar date ("2021-18-05" or "2021-02-30" read wrong is not). */
+export function isRealDate(date: string | undefined): date is string {
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
+  const d = new Date(`${date}T12:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === date;
+}
+
 function addDay(date: string, n = 1): string {
   const d = new Date(`${date}T12:00:00Z`);
   d.setUTCDate(d.getUTCDate() + n);
@@ -185,8 +192,10 @@ export function parseTimecard(words: OcrWord[], width: number): TimecardPage {
   let to: string | undefined;
   for (const line of all) {
     const text = line.map((w) => w.text).join(' ');
-    from ??= /fr\s*o\s*m:?\s*(20\d{2}-\d{2}-\d{2})/i.exec(text)?.[1];
-    to ??= /t\s*o\s*m:?\s*(20\d{2}-\d{2}-\d{2})/i.exec(text)?.[1];
+    const f = /fr\s*o\s*m:?\s*(20\d{2}-\d{2}-\d{2})/i.exec(text)?.[1];
+    const t = /t\s*o\s*m:?\s*(20\d{2}-\d{2}-\d{2})/i.exec(text)?.[1];
+    if (isRealDate(f)) from ??= f;
+    if (isRealDate(t)) to ??= t;
   }
 
   // Columns: the times from where they were found; Arb Tid, Ord Tim and Frånvaro from the header when it was read.
@@ -229,7 +238,7 @@ export function parseTimecard(words: OcrWord[], width: number): TimecardPage {
       const expected: string | undefined = current ? addDay(current.date) : from;
       let date: string | undefined = expected;
       const read = fullDate ? `${fullDate[1]}-${fullDate[2]}-${fullDate[3]}` : undefined;
-      if (read && (!current || read > current.date) && (!from || read >= from) && (!to || read <= to)) date = read;
+      if (isRealDate(read) && (!current || read > current.date) && (!from || read >= from) && (!to || read <= to)) date = read;
       else if (weekday && expected && weekdayOf(expected) !== weekday) {
         for (let k = 1; k <= 3; k++) if (weekdayOf(addDay(expected, k)) === weekday) date = addDay(expected, k);
       }

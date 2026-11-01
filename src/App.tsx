@@ -14,6 +14,7 @@ import { MonthView } from './ui/MonthView.tsx';
 import { ReportView } from './ui/ReportView.tsx';
 import { SettingsView } from './ui/SettingsView.tsx';
 import { HelpView } from './ui/HelpView.tsx';
+import { ErrorBoundary } from './ui/ErrorBoundary.tsx';
 import { TimecardImport } from './ui/TimecardImport.tsx';
 import { SlipsView } from './ui/SlipsView.tsx';
 
@@ -101,7 +102,9 @@ export function App() {
           </header>
         )}
         <UpdateBanner text={t('update.available')} action={t('update.reload')} />
-        <Screen route={route} />
+        <ErrorBoundary title={t('error.title')} text={t('error.text')} back={t('error.back')} resetKey={JSON.stringify(route)}>
+          <Screen route={route} />
+        </ErrorBoundary>
         {!isReport && (
           <nav className="tabbar no-print">
             {TABS.map((tab) => (
