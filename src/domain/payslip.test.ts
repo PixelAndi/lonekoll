@@ -116,6 +116,24 @@ describe('classifyLine', () => {
   });
 });
 
+describe('the pay day on a photo', () => {
+  const withBar = (cells: [string, number, number][]) => items.filter((i) => i.y !== 66.7).concat(row(66.7, cells));
+
+  it('is read with "Utbetalas" misread', () => {
+    const slip = parsePaySlip(withBar([['uuUibgjalas 2026-10-23.', 306.1, 96.2], ['25 275,80', 512.8, 44.5]]));
+    expect([slip.payDate, slip.net]).toEqual(['2026-10-23', 25275.8]);
+  });
+
+  it('is the date shortly after the period when the word is lost, its year put right', () => {
+    expect(parsePaySlip(withBar([['2026-10-23,', 306.1, 40], ['25 275,80', 512.8, 44.5]])).payDate).toBe('2026-10-23');
+    expect(parsePaySlip(withBar([['2006-10-23', 306.1, 40]])).payDate).toBe('2026-10-23');
+  });
+
+  it('is not taken from a date far from the period', () => {
+    expect(parsePaySlip(withBar([['2026-03-23', 306.1, 40]])).payDate).toBeUndefined();
+  });
+});
+
 describe('the payout block', () => {
   it('reads a dash as nothing (an extra payout with no tax)', () => {
     const noTax = items.filter((i) => !(i.y === 174.6 && i.x > 500)).concat(row(174.6, [['-', 555, 2.3]]));

@@ -250,14 +250,18 @@ export function warmUpSlipReading(): void {
  * into the table's cells (see slipPhoto.ts) and given to the same parser.
  */
 export async function readPaySlipImage(file: Blob, hourlyRate?: number): Promise<import('../domain/payslip.ts').PaySlip> {
-  const [{ slipItemsFromWords }, { parsePaySlip }, ocr] = await Promise.all([import('./slipPhoto.ts'), import('../domain/payslip.ts'), getEngine('swe')]);
+  const [{ slipItemsFromWords, lightenDarkBars }, { parsePaySlip }, ocr] = await Promise.all([import('./slipPhoto.ts'), import('../domain/payslip.ts'), getEngine('swe')]);
   // Scaled to reading size as it is decoded: a phone photo is 12 megapixels, far more than needed.
   const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image', resizeWidth: TIMECARD_WIDTH, resizeQuality: 'high' });
   const canvas = document.createElement('canvas');
   canvas.width = bitmap.width;
   canvas.height = bitmap.height;
-  canvas.getContext('2d')!.drawImage(bitmap, 0, 0);
+  const context = canvas.getContext('2d')!;
+  context.drawImage(bitmap, 0, 0);
   bitmap.close();
+  // The grey bars (the pay day and payout are printed on one) made readable before the page is cleaned.
+  const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
+  if (lightenDarkBars(pixels.data, canvas.width, canvas.height).length) context.putImageData(pixels, 0, 0);
   const strips = slipStrips();
   const prepared = await prepare(canvas, strips, Math.round(TIMECARD_WIDTH * 0.03));
   const words = await ocr.recognizeStrips(prepared.strips, 'find');

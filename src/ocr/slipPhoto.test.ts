@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parsePaySlip } from '../domain/payslip.ts';
 import type { OcrWord } from './parse.ts';
-import { slipItemsFromWords } from './slipPhoto.ts';
+import { lightenDarkBars, slipItemsFromWords } from './slipPhoto.ts';
 
 // A made-up pay slip as the OCR reads a photo of it: single words with their boxes, on a picture
 // 2400 px across, tilted a little (rows rise 1 px per 100 px across), the decimal comma read as a point.
@@ -47,5 +47,35 @@ describe('a photographed pay slip', () => {
       ['1149', 20, 50.89, 1017.8, 'ob1'],
     ]);
     expect([slip.gross, slip.tax, slip.payDate, slip.net]).toEqual([22707.8, 6000, '2026-10-23', 16707.8]);
+  });
+});
+
+describe('the grey bars', () => {
+  // A made-up page: white paper, a grey bar across it with dark ink on it, and some text above.
+  const width = 400;
+  const height = 600;
+  const page = () => {
+    const rgba = new Uint8ClampedArray(width * height * 4).fill(230);
+    const set = (x: number, y: number, v: number) => rgba.fill(v, (y * width + x) * 4, (y * width + x) * 4 + 3);
+    for (let y = 500; y < 515; y++) for (let x = 20; x < 380; x++) set(x, y, 120);
+    for (let y = 504; y < 511; y++) for (let x = 100; x < 140; x++) set(x, y, 40);
+    for (let y = 100; y < 107; y++) for (let x = 100; x < 140; x++) set(x, y, 40);
+    return rgba;
+  };
+  const at = (rgba: Uint8ClampedArray, x: number, y: number) => rgba[(y * width + x) * 4];
+
+  it('turns a bar white and keeps its ink dark', () => {
+    const rgba = page();
+    const bars = lightenDarkBars(rgba, width, height);
+    expect(bars).toEqual([{ top: 500, bottom: 514 }]);
+    expect(at(rgba, 300, 507)).toBeGreaterThan(200);
+    expect(at(rgba, 120, 507)).toBeLessThan(60);
+  });
+
+  it('leaves the rest of the page alone', () => {
+    const rgba = page();
+    lightenDarkBars(rgba, width, height);
+    expect(at(rgba, 120, 103)).toBe(40);
+    expect(at(rgba, 300, 300)).toBe(230);
   });
 });

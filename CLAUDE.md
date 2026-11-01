@@ -104,9 +104,15 @@ newer layout has not been verified from a photo yet. Older slips print
 re-read at start, `rereadUndatedSlips`). Hourly overtime is printed as the
 supplement ("Övertid 1/2/3, timavlönad, 50%/75%/100%") plus "Timlön vid
 övertid" (the hour itself, read as wage). The 75 % level, seen only on
-Saturdays, isn't in the app's rules, so it is compared as overtime in total. The payout on the dark
-bar is often unreadable; it is then gross − tax − other deductions, rounded
-up to whole kronor (as these slips do).
+Saturdays, isn't in the app's rules, so it is compared as overtime in total. The pay day and payout
+are printed on a grey bar (dark ink on grey, with print showing through from
+the back); on a photo the bar is found and lightened (`lightenDarkBars`)
+before the page is cleaned, which made the pay day readable on all 4 real
+photos tried. A misread "Utbetalas" is accepted with a date after it, and
+without the word the pay day is the date 1–62 days after the period (year
+misread put right). If the payout is still unreadable it is gross − tax −
+other deductions, rounded up to whole kronor (as these slips do). One real
+photo still misses one of its 19 per-day lines (the check card warns).
 
 The pay period is never taken from the import date: read from "Löneperiod"
 (year checked against the other dates on the slip), else worked out from the

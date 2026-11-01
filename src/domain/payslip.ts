@@ -391,6 +391,30 @@ function valuesAfter(lines: TextItem[][], label: RegExp): { label: TextItem; val
 const rightmost = <T extends { label: TextItem }>(list: T[]) =>
   list.length ? list.reduce((a, b) => (b.label.x > a.label.x ? b : a)) : undefined;
 
+/**
+ * A photo can lose the word "Utbetalas" on its grey bar, or misread its year
+ * ("2006-10-23" for 2026-10-23). The pay day is then the slip's one date shortly after the
+ * period ends (1–62 days); a year misread is put right when the month and day
+ * still fit. The check card shows it for the user to confirm.
+ */
+function payDateWithoutLabel(lines: TextItem[][], slip: PaySlip): LocalDate | undefined {
+  const end = slip.periodEnd;
+  if (!end) return undefined;
+  const fits = (d: LocalDate) => daysBetween(end, d) >= 1 && daysBetween(end, d) <= 62;
+  const year = Number(end.slice(0, 4));
+  // From the bottom of the page up: the pay day is printed last.
+  for (const line of [...lines].reverse()) {
+    for (const item of line) {
+      for (const d of datesIn(item.str)) {
+        if (fits(d)) return d;
+        const fixed = [year, year + 1].map((y) => `${y}${d.slice(4)}`).find(fits);
+        if (fixed) return fixed;
+      }
+    }
+  }
+  return undefined;
+}
+
 export function parsePaySlip(items: TextItem[], hourlyRate?: number): PaySlip {
   const lines = joinSplitRows(groupLines(items));
   const slip: PaySlip = { lines: [], balances: {} };
@@ -403,9 +427,12 @@ export function parsePaySlip(items: TextItem[], hourlyRate?: number): PaySlip {
   fixMisreadPrices(slip.lines);
   slip.employer = lines[0]?.[0]?.str.trim();
 
-  // "Utbetalas 2026-10-23" with the amount paid out further right.
+  // "Utbetalas 2026-10-23" with the amount paid out further right. On a photo the word is
+  // printed on a grey bar and often misread ("uuUibgjalas"): its ending or middle will do, with a date.
+  const misread = (s: string) => /^\S*(alas|betal\S*)\b/i.test(s);
   for (const line of lines) {
-    const idx = line.findIndex((i) => /^Utbetalas\b/i.test(i.str.trim()));
+    const dated = (k: number) => datesIn(line[k].str).length > 0 || (!!line[k + 1] && datesIn(line[k + 1].str).length > 0);
+    const idx = line.findIndex((i, k) => /^Utbetalas\b/i.test(i.str.trim()) || (misread(i.str.trim()) && dated(k)));
     if (idx < 0) continue;
     // The date in the same text, or (a photographed slip) the next cell.
     const date = datesIn(line[idx].str)[0] ?? (line[idx + 1] && datesIn(line[idx + 1].str)[0]);
@@ -415,6 +442,7 @@ export function parsePaySlip(items: TextItem[], hourlyRate?: number): PaySlip {
   }
 
   findPeriod(lines, slip);
+  if (!slip.payDate) slip.payDate = payDateWithoutLabel(lines, slip);
 
   // Bruttolön/Skatt appear in several summary blocks; the payout block is rightmost.
   const gross = rightmost(valuesAfter(lines, /^Bruttolön$/i));
