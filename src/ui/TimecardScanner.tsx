@@ -1,55 +1,54 @@
 import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../app-context.ts';
 import type { TimecardReading } from '../ocr/browser.ts';
-import { aimAt, aimAtPart, findPage, type Aim, type FoundPage } from '../ocr/pageFind.ts';
-import { combineReadings, type CheckedDay } from '../ocr/timecard.ts';
+import { aimAt, findPage, type Aim, type FoundPage } from '../ocr/pageFind.ts';
+import { addsUpToTotal, combineReadings, type CheckedDay } from '../ocr/timecard.ts';
 
-// A live scanner for printed timecards, in steps: first the whole page (the
-// month, which card it is, a first reading of every day), then close-ups of
-// its top and bottom half, Datum to Arb Tid, where the digits come out larger
-// – a second reading of every day. A map of the card says which part to aim
-// at and which days are certain. A card scanned again is known by its period
-// and print time, and every reading of a day is put to the vote (see
-// combineReadings).
+// A live scanner for printed timecards. Hold the whole card in the frame:
+// pictures are taken from the camera's live picture (no separate photo – the
+// camera would refocus and change its colours each time) when it is steady
+// and sharp, and read; every reading of a day is put to the vote (see
+// combineReadings). Another picture is taken only while some days are not
+// yet certain, or the days don't add up to the card's own total Arb Tid –
+// on real scans of a card, a day that adds up as read was never wrong, so
+// most cards are done after one or two pictures. A map shows which days are
+// certain. Then the next card; one scanned again is known by its period, and
+// its readings join the vote.
 
-/** The frame's width, as a share of what the screen shows. */
+/** The frame: A4 upright, its width a share of what the screen shows. */
 const FRAME_WIDTH = 0.9;
-/** The whole page: A4 upright. */
 const PAGE_RATIO = 297 / 210;
-/** A close-up: half the card's rows, Datum to Arb Tid (about 0.6 as high as wide). */
-const PART_RATIO = 0.62;
 /** How long the picture must be steady before it is taken (ms). */
-const STEADY_MS = 900;
+const STEADY_MS = 700;
+/** At most this many pictures of a card; days still not certain then are left to the review. */
+const MAX_READS = 4;
 /**
  * The smallest printed row (pixels in the picture) read reliably: smaller,
  * and digits are misread in ways that can still add up (tried on real cards:
  * 16 px read every day right, 13 px read some days wrong without noticing).
  */
 const MIN_ROW_PIXELS = 15;
-/** A close-up must show the rows this much larger than the whole page did. */
-const MIN_ZOOM = 1.2;
-
-export type ScanStep = 'page' | 'top' | 'bottom';
+/** The live picture is used when it is this wide (4K upright is 2160); else a photo is taken. */
+const MIN_VIDEO_WIDTH = 1800;
 
 type Phase =
   | { kind: 'starting' }
-  | { kind: 'aiming'; hint: Exclude<Aim, 'ready'> | 'steady' }
+  | { kind: 'aiming'; hint: Exclude<Aim, 'ready'> | 'steady' | 'nudge' }
   | { kind: 'reading' }
   | { kind: 'failed' }
-  | { kind: 'small' };
+  | { kind: 'small' }
+  | { kind: 'next' };
 
 const ARROWS: Partial<Record<Aim, string>> = { left: '←', right: '→', up: '↑', down: '↓' };
 
 export interface ScannedPage {
   reading: TimecardReading;
-  step: ScanStep;
 }
 
 /** A card being scanned: its dates and every reading of it so far. */
 interface Card {
   key: string;
   dates: string[];
-  rowPixels?: number;
   readings: TimecardReading[];
 }
 
@@ -65,16 +64,6 @@ function datesBetween(from: string, to: string): string[] {
   return out;
 }
 
-/** The dates a step is for: all of them, or the top or bottom half of the rows. */
-function stepDates(card: Card | null, step: ScanStep): string[] {
-  if (!card) return [];
-  const half = Math.ceil(card.dates.length / 2);
-  return step === 'page' ? card.dates : step === 'top' ? card.dates.slice(0, half) : card.dates.slice(half);
-}
-
-const dayNo = (date: string) => String(Number(date.slice(8)));
-const span = (dates: string[]) => ({ from: dayNo(dates[0]), to: dayNo(dates[dates.length - 1]) });
-
 /** Each date's day as read so far: every reading of it put to the vote. */
 function dayStates(card: Card | null): Map<string, CheckedDay | undefined> {
   const out = new Map<string, CheckedDay | undefined>();
@@ -84,6 +73,17 @@ function dayStates(card: Card | null): Map<string, CheckedDay | undefined> {
     out.set(date, readings.length ? combineReadings(readings) : undefined);
   }
   return out;
+}
+
+/** How a card stands: days not yet certain, and whether they add up to its total (when that was read). */
+function standing(card: Card) {
+  const days = [...dayStates(card).values()];
+  const unsure = days.filter((d) => !d || (d.status !== 'ok' && d.status !== 'empty')).length;
+  const totals = card.readings.map((r) => r.totalWorked).filter((x): x is number => x !== undefined);
+  const total = totals.sort((a, b) => totals.filter((x) => x === b).length - totals.filter((x) => x === a).length)[0];
+  const addsUp = total === undefined || addsUpToTotal(days.filter((d): d is CheckedDay => !!d), total);
+  const sure = days.filter((d) => d && d.status === 'ok').length;
+  return { unsure, addsUp, sure, done: unsure === 0 && addsUp };
 }
 
 /** Saves a file to the phone (test mode: what the scanner saw, to send for troubleshooting). */
@@ -105,26 +105,29 @@ export function TimecardScanner({ onPage, onClose, test = false }: { onPage: (pa
   const video = useRef<HTMLVideoElement>(null);
   const [phase, setPhase] = useState<Phase>({ kind: 'starting' });
   const [error, setError] = useState(false);
-  const [step, setStepState] = useState<ScanStep>('page');
   const [card, setCardState] = useState<Card | null>(null);
-  /** What the last picture gave (a step done, the wrong part, the same card again …). */
+  /** What the last picture gave (the card done, days still to confirm …). */
   const [note, setNote] = useState<{ text: string; kind: 'ok' | 'warn' } | null>(null);
-  const [pages, setPages] = useState(0);
-  // The same as refs, for the camera loop.
-  const stepRef = useRef<ScanStep>('page');
+  const [cardsDone, setCardsDone] = useState(0);
   const cardRef = useRef<Card | null>(null);
   const cards = useRef(new Map<string, Card>());
-  const setStep = (s: ScanStep) => {
-    stepRef.current = s;
-    setStepState(s);
-  };
   const setCard = (c: Card | null) => {
     cardRef.current = c;
     setCardState(c ? { ...c, readings: [...c.readings] } : null);
   };
+  /** A card is done: wait until it is taken away (or another is put there) before the next picture. */
+  const waiting = useRef(false);
   const busy = useRef(false);
   const steadySince = useRef<number | null>(null);
+  /** The sharpest the picture has been while steady: a picture is taken at its sharpest. */
+  const sharpest = useRef(0);
   const last = useRef<Uint8ClampedArray | null>(null);
+  /**
+   * The picture when the last one was taken: the next must differ a little (the phone moved a
+   * bit). Readings of the very same picture would agree on the same misread – only readings of
+   * different pictures confirm each other.
+   */
+  const lastShot = useRef<Uint8ClampedArray | null>(null);
   const capture = useRef<() => Promise<void>>(async () => undefined);
   /** The print as last found (shares of the picture), for the outline and the crop. */
   const found = useRef<FoundPage | null>(null);
@@ -163,15 +166,13 @@ export function TimecardScanner({ onPage, onClose, test = false }: { onPage: (pa
         if (!alive) return;
         if (test) startRecording(stream);
         setPhase({ kind: 'aiming', hint: 'find' });
-        timer = window.setInterval(() => void tick(), 250);
+        timer = window.setInterval(() => void tick(), 200);
       } catch {
         setError(true);
       }
     })();
 
-    const ratio = () => (stepRef.current === 'page' ? PAGE_RATIO : PART_RATIO);
-
-    /** Find the print, say how to move; in place and steady for a moment: take the picture. */
+    /** Find the print, say how to move; in place, steady and at its sharpest: take the picture. */
     const tick = async () => {
       const v = video.current;
       if (!v || busy.current || v.videoWidth === 0) return;
@@ -179,24 +180,38 @@ export function TimecardScanner({ onPage, onClose, test = false }: { onPage: (pa
       const moved = last.current ? difference(last.current, sample.data) : 1;
       last.current = sample.data;
       // The print's rows only show at a finer size (at 160 px across they blur into grey).
-      const page = findPage(sample, videoSample(v, 480));
+      const fine = videoSample(v, 480);
+      const page = findPage(sample, fine);
       found.current = page;
-      const frame = frameShare(v, ratio());
+      const frame = frameShare(v, PAGE_RATIO);
       setFrameOnScreen(onScreen(v, frame));
-      const aim = (stepRef.current === 'page' ? aimAt : aimAtPart)(page, frame);
+      const aim = aimAt(page, frame);
       setOutline(page ? { ...onScreen(v, page), ready: aim === 'ready' } : null);
+      if (waiting.current) {
+        // The card done is still there: wait for it to go, or for a big change (the next card).
+        if (!page || moved > 0.25) waiting.current = false;
+        else return setPhase({ kind: 'next' });
+      }
       if (aim !== 'ready') {
         steadySince.current = null;
         setPhase({ kind: 'aiming', hint: aim });
         return;
       }
+      if (cardRef.current && lastShot.current && difference(lastShot.current, sample.data) < 0.02) {
+        steadySince.current = null;
+        setPhase({ kind: 'aiming', hint: 'nudge' });
+        return;
+      }
       setPhase({ kind: 'aiming', hint: 'steady' });
       if (moved > 0.04) {
         steadySince.current = null;
+        sharpest.current = 0;
         return;
       }
+      const sharp = sharpness(fine, page!);
+      sharpest.current = Math.max(sharpest.current, sharp);
       steadySince.current ??= performance.now();
-      if (performance.now() - steadySince.current >= STEADY_MS) await capture.current();
+      if (performance.now() - steadySince.current >= STEADY_MS && sharp >= sharpest.current * 0.9) await capture.current();
     };
 
     capture.current = async () => {
@@ -204,104 +219,74 @@ export function TimecardScanner({ onPage, onClose, test = false }: { onPage: (pa
       if (!v || !stream || busy.current) return;
       busy.current = true;
       steadySince.current = null;
+      sharpest.current = 0;
       setPhase({ kind: 'reading' });
-      const now = stepRef.current;
-      const current = cardRef.current;
-      const target = stepDates(current, now);
+      lastShot.current = last.current;
       try {
-        const canvas = await fullResolution(stream, v, ratio());
+        const canvas = await picture(stream, v, PAGE_RATIO);
         const sheet = found.current;
         const crop = cropToPage(canvas, sheet);
         const { readTimecardImage } = await import('../ocr/browser.ts');
-        // A close-up's rows can be the half aimed at, or a few days either side.
-        const hint =
-          now !== 'page' && current && target.length
-            ? {
-                from: current.dates[0],
-                to: current.dates[current.dates.length - 1],
-                near: { from: addDays(target[0], -4), to: addDays(target[target.length - 1], 4) },
-              }
-            : undefined;
-        const reading = await readTimecardImage(crop, hint);
+        const reading = await readTimecardImage(crop);
         const read = reading.days.filter((d) => d.status !== 'empty').length;
         const small = reading.rowPixels !== undefined && reading.rowPixels < MIN_ROW_PIXELS;
-        const notCloser = now !== 'page' && !!current?.rowPixels && !!reading.rowPixels && reading.rowPixels < current.rowPixels * MIN_ZOOM;
         if (test) {
           // Everything about this picture, to find out what went wrong and why.
-          const name = `tidkort-test-${stamp()}-${++shots}-${now}`;
+          const name = `tidkort-test-${stamp()}-${++shots}`;
           canvas.toBlob((b) => b && save(b, `${name}.jpg`), 'image/jpeg', 0.95);
           const info = {
             taken: new Date().toISOString(),
-            step: now,
-            hint,
             browser: navigator.userAgent,
             video: { width: v.videoWidth, height: v.videoHeight },
             picture: { width: canvas.width, height: canvas.height, via: canvas.dataset.via },
             view: viewSize(v),
-            frame: frameShare(v, ratio()),
+            frame: frameShare(v, PAGE_RATIO),
             sheet,
             crop: { width: crop.width, height: crop.height },
             rowPixels: reading.rowPixels,
             from: reading.from,
             to: reading.to,
             printed: reading.printed,
+            totalWorked: reading.totalWorked,
             days: reading.days.map(({ rowImage: _r, noteImage: _n, ...d }) => d),
           };
           save(new Blob([JSON.stringify(info, null, 1)], { type: 'application/json' }), `${name}.json`);
         }
         if (!alive) return;
         if (small) return setPhase({ kind: 'small' });
-        if (notCloser) {
-          setNote({ text: t('tcscan.notCloser', span(target)), kind: 'warn' });
-          return setPhase({ kind: 'aiming', hint: 'closer' });
+        if (!read) return setPhase({ kind: 'failed' });
+        const dates = reading.days.map((d) => d.date).sort();
+        const from = reading.from ?? dates[0];
+        const to = reading.to ?? dates[dates.length - 1];
+        // Which card: its period (the time it was printed is often too small to read).
+        const key = `${from}|${to}`;
+        const again = cards.current.get(key);
+        const current: Card = again ?? { key, dates: datesBetween(from, to), readings: [] };
+        const first = !again;
+        current.readings.push(reading);
+        cards.current.set(key, current);
+        setCard(current);
+        onPage({ reading });
+        const now = standing(current);
+        const month = fmt.month(`${from.slice(0, 7)}-01`);
+        if (now.done || current.readings.length >= MAX_READS) {
+          navigator.vibrate?.([80, 60, 80]);
+          if (first || !waiting.current) setCardsDone((n) => n + 1);
+          setNote({
+            text: now.done ? t('tcscan.cardDone', { month, ok: now.sure }) : t('tcscan.cardLeft', { month, check: now.unsure }),
+            kind: now.done ? 'ok' : 'warn',
+          });
+          waiting.current = true;
+        } else {
+          navigator.vibrate?.(60);
+          setNote({ text: now.unsure ? t('tcscan.keep', { n: now.unsure }) : t('tcscan.totalOff'), kind: 'warn' });
         }
-        if (now === 'page') {
-          if (!read) return setPhase({ kind: 'failed' });
-          const dates = reading.days.map((d) => d.date).sort();
-          const from = reading.from ?? dates[0];
-          const to = reading.to ?? dates[dates.length - 1];
-          // Which card: its period and when it was printed.
-          const key = `${from}|${to}|${reading.printed ?? ''}`;
-          const again = cards.current.get(key);
-          const next: Card = again ?? { key, dates: datesBetween(from, to), readings: [] };
-          next.rowPixels = reading.rowPixels;
-          next.readings.push(reading);
-          cards.current.set(key, next);
-          setCard(next);
-          setPages((n) => n + 1);
-          navigator.vibrate?.(80);
-          onPage({ reading, step: now });
-          setNote(again ? { text: t('tcscan.sameCard'), kind: 'ok' } : { text: t('tcscan.newCard', { month: fmt.month(`${from.slice(0, 7)}-01`) }), kind: 'ok' });
-          setStep('top');
-        } else if (current) {
-          const got = reading.days.map((d) => d.date).sort();
-          if (!got.length) return setPhase({ kind: 'failed' });
-          current.readings.push(reading);
-          setCard(current);
-          onPage({ reading, step: now });
-          const hit = target.filter((d) => got.includes(d)).length;
-          if (hit >= target.length * 0.6) {
-            navigator.vibrate?.(80);
-            if (now === 'top') {
-              setNote({ text: t('tcscan.partDone', span(target)), kind: 'ok' });
-              setStep('bottom');
-            } else finishCard(current);
-          } else {
-            // Another part of the card: still a reading of those days; say where to go.
-            const middle = (ds: string[]) => ds.reduce((sum, d) => sum + Number(d.slice(8)), 0) / ds.length;
-            const dir = middle(got) < middle(target) ? 'down' : 'up';
-            setNote({ text: t(`tcscan.wrongPart.${dir}`, { got: `${span(got).from}–${span(got).to}`, want: `${span(target).from}–${span(target).to}` }), kind: 'warn' });
-          }
-        }
-        setPhase({ kind: 'aiming', hint: 'find' });
+        setPhase({ kind: 'aiming', hint: 'steady' });
       } catch {
         if (alive) setPhase({ kind: 'failed' });
       } finally {
-        // A moment to move to the next part before looking again.
-        window.setTimeout(() => {
-          busy.current = false;
-          last.current = null;
-        }, 2000);
+        busy.current = false;
+        last.current = null;
       }
     };
 
@@ -314,27 +299,6 @@ export function TimecardScanner({ onPage, onClose, test = false }: { onPage: (pa
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onPage, test]);
 
-  // The frame takes the step's shape at once (the camera loop pauses while a picture is read).
-  useEffect(() => {
-    const v = video.current;
-    if (v?.videoWidth) setFrameOnScreen(onScreen(v, frameShare(v, step === 'page' ? PAGE_RATIO : PART_RATIO)));
-  }, [step]);
-
-  /** All steps of a card done: how it stands, then ready for the next card. */
-  function finishCard(c: Card) {
-    const states = [...dayStates(c).values()].filter((d) => d && d.status !== 'empty');
-    const sure = states.filter((d) => d!.status === 'ok').length;
-    setNote({ text: t('tcscan.cardDone', { ok: sure, check: states.length - sure }), kind: sure === states.length ? 'ok' : 'warn' });
-    setStep('page');
-  }
-
-  const skip = () => {
-    if (step === 'top') setStep('bottom');
-    else if (cardRef.current) finishCard(cardRef.current);
-    setNote(null);
-  };
-
-  const target = stepDates(card, step);
   const status =
     phase.kind === 'reading'
       ? t('tcscan.reading')
@@ -342,17 +306,17 @@ export function TimecardScanner({ onPage, onClose, test = false }: { onPage: (pa
         ? t('tcscan.failed')
         : phase.kind === 'small'
           ? t('tcscan.small')
-          : phase.kind === 'aiming'
-            ? `${ARROWS[phase.hint as Aim] ?? ''} ${t(phase.hint === 'closer' && step !== 'page' ? 'tcscan.hint.closerPart' : `tcscan.hint.${phase.hint}`)}`.trim()
-            : t('tcscan.starting');
-  const steps: ScanStep[] = ['page', 'top', 'bottom'];
-  const stepLabel = (s: ScanStep) => (s === 'page' ? t('tcscan.step.page') : card ? t('tcscan.step.part', span(stepDates(card, s))) : t(`tcscan.step.${s}`));
+          : phase.kind === 'next'
+            ? t('tcscan.next')
+            : phase.kind === 'aiming'
+              ? `${ARROWS[phase.hint as Aim] ?? ''} ${t(`tcscan.hint.${phase.hint}`)}`.trim()
+              : t('tcscan.starting');
 
   return (
     <div className="scanner" role="dialog" aria-modal="true" aria-label={t('tcscan.title')}>
       <div className="scanner-view">
         <video ref={video} className="scanner-video" playsInline muted />
-        {frameOnScreen && <div className={`tcscan-frame ${step !== 'page' ? 'tcscan-frame-part' : ''}`} style={frameOnScreen} aria-hidden="true" />}
+        {frameOnScreen && <div className="tcscan-frame" style={frameOnScreen} aria-hidden="true" />}
         {outline && (
           <div
             className={`tcscan-page ${outline.ready ? 'tcscan-page-ready' : ''}`}
@@ -360,50 +324,53 @@ export function TimecardScanner({ onPage, onClose, test = false }: { onPage: (pa
             aria-hidden="true"
           />
         )}
-        <ol className="tcscan-steps">
-          {steps.map((s, i) => {
-            const done = card && steps.indexOf(step) > i;
-            return (
-              <li key={s} className={s === step ? 'tcscan-step-now' : done ? 'tcscan-step-done' : ''}>
-                {done ? '✓' : i + 1} {stepLabel(s)}
-              </li>
-            );
-          })}
-        </ol>
-        <CardMap card={card} target={step === 'page' ? null : target} t={t} />
+        <CardMap card={card} t={t} />
         {error && <p className="scanner-status tcscan-error">{t('tcscan.noCamera')}</p>}
         <div className="scanner-status">
           {test && <div className="tcscan-test">{t('tcscan.test')}</div>}
           {note && <div className={`tcscan-note tcscan-note-${note.kind}`}>{note.text}</div>}
-          <div className="tcscan-do">{step === 'page' ? t('tcscan.do.page') : t('tcscan.do.part', span(target))}</div>
+          {!card && <div className="tcscan-do">{t('tcscan.do.page')}</div>}
           <div className={`scanner-pill ${phase.kind === 'reading' ? 'scanner-pill-ok' : phase.kind === 'failed' || phase.kind === 'small' ? 'scanner-pill-warn' : ''}`}>
             {status}
-            {pages > 0 && <div className="tcscan-count">{t('tcscan.cards', { n: cards.current.size })}</div>}
+            {cardsDone > 0 && <div className="tcscan-count">{t('tcscan.cards', { n: cardsDone })}</div>}
           </div>
         </div>
       </div>
       <div className="scanner-controls">
         <button type="button" className="button" onClick={onClose}>
-          {pages ? t('tcscan.done') : t('common.close')}
+          {card ? t('tcscan.done') : t('common.close')}
         </button>
         <button type="button" className="scanner-shutter" aria-label={t('tcscan.capture')} disabled={phase.kind === 'reading'} onClick={() => void capture.current()} />
-        {step !== 'page' ? (
-          <button type="button" className="button" onClick={skip}>
-            {t('tcscan.skip')}
-          </button>
-        ) : (
-          <span className="tcscan-spacer" />
-        )}
+        <span className="tcscan-spacer" />
       </div>
     </div>
   );
 }
 
+/** How sharp the print is: the mean difference between neighbouring pixels inside it. */
+function sharpness(img: { width: number; height: number; data: Uint8ClampedArray }, page: FoundPage): number {
+  const { width: w, height: h, data } = img;
+  const x0 = Math.max(1, Math.round(page.x * w));
+  const x1 = Math.min(w - 1, Math.round((page.x + page.w) * w));
+  const y0 = Math.max(1, Math.round(page.y * h));
+  const y1 = Math.min(h - 1, Math.round((page.y + page.h) * h));
+  let sum = 0;
+  let n = 0;
+  for (let y = y0; y < y1; y += 2) {
+    for (let x = x0; x < x1; x += 2) {
+      const i = y * w + x;
+      sum += Math.abs(4 * data[i] - data[i - 1] - data[i + 1] - data[i - w] - data[i + w]);
+      n++;
+    }
+  }
+  return n ? sum / n : 0;
+}
+
 /**
  * The card in miniature: a row per date, green when certain, orange when not
- * (yet), grey without stamps; the part to aim at outlined in blue.
+ * (yet), grey without stamps.
  */
-function CardMap({ card, target, t }: { card: Card | null; target: string[] | null; t: ReturnType<typeof useApp>['t'] }) {
+function CardMap({ card, t }: { card: Card | null; t: ReturnType<typeof useApp>['t'] }) {
   const W = 70;
   const H = 99;
   const top = 16;
@@ -411,8 +378,6 @@ function CardMap({ card, target, t }: { card: Card | null; target: string[] | nu
   const dates = card?.dates ?? Array.from({ length: 31 }, (_, i) => String(i));
   const states = dayStates(card);
   const rowH = (bottom - top) / dates.length;
-  const first = target ? dates.indexOf(target[0]) : 0;
-  const lastRow = target ? dates.indexOf(target[target.length - 1]) : dates.length - 1;
   return (
     <div className="tcscan-map" aria-hidden="true">
       <svg viewBox={`0 0 ${W} ${H}`} width={W * 1.3} height={H * 1.3}>
@@ -424,18 +389,6 @@ function CardMap({ card, target, t }: { card: Card | null; target: string[] | nu
           return <rect key={d} x="5" y={top + i * rowH + 0.3} width={(W - 10) * 0.72} height={Math.max(0.8, rowH - 0.6)} fill={fill} />;
         })}
         <rect x="5" y={top + (bottom - top) + 1} width={W - 10} height="5" fill="#e5e7eb" />
-        {(target || !card) && (
-          <rect
-            x="2.5"
-            y={target ? top + first * rowH - 1.5 : 2}
-            width={target ? (W - 10) * 0.72 + 5 : W - 5}
-            height={target ? (lastRow - first + 1) * rowH + 3 : H - 4}
-            rx="2"
-            fill="none"
-            stroke="#2563eb"
-            strokeWidth="2"
-          />
-        )}
       </svg>
       {card && (
         <div className="tcscan-map-key">
@@ -507,8 +460,17 @@ function difference(a: Uint8ClampedArray, b: Uint8ClampedArray): number {
   return changed / a.length;
 }
 
-/** The picture at the camera's full resolution: a photo where the browser can take one, else the video frame. */
-async function fullResolution(stream: MediaStream, v: HTMLVideoElement, ratio: number): Promise<HTMLCanvasElement> {
+/**
+ * The picture to read: the live picture when it is large enough (4K) – taken
+ * at once, with no refocusing or change of colours – else a photo at the
+ * camera's full resolution where the browser can take one.
+ */
+async function picture(stream: MediaStream, v: HTMLVideoElement, ratio: number): Promise<HTMLCanvasElement> {
+  if (Math.min(v.videoWidth, v.videoHeight) >= MIN_VIDEO_WIDTH) {
+    const canvas = fromSource(v, v.videoWidth, v.videoHeight, v, ratio);
+    canvas.dataset.via = 'video';
+    return canvas;
+  }
   const track = stream.getVideoTracks()[0];
   const Capture = (window as unknown as { ImageCapture?: new (t: MediaStreamTrack) => { takePhoto(): Promise<Blob> } }).ImageCapture;
   if (Capture && track) {

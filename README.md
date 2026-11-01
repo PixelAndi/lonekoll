@@ -95,16 +95,24 @@ report you can go through with your employer.
   user's app language, or both in one file (Swedish first), with the summary,
   explanations, assumptions, the day log and optionally the photos.
 - **Printed timecards (tidkort).** A small "Tidkort" button beside the scan
-  button reads the time clock's printout from the employer: scanned live
-  in three steps – the whole page (the month, which card it is, a first
-  reading of every day), then close-ups of its top and bottom half, Datum to
-  Arb Tid, where the digits come out larger. A map of the card shows which
-  part to aim at and which days are certain (green) or not yet (orange); a
-  close-up of another part than the one asked for is still used, and the
-  scanner says where to move. A card scanned again is known by its period
-  and print time. Every reading of a day is put to the vote: readings alike
-  confirm each other, one that adds up uncorrected counts a little more, and
-  days the readings disagree on are put to the user. Photos or PDFs work too,
+  button reads the time clock's printout from the employer: scanned live –
+  hold the whole card in the frame and the scanner reads the camera's live
+  4K picture when it is steady and sharp (no separate photo, which made the
+  camera refocus and change its colours), in three strips at once on the
+  phone's spare cores. It takes another picture only while some days are not
+  yet certain or the days don't add up to the card's own total Arb Tid
+  (summed from the exact stamped minutes, as the card does), at most four,
+  and between pictures the view must change a little: readings of the very
+  same picture would share their misreads. Every reading of a day is put to
+  the vote: tried on 20 real pictures of a card, a day that adds up to its
+  Arb Tid as read was never wrong (254 of 254), one that adds up only after
+  correcting a digit sometimes was, and one that doesn't add up mostly was –
+  so the first decide, two alike of the second confirm, and the third are no
+  votes. A map shows which days are certain; a card scanned again (known by
+  its period) adds to the vote. Each day starts at its line of text in the
+  weekday and schedule columns, found from the ink: the date columns are
+  ruled apart from the times on this card and drift from them on a photo, so
+  the offset is measured locally by each worked day's Arb Tid row. Photos or PDFs work too,
   several pages and months at once. The table's printed rules are found
   first (fitted one by one, so a tilted or slightly angled photo still works)
   and say where each row is; the lines are then removed before the text is

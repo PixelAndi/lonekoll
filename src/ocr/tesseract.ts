@@ -68,8 +68,51 @@ export class TesseractEngine implements OcrEngine {
     return job;
   }
 
+  /** Workers besides the main one, for reading strips of a page at the same time. */
+  private helpers: Promise<Worker>[] = [];
+
+  /**
+   * A large page read in horizontal strips at the same time, one worker each (a phone has several
+   * cores; one worker uses one). The strips overlap so that no line of text is cut; a word is kept
+   * from the strip whose own part (without the overlap) its middle lies in.
+   */
+  async recognizeInStrips(image: GrayImage, mode: OcrMode, strips: number, overlap: number): Promise<OcrWord[]> {
+    if (strips <= 1) return this.recognize(image, mode);
+    const paths = Object.fromEntries(Object.entries(this.paths).filter(([, v]) => v !== undefined));
+    while (this.helpers.length < strips - 1) this.helpers.push(createWorker('eng', 1, { ...paths, cacheMethod: 'none', gzip: true }));
+    const { width, height, data } = image;
+    const step = Math.ceil(height / strips);
+    const parts = Array.from({ length: strips }, (_, k) => {
+      const own = { from: k * step, to: Math.min(height, (k + 1) * step) };
+      const y0 = Math.max(0, own.from - overlap);
+      const y1 = Math.min(height, own.to + overlap);
+      return { own, y0, image: { width, height: y1 - y0, data: data.subarray(y0 * width, y1 * width) } };
+    });
+    const read = async (part: (typeof parts)[number], worker: Promise<Worker> | null) => {
+      const words = worker
+        ? await (async () => {
+            const w = await worker;
+            await w.setParameters({ ...PARAMS[mode], user_defined_dpi: '300', debug_file: '/dev/null' });
+            const result = await w.recognize(this.toImage(encodeGrayPng(part.image)) as Blob, {}, { blocks: true });
+            return wordsOf(result.data as unknown as PageLike);
+          })()
+        : await this.recognize(part.image, mode);
+      const shift = (b: OcrWord['bbox']) => ({ ...b, y0: b.y0 + part.y0, y1: b.y1 + part.y0 });
+      return words
+        .map((w) => ({ ...w, bbox: shift(w.bbox), symbols: w.symbols?.map((c) => ({ ...c, bbox: shift(c.bbox) })) }))
+        .filter((w) => {
+          const mid = (w.bbox.y0 + w.bbox.y1) / 2;
+          return mid >= part.own.from && mid < part.own.to;
+        });
+    };
+    const results = await Promise.all(parts.map((p, k) => read(p, k === 0 ? null : this.helpers[k - 1])));
+    return results.flat();
+  }
+
   async terminate(): Promise<void> {
     if (this.worker) await (await this.worker).terminate();
     this.worker = null;
+    for (const h of this.helpers) await (await h).terminate();
+    this.helpers = [];
   }
 }

@@ -117,6 +117,8 @@ export interface TimecardReading {
   rowPixels?: number;
   /** When the card was printed (with the period, which card this is). */
   printed?: string;
+  /** The month's Arb Tid from the totals box. */
+  totalWorked?: number;
 }
 
 /** A printed timecard page (photo or rendered PDF page): every day's stamps, checked, and its notes. */
@@ -129,7 +131,9 @@ export async function readTimecardImage(source: HTMLCanvasElement, hint?: Timeca
   const gray = new Uint8Array(width * height);
   for (let i = 0; i < gray.length; i++) gray[i] = Math.round(0.299 * rgba[i * 4] + 0.587 * rgba[i * 4 + 1] + 0.114 * rgba[i * 4 + 2]);
   const { clean, rules } = prepareTimecard({ width, height, data: gray });
-  const words = await ocr.recognize(clean, 'find');
+  // In strips at the same time, on as many cores as the phone has to spare (three at most).
+  const strips = Math.max(1, Math.min(3, (navigator.hardwareConcurrency || 2) - 1));
+  const words = await ocr.recognizeInStrips(clean, 'find', strips, Math.round(width * 0.03));
   const page = parseTimecard(words, width, { clean, rules }, hint);
   const ink = noteInk(clean, page);
   const days = page.days.map((day) => {
@@ -140,7 +144,7 @@ export async function readTimecardImage(source: HTMLCanvasElement, hint?: Timeca
     return checked;
   });
   const row = rowHeight(rules, width);
-  return { from: page.from, to: page.to, printed: page.printed, days, pageImage: source.toDataURL('image/jpeg', 0.9), rowPixels: row === null ? undefined : (row * source.width) / width };
+  return { from: page.from, to: page.to, printed: page.printed, totalWorked: page.totalWorked, days, pageImage: source.toDataURL('image/jpeg', 0.9), rowPixels: row === null ? undefined : (row * source.width) / width };
 }
 
 const TIMECARD_WIDTH = 2400;

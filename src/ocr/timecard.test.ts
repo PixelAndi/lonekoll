@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { OcrWord } from './parse.ts';
-import { alignDays, asTime, checkDay, cleanTimecard, noteInk, parseTimecard, rowHeight, combineReadings, workedHours, type CheckedDay, type Rule, type TimecardDay } from './timecard.ts';
+import { addsUpToTotal, alignDays, asTime, checkDay, cleanTimecard, noteInk, parseTimecard, rowHeight, combineReadings, workedHours, type CheckedDay, type Rule, type TimecardDay } from './timecard.ts';
 
 // A made-up timecard as the OCR reads it: words with their boxes, on a page
 // 1500 px wide, slightly tilted (rows rise 1 px per 100 px across).
@@ -224,8 +224,20 @@ describe('a day read several times', () => {
     expect(d.status).toBe('ok');
     expect([d.reads, d.agree]).toEqual([3, 2]);
   });
-  it('doesn’t let corrected readings outvote one that adds up as read', () => {
-    expect(combineReadings([day('fixed', '15:00'), day('fixed', '15:00'), day('ok', '17:00')]).status).toBe('check');
+  it('goes by a reading that adds up as read (never wrong on real scans)', () => {
+    const d = combineReadings([day('fixed', '15:00'), day('fixed', '15:00'), day('ok', '17:00')]);
+    expect([d.status, d.pairs[0].out]).toEqual(['ok', '17:00']);
+  });
+  it('asks when readings that add up as read disagree', () => {
+    expect(combineReadings([day('ok', '15:00'), day('ok', '17:00')]).status).toBe('check');
+  });
+  it('doesn’t count readings that don’t add up as votes', () => {
+    const d = combineReadings([day('check', '13:14'), day('ok', '13:15'), day('check', '13:14')]);
+    expect([d.status, d.pairs[0].out]).toEqual(['ok', '13:15']);
+  });
+  it('counts readings without stamps: a junk reading of an empty row doesn’t win', () => {
+    const empty: CheckedDay = { date: '2026-03-01', status: 'empty', corrected: [], pairs: [] };
+    expect(combineReadings([empty, day('check', '09:41'), empty]).status).toBe('empty');
   });
   it('keeps a single reading as it was', () => {
     expect(combineReadings([day('fixed', '15:00')]).status).toBe('fixed');
@@ -263,5 +275,20 @@ describe('a close-up of part of the card', () => {
     const page = parseTimecard(blurred, w, { clean, rules }, march({ from: '2026-03-08', to: '2026-03-20' }));
     // Weekdays Tue–Fri from the 8th on: the 10th–13th.
     expect(page.days.map((d) => d.date)).toEqual(['2026-03-10', '2026-03-11', '2026-03-12', '2026-03-13']);
+  });
+});
+
+describe('the card’s own total', () => {
+  const d = (pairs: [string, string][], status: CheckedDay['status'] = 'ok'): CheckedDay => ({ date: 'x', status, corrected: [], pairs: pairs.map(([a, b]) => ({ in: a, out: b })) });
+  // 8 h 01 min + 7 h 58 min = 15 h 59 min = 15.9833 h: the card says 15.98 (each day alone 8.02 + 7.97 = 15.99).
+  const days = [d([['07:00', '15:01']]), d([['07:00', '11:00'], ['11:30', '15:28']]), d([], 'empty')];
+  it('is reached by the exact minutes of every day with stamps', () => {
+    expect(addsUpToTotal(days, 15.98)).toBe(true);
+  });
+  it('is not when a day is missing, a time is wrong, or a time is missing', () => {
+    expect(addsUpToTotal(days.slice(1), 15.98)).toBe(false);
+    expect(addsUpToTotal([d([['07:00', '15:11']]), days[1]], 15.98)).toBe(false);
+    expect(addsUpToTotal([{ ...days[0], pairs: [{ in: '07:00', out: null }] }, days[1]], 15.98)).toBe(false);
+    expect(addsUpToTotal(days, undefined)).toBe(false);
   });
 });

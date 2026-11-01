@@ -90,15 +90,10 @@ export function TimecardImport() {
   const onScanned = useCallback(
     (page: ScannedPage) => {
       const read = addReadings([page.reading]);
-      const dates = page.reading.days.map((d) => d.date).sort();
-      const day = (d: string | undefined) => (d ? String(Number(d.slice(8))) : '');
       setFiles((f) => [
         ...f,
         {
-          name:
-            page.step === 'page'
-              ? t('timecard.scannedPage', { n: f.filter((x) => x.images).length + 1 })
-              : t('timecard.closeUp', { from: day(dates[0]), to: day(dates[dates.length - 1]) }),
+          name: t('timecard.scannedPage', { n: f.filter((x) => x.images).length + 1 }),
           status: read ? 'done' : 'none',
           ...read,
           images: page.reading.pageImage ? [page.reading.pageImage] : [],

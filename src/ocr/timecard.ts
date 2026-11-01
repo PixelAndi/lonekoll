@@ -125,21 +125,28 @@ function findRules(px: number[], py: number[], w: number, h: number): Rule[] {
     if (top && (!peaks.length || y - peaks[peaks.length - 1] > 4)) peaks.push(y);
   }
   return peaks.map((peak) => {
-    // Least squares over the rule's own pixels.
-    let sx = 0, sy = 0, sxx = 0, sxy = 0, count = 0, x0 = w, x1 = 0;
-    for (let i = 0; i < n; i++) {
-      if (Math.abs(py[i] - slope * (px[i] - cx) + pad - peak) > 3) continue;
-      sx += px[i];
-      sy += py[i];
-      sxx += px[i] * px[i];
-      sxy += px[i] * py[i];
-      count++;
-      x0 = Math.min(x0, px[i]);
-      x1 = Math.max(x1, px[i]);
-    }
-    const div = count * sxx - sx * sx;
-    const b = div > 0 ? (count * sxy - sx * sy) / div : slope;
-    return { a: (sy - b * sx) / count, b, x0, x1 };
+    // Least squares over the rule's own pixels; then again without those far off it (a binder
+    // hole's shadow, a letter touching the line), which would tilt the rule at its ends.
+    const fit = (near: (i: number) => boolean) => {
+      let sx = 0, sy = 0, sxx = 0, sxy = 0, count = 0, x0 = w, x1 = 0;
+      for (let i = 0; i < n; i++) {
+        if (!near(i)) continue;
+        sx += px[i];
+        sy += py[i];
+        sxx += px[i] * px[i];
+        sxy += px[i] * py[i];
+        count++;
+        x0 = Math.min(x0, px[i]);
+        x1 = Math.max(x1, px[i]);
+      }
+      const div = count * sxx - sx * sx;
+      const b = div > 0 ? (count * sxy - sx * sy) / div : slope;
+      return { a: (sy - b * sx) / Math.max(1, count), b, x0, x1, count };
+    };
+    const rough = fit((i) => Math.abs(py[i] - slope * (px[i] - cx) + pad - peak) <= 3);
+    const fine = fit((i) => Math.abs(py[i] - slope * (px[i] - cx) + pad - peak) <= 3 && Math.abs(py[i] - (rough.a + rough.b * px[i])) <= 1.5);
+    const { a, b, x0, x1 } = fine.count >= rough.count * 0.5 ? fine : rough;
+    return { a, b, x0, x1 };
   });
 }
 
@@ -168,6 +175,8 @@ export interface TimecardPage {
   notesFrom: number;
   /** When the card was printed ("2026-04-02 09:15", top right): with the period, which card this is. */
   printed?: string;
+  /** The month's Arb Tid in the totals box: the days' Arb Tid add up to it when every day was read. */
+  totalWorked?: number;
 }
 
 /**
@@ -343,6 +352,15 @@ export function parseTimecard(words: OcrWord[], width: number, layout?: Timecard
     if (isRealDate(f)) from ??= f;
     if (isRealDate(t)) to ??= t;
   }
+  // The totals box: "Arb Tid 172.35" (more than a day can have).
+  let totalWorked: number | undefined;
+  for (const line of all) {
+    const texts = line.map((w) => clean(w.text));
+    const at = texts.findIndex((t, i) => /^arb$/i.test(t) && /^tid$/i.test(texts[i + 1] ?? ''));
+    if (at < 0) continue;
+    const n = texts.slice(at + 2, at + 5).map((t) => /^(\d{2,3})[.,](\d{2})$/.exec(t)).find((m) => m);
+    if (n && Number(n[1]) >= 24) totalWorked ??= Number(`${n[1]}.${n[2]}`);
+  }
   // When it was printed: the date and time beside "Sida".
   let printed: string | undefined;
   for (const line of all) {
@@ -397,8 +415,9 @@ export function parseTimecard(words: OcrWord[], width: number, layout?: Timecard
     }
   };
 
-  const page: TimecardPage = { from, to, days: [], notesFrom, printed };
-  const ruled = layout && byRules(words, width, layout, { from, to, dateEnd, hint });
+  const page: TimecardPage = { from, to, days: [], notesFrom, printed, totalWorked };
+  const isHours = (w: OcrWord) => centerX(w.bbox) > afterTimes && centerX(w.bbox) < notesFrom && asHours(w.text) !== null;
+  const ruled = layout && byRules(words, width, layout, { from, to, dateEnd, hint, column: columns.length === 4 ? column : undefined, isHours });
   if (ruled) {
     for (const { date, rows, top, bottom } of ruled) {
       const day: TimecardDay = { date, pairs: [], rounded: [], top, bottom };
@@ -486,7 +505,14 @@ function byRules(
   words: OcrWord[],
   width: number,
   { clean: img, rules }: TimecardLayout,
-  { from, to, dateEnd, hint }: { from?: string; to?: string; dateEnd: number; hint?: TimecardHint },
+  {
+    from,
+    to,
+    dateEnd,
+    hint,
+    column,
+    isHours,
+  }: { from?: string; to?: string; dateEnd: number; hint?: TimecardHint; column?: (w: OcrWord) => number; isHours?: (w: OcrWord) => boolean },
 ): { date: string; rows: OcrWord[][]; top: number; bottom: number }[] | null {
   if (rules.length < 4) return null;
   const mid = width / 2;
@@ -524,29 +550,140 @@ function byRules(
   }
   for (let i = 0; i < rows.length; i++) rows[i] = joinSplit(rows[i].sort((a, b) => a.bbox.x0 - b.bbox.x0), width);
 
-  // Below the header ("Datum Dag Schema …") and above the totals.
+  // The usual height of a row.
+  const gaps = run
+    .slice(1)
+    .map((r, k) => ruleY(r, mid) - ruleY(run[k], mid))
+    .sort((a, b) => a - b);
+  const rowH = gaps[Math.floor(gaps.length / 2)];
+
+  // A time read into the row above or below its own, beside a binder hole: the same time is in its
+  // pair's column there (Ut and Avr Ut are the same), and its own column there is empty.
+  if (column) {
+    const timeAt = (r: OcrWord[], c: number) => r.find((w) => !SCHEDULE.test(clean(w.text)) && asTime(w.text) && column(w) === c);
+    for (let k = 0; k < rows.length; k++) {
+      for (const w of [...rows[k]]) {
+        const c = asTime(w.text) && !SCHEDULE.test(clean(w.text)) ? column(w) : -1;
+        if (c < 0 || timeAt(rows[k], c ^ 1)) continue;
+        for (const n of [k + 1, k - 1]) {
+          const pair = rows[n] && timeAt(rows[n], c ^ 1);
+          if (pair && asTime(pair.text) === asTime(w.text) && !timeAt(rows[n], c)) {
+            rows[k] = rows[k].filter((x) => x !== w);
+            rows[n] = [...rows[n], w].sort((a, b) => a.bbox.x0 - b.bbox.x0);
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  // Below the header ("Datum Dag Schema …", two lines high: "Avr / In") and above the totals.
   let first = 0;
   let last = rows.length;
-  rows.forEach((r, i) => {
-    if (r.some((w) => /^(datum|schema)$/i.test(clean(w.text)))) first = i + 1;
+  rows.forEach((r, k) => {
+    if (r.some((w) => /^(datum|schema)$/i.test(clean(w.text)))) first = k + 1;
   });
+  if (!first) {
+    for (let k = 0; k < Math.min(3, rows.length); k++) {
+      if (ruleY(run[k + 1], mid) - ruleY(run[k], mid) > rowH * 1.6) {
+        first = k + 1;
+        break;
+      }
+    }
+  }
   const totals = rows.findIndex((r) => r.some((w) => /^totaler$/i.test(clean(w.text))));
   if (totals >= first) last = totals;
 
   // The table's left edge (the rules between a day's own rows don't reach across the date part).
   const left = run.map((r) => r.x0).sort((a, b) => a - b)[Math.floor(run.length * 0.2)];
   const dayRows: { index: number; fullDate?: string; weekday?: number }[] = [];
-  // The date part's middle: where its row is measured (a tilted page's rows aren't level).
+  // The date part's middle: where its rows are measured (a tilted page's rows aren't level).
   const dateMid = (left + dateEnd) / 2;
-  for (let i = first; i < last; i++) {
-    const top = ruleY(run[i], dateMid);
-    const bottom = ruleY(run[i + 1], dateMid);
-    const pad = (bottom - top) * 0.2;
-    const inDatePart = rows[i].filter((w) => centerX(w.bbox) < dateEnd);
-    // Ink in the weekday and schedule columns (the date's left edge is where binder holes and shadows are).
-    const written = inDatePart.some((w) => clean(w.text).length >= 3) || inkIn(img, left + (dateEnd - left) * 0.4, top + pad, dateEnd, bottom - pad) > 0.03;
-    if (written) dayRows.push({ index: i, ...dayWords(inDatePart) });
+  const dagFrom = left + (dateEnd - left) * 0.4;
+  const center = (k: number) => (ruleY(run[k], dateMid) + ruleY(run[k + 1], dateMid)) / 2;
+
+  // Each day has one line of text in the weekday and schedule columns ("Tor 12:00-12:00"), on its first
+  // row. The date columns are ruled apart from the times, a little lower, and on a photo taken at a
+  // slight angle the two drift apart – so the days are found by those lines of ink, not by the rules:
+  // each starts the row it is level with (or just below), and the rows after it until the next are its.
+  const slopes = run.map((r) => r.b).sort((a, b) => a - b);
+  const slope = slopes[Math.floor(slopes.length / 2)];
+  const yTop = Math.floor(ruleY(run[first], dateMid));
+  const yBottom = Math.ceil(ruleY(run[last], dateMid));
+  const profile: number[] = [];
+  for (let y = yTop; y < yBottom; y++) {
+    let ink = 0;
+    for (let x = Math.round(dagFrom); x < dateEnd; x += 2) {
+      const yy = Math.round(y + slope * (x - dateMid));
+      if (yy >= 0 && yy < img.height && img.data[yy * img.width + x] === 0) ink++;
+    }
+    profile.push(ink);
   }
+  const busy = ((dateEnd - dagFrom) / 2) * 0.04;
+  const anchors: number[] = [];
+  for (let y = 0, start = -1, quiet = 0; y <= profile.length; y++) {
+    if (y < profile.length && profile[y] > busy) {
+      if (start < 0) start = y;
+      quiet = 0;
+    } else if (start >= 0 && (++quiet > 2 || y === profile.length)) {
+      const end = y - quiet;
+      if (end - start >= rowH * 0.15) {
+        const at = yTop + (start + end) / 2;
+        if (!anchors.length || at - anchors[anchors.length - 1] > rowH * 0.5) anchors.push(at);
+      }
+      start = -1;
+    }
+  }
+  const starts: number[] = [];
+  if (anchors.length >= 2) {
+    // How far each line of text sits from its day's first row: a worked day has its Arb Tid on that
+    // row. The offset varies over the photo (the two rulings drift apart), so each line goes by the
+    // offsets of the lines nearest it; then it starts the row nearest to where it says.
+    const hoursRows = rows.map((r, k) => (k >= first && k < last && r.some((w) => isHours?.(w)) ? center(k) : null));
+    const offsets = anchors.map((a) => {
+      let best: number | null = null;
+      for (const c of hoursRows) if (c !== null && Math.abs(a - c) < rowH * 1.2 && (best === null || Math.abs(a - c) < Math.abs(a - best))) best = c;
+      return best === null ? null : a - best;
+    });
+    anchors.forEach((a, n) => {
+      const near = offsets
+        .map((o, m) => ({ o, d: Math.abs(m - n) }))
+        .filter((x): x is { o: number; d: number } => x.o !== null)
+        .sort((p, q) => p.d - q.d)
+        .slice(0, 5)
+        .map((x) => x.o)
+        .sort((p, q) => p - q);
+      const offset = near.length ? near[Math.floor(near.length / 2)] : 0;
+      let row = -1;
+      for (let k = first; k < last; k++) if (row < 0 || Math.abs(center(k) - (a - offset)) < Math.abs(center(row) - (a - offset))) row = k;
+      if (row >= first && !starts.includes(row)) starts.push(row);
+    });
+  } else {
+    // Without those lines: a row with ink there starts a day.
+    for (let k = first; k < last; k++) {
+      const top = ruleY(run[k], dateMid);
+      const bottom = ruleY(run[k + 1], dateMid);
+      const pad = (bottom - top) * 0.2;
+      const dag = rows[k].filter((w) => centerX(w.bbox) > dagFrom && centerX(w.bbox) < dateEnd);
+      if (dag.some((w) => clean(w.text).length >= 3) || inkIn(img, dagFrom, top + pad, dateEnd, bottom - pad) > 0.03) starts.push(k);
+    }
+  }
+  starts.sort((a, b) => a - b);
+  // The words in the date part go with the day whose first row they are nearest (level, or just below).
+  // (By the lines of text when they were found: each word to the nearest.)
+  const dateWords: OcrWord[][] = starts.map(() => []);
+  const lineOf = anchors.length >= 2 && anchors.length === starts.length ? anchors : starts.map(center);
+  for (const w of words) {
+    if (centerX(w.bbox) >= dateEnd) continue;
+    const y = centerY(w.bbox) - slope * (centerX(w.bbox) - dateMid);
+    if (y < yTop || y > yBottom) continue;
+    let best = -1;
+    lineOf.forEach((a, n) => {
+      if (best < 0 || Math.abs(a - y) < Math.abs(lineOf[best] - y)) best = n;
+    });
+    if (best >= 0) dateWords[best].push(w);
+  }
+  starts.forEach((k, n) => dayRows.push({ index: k, ...dayWords(dateWords[n].sort((a, b) => a.bbox.x0 - b.bbox.x0)) }));
   if (!dayRows.length) return null;
 
   // The period's dates: from Fr o m to T o m; without them, the calendar month most dates read are in
@@ -723,29 +860,56 @@ export function checkDay(day: TimecardDay): CheckedDay {
 }
 
 /**
- * A day read several times (the same card scanned again, close-ups of its
- * rows): the readings are put to a vote. Readings alike confirm each other,
- * also where a time had to be corrected; a reading that adds up without
- * correcting counts half a vote more. The day is certain when one reading
- * leads – but never over a rival that adds up uncorrected while it doesn't.
- * Otherwise it is put to the user.
+ * A day read several times (the card scanned again): the readings are put
+ * to the vote. Tried on real scans of a card (14 pictures, every day checked
+ * against the card): a reading that adds up to Arb Tid as read was never
+ * wrong (181 of 181), one that adds up only after correcting a digit was
+ * wrong 5 times in 48, and one that doesn't add up was mostly wrong. So:
+ * - readings that add up as read decide; if they disagree, the user does;
+ * - otherwise readings that add up after a correction, and readings with
+ *   no stamps, are counted: two alike and more than any other confirm;
+ * - readings that don't add up are no votes, only shown when nothing else is.
  */
 export function combineReadings<T extends CheckedDay>(readings: T[]): T {
-  const read = readings.filter((r) => r.status !== 'empty');
-  if (!read.length) return { ...readings[readings.length - 1], reads: 0, agree: 0 };
-  const groups = new Map<string, T[]>();
-  for (const r of read) groups.set(JSON.stringify(r.pairs), [...(groups.get(JSON.stringify(r.pairs)) ?? []), r]);
-  const ranked = [...groups.values()]
-    .map((g) => ({ g, sure: g.some((r) => r.status === 'ok') }))
-    .map((x) => ({ ...x, score: x.g.length + (x.sure ? 0.5 : 0) }))
-    .sort((a, b) => b.score - a.score);
-  const [top, rival] = ranked;
-  // The latest reading of the winning kind: a close-up's picture of the rows is the clearest.
-  const pick = top.g[top.g.length - 1];
-  const counts = { reads: read.length, agree: top.g.length };
-  if (!rival) return top.g.length >= 2 ? { ...pick, ...counts, status: 'ok', corrected: [] } : { ...pick, ...counts };
-  if (top.score - rival.score >= 0.5 && !(rival.sure && !top.sure)) return { ...pick, ...counts, status: 'ok', corrected: [] };
-  return { ...pick, ...counts, status: 'check', corrected: [] };
+  const last = readings[readings.length - 1];
+  const counts = (agree: number) => ({ reads: readings.filter((r) => r.status !== 'empty').length, agree });
+  const groups = (rs: T[]) => {
+    const by = new Map<string, T[]>();
+    for (const r of rs) by.set(JSON.stringify(r.pairs), [...(by.get(JSON.stringify(r.pairs)) ?? []), r]);
+    return [...by.values()].sort((a, b) => b.length - a.length);
+  };
+  const sure = groups(readings.filter((r) => r.status === 'ok'));
+  if (sure.length === 1) return { ...sure[0][sure[0].length - 1], ...counts(sure[0].length), status: 'ok', corrected: [] };
+  if (sure.length > 1) return { ...sure[0][sure[0].length - 1], ...counts(sure[0].length), status: 'check', corrected: [] };
+  const votes = groups(readings.filter((r) => r.status === 'fixed' || r.status === 'empty'));
+  const [top, rival] = votes;
+  if (top) {
+    const pick = top[top.length - 1];
+    if (top.length >= 2 && (!rival || top.length > rival.length)) return { ...pick, ...counts(top.length), status: pick.status === 'empty' ? 'empty' : 'ok', corrected: [] };
+    // One reading (or a tie): as it is when nothing contradicts it, else to the user.
+    if (!rival && !readings.some((r) => r.status === 'check')) return { ...pick, ...counts(1) };
+    if (!rival && pick.status === 'fixed') return { ...pick, ...counts(1) };
+    return { ...pick, ...counts(1), status: 'check', corrected: [] };
+  }
+  const unsure = groups(readings.filter((r) => r.status === 'check'))[0];
+  return unsure ? { ...unsure[unsure.length - 1], ...counts(unsure.length), status: 'check' } : { ...last, ...counts(0) };
+}
+
+/**
+ * Whether the days read add up to the card's own total Arb Tid (no day
+ * missed or read twice, no time read wrong). The card totals the exact
+ * minutes, not each day's rounded hours, so the stamps are summed.
+ */
+export function addsUpToTotal(days: CheckedDay[], total: number | undefined): boolean {
+  if (total === undefined) return false;
+  let hours = 0;
+  for (const d of days) {
+    if (d.status === 'empty' || !d.pairs.length) continue;
+    const h = workedHours(d.pairs);
+    if (h === null) return false;
+    hours += h;
+  }
+  return Math.abs(hours - total) < 0.006;
 }
 
 /**
