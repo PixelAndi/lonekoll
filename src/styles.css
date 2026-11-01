@@ -2743,3 +2743,11 @@ input[type='checkbox'] {
 .wage-breakdown .table td:first-child {
   white-space: nowrap;
 }
+
+.error-details {
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--surface-2, rgba(127, 127, 127, 0.1));
+  padding: 0.75rem;
+  border-radius: 8px;
+}

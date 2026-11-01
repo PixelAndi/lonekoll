@@ -542,6 +542,8 @@ export const pl: Record<TextKey, string> = {
   'error.title': 'Coś poszło nie tak',
   'error.text': 'Nie udało się wyświetlić tej strony. To, co zapisałeś, nadal tam jest.',
   'error.back': 'Do Dni',
+  'error.details': 'Informacje techniczne (zrób zrzut ekranu, jeśli zgłaszasz błąd)',
+  'error.reload': 'Załaduj aplikację ponownie',
   'timecard.button': 'Karta czasu',
   'timecard.title': 'Wczytaj karty czasu pracy',
   'timecard.intro': 'Zrób zdjęcie kart czasu pracy od pracodawcy (wydruku z zegara) albo wybierz zdjęcia lub PDF. Może być kilka stron i miesięcy. Każdy dzień jest sprawdzany z kolumną ”Arb Tid” na karcie.',

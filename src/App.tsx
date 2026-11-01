@@ -109,7 +109,7 @@ export function App() {
         )}
         <UpdateBanner text={t('update.available')} action={t('update.reload')} />
         <CloudBanner />
-        <ErrorBoundary title={t('error.title')} text={t('error.text')} back={t('error.back')} resetKey={JSON.stringify(route)}>
+        <ErrorBoundary title={t('error.title')} text={t('error.text')} back={t('error.back')} details={t('error.details')} reload={t('error.reload')} resetKey={JSON.stringify(route)}>
           <Screen route={route} />
         </ErrorBoundary>
         {!isReport && (
