@@ -97,9 +97,10 @@ export function wageChanges(paid: PaidWage[], settings: Settings): WageChange[] 
   const out: WageChange[] = [];
   for (const p of paid) {
     if (p.basis === 'hourly') {
-      const minimum = minimumWageOn(settings, p.from);
-      if (minimum && p.amount < minimum.minimum - 0.005) {
-        out.push({ kind: 'belowMinimum', paid: p, minimum: minimum.minimum });
+      // At its start and its end: the minimum may rise within it (1 April, a year's employment).
+      const minimum = Math.max(minimumWageOn(settings, p.from)?.minimum ?? 0, minimumWageOn(settings, p.to)?.minimum ?? 0);
+      if (minimum && p.amount < minimum - 0.005) {
+        out.push({ kind: 'belowMinimum', paid: p, minimum });
         continue;
       }
     }

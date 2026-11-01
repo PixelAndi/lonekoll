@@ -24,7 +24,8 @@ export interface Formatter {
   number(n: number | undefined, decimals?: number): string;
   hours(n: number | undefined): string;
   duration(minutes: number): string;
-  date(date: LocalDate, style?: 'short' | 'long' | 'numeric'): string;
+  /** short: "Ons 3 mars" · long: "Onsdag 3 mars 2027" · inText: "3 mars 2027" (inside a sentence) · numeric: the ISO date. */
+  date(date: LocalDate, style?: 'short' | 'long' | 'inText' | 'numeric'): string;
   month(date: LocalDate): string;
   /** "mar", for a month in a calendar. */
   monthShort(date: LocalDate): string;
@@ -47,6 +48,7 @@ export function formatter(lang: Language): Formatter {
     duration: (minutes) => formatDuration(minutes),
     date: (d, style = 'short') => {
       if (style === 'numeric') return d;
+      if (style === 'inText') return new Intl.DateTimeFormat(locale(lang), { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }).format(asDate(d));
       const options: Intl.DateTimeFormatOptions =
         style === 'long'
           ? { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }

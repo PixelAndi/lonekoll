@@ -85,6 +85,15 @@ in Playwright by routing `https://accounts.google.com/gsi/client` and
   `src/ui/camera.ts` holds the camera helpers it shares with
   `TimecardScanner.tsx`, and `chime()` (tones made with Web Audio, no files;
   `settings.scanSound`, toggled by the speaker button in both scanners).
+- `src/domain/agreementCheck.ts` – the slips against the agreement on their
+  own (no clock data): the hourly wage against the minimum day by day (cause:
+  the one-year step, a 1 April revision, or below), Bilaga J's lowest raise
+  for wages above the minimum, and OB / overtime / sick pay / holiday pay
+  prices; findings joined over months, with later "retro" or "Övrig
+  ersättning" lines named as possible corrections, and the months that
+  couldn't be checked. Shown on the pay slip page and per slip in the report
+  (`AgreementFindings.tsx`). On the owner's slips it found the missed step
+  after a year's employment (the owner confirms it happened).
 - `src/domain/basis.ts` – what a slip's comparison rests on (`periodBasis`):
   none (nothing logged: the report claims nothing, shows only what the slip
   pays), partial (days the slip pays without stamps; or, on summed slips,

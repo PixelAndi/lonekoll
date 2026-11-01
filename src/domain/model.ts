@@ -238,6 +238,13 @@ export interface MinimumWage {
 }
 
 /** The agreement's minimum hourly wage for this person on a date (Bageri §1). */
+/** The day the higher minimum starts: a year of employment after turning 18 (null without a start date). */
+export function higherMinimumFrom(settings: Settings): LocalDate | null {
+  if (!settings.employedSince) return null;
+  const adultFrom = settings.birthDate ? addYears(settings.birthDate, 18) : settings.employedSince;
+  return addYears(adultFrom > settings.employedSince ? adultFrom : settings.employedSince, 1);
+}
+
 export function minimumWageOn(settings: Settings, date: LocalDate): MinimumWage | null {
   const last = AGREEMENT_PERIODS[AGREEMENT_PERIODS.length - 1];
   let period = agreementFor(date);
@@ -250,12 +257,8 @@ export function minimumWageOn(settings: Settings, date: LocalDate): MinimumWage 
   }
   const age = ageOn(settings, date);
   // The higher minimum needs a year of employment after turning 18.
-  let afterOneYear = false;
-  if (settings.employedSince && (age === null || age >= 18)) {
-    const adultFrom = settings.birthDate ? addYears(settings.birthDate, 18) : settings.employedSince;
-    const countFrom = adultFrom > settings.employedSince ? adultFrom : settings.employedSince;
-    afterOneYear = date >= addYears(countFrom, 1);
-  }
+  const higherFrom = higherMinimumFrom(settings);
+  const afterOneYear = higherFrom !== null && (age === null || age >= 18) && date >= higherFrom;
   const base = afterOneYear ? period.minimumWage.adultAfterOneYear : period.minimumWage.adult;
   return { minimum: round2(base * payShare(age, settings.traineeYear)), afterOneYear, period, known };
 }

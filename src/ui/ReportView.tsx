@@ -17,6 +17,11 @@ import { reportPoints } from '../domain/reportPoints.ts';
 import { periodBasis } from '../domain/basis.ts';
 import { editionYears } from '../domain/sources.ts';
 import { BasisSection } from './BasisNote.tsx';
+import { FindingItem } from './AgreementFindings.tsx';
+import { slipFindings } from '../domain/agreementCheck.ts';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '../db.ts';
+import { applyOverrides } from './slipComparison.ts';
 import { LogStamps } from './LogStamps.tsx';
 import { PointCard, PointsOverview } from './ReportPoints.tsx';
 
@@ -132,6 +137,9 @@ function ReportPage({
   // What the comparison rests on: with nothing logged there is nothing to claim, only what the slip pays;
   // with days missing every difference may be those days, so the points are questions.
   const basis = periodBasis(slip, app.days, settings, start, end, todayLocal(), period.totals.wage?.hours);
+  // The slip against the agreement on its own (needs no clock data): its own section.
+  const allSlips = useLiveQuery(() => db.slips.toArray(), []);
+  const findings = slipFindings(slip, (allSlips ?? []).map((r) => applyOverrides(r.slip, settings.codeOverrides)), settings);
   // Differences as numbered points to go through together.
   const points = basis.state === 'none' ? [] : reportPoints(comparison, period, app.days, settings, basis.state === 'partial');
   const reviewSummary =
@@ -216,6 +224,19 @@ function ReportPage({
         </header>
 
         <BasisSection basis={basis} t={t} fmt={fmt} />
+
+        <section className="report-agreement">
+          <h2>{t('report.agr.title')}</h2>
+          {findings.length ? (
+            <ul className="findings">
+              {findings.map((f, i) => (
+                <FindingItem key={i} f={f} settings={settings} t={t} fmt={fmt} report />
+              ))}
+            </ul>
+          ) : (
+            <p>{t('report.agr.none')}</p>
+          )}
+        </section>
 
         <section>
           <h2>{t('report.summary')}</h2>
