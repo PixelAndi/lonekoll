@@ -158,6 +158,8 @@ export interface Settings {
   kompMode: KompMode;
   /** The first month of the vacation earning year (intjänandeår): 4 = 1 April–31 March, 1 = the calendar year. */
   vacationYearStartMonth: 1 | 4;
+  /** Keep the pictures of scanned timecards in the app (on this device), to look up the source later. */
+  keepTimecards?: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -182,6 +184,7 @@ export const DEFAULT_SETTINGS: Settings = {
   overtimeAs: 'pay',
   kompMode: 'hour',
   vacationYearStartMonth: 4,
+  keepTimecards: true,
 };
 
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;

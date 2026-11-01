@@ -567,8 +567,107 @@ input[type='checkbox'] {
 }
 
 .month-nav-label {
+  font: inherit;
   font-weight: 700;
   font-size: 1.1rem;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+/* All months at a glance: which have days, which are missing in between. */
+.month-picker {
+  margin: 0 0 12px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.month-picker-year {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+.month-picker-label {
+  width: 3.2em;
+  padding-top: 6px;
+  font-weight: 700;
+}
+
+.month-picker-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 4px;
+}
+
+.month-cell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 4px 0;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-decoration: none;
+}
+
+.month-cell small {
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.month-cell-ok {
+  background: rgb(22 163 74 / 0.15);
+  color: var(--text);
+}
+
+.month-cell-gap {
+  background: rgb(245 158 11 / 0.25);
+  color: var(--text);
+}
+
+.month-cell-after {
+  background: rgb(127 127 127 / 0.12);
+}
+
+.month-cell-now {
+  border-color: var(--accent, #2563eb);
+  border-width: 2px;
+}
+
+.month-cell-slip {
+  position: absolute;
+  top: 3px;
+  right: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #2563eb;
+}
+
+.month-picker-key span {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 6px;
+}
+
+.month-cell-slipkey::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 4px;
+  border-radius: 50%;
+  background: #2563eb;
+  vertical-align: middle;
 }
 
 .month-summary {
@@ -2573,4 +2672,36 @@ input[type='checkbox'] {
 
 .tcscan-note-warn {
   background: #b45309;
+}
+
+/* Cards read in the scanner, along the top: done, or still uncertain. */
+.tcscan-cards {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 110px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.78rem;
+  color: #fff;
+}
+
+.tcscan-cards li {
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 0.6);
+}
+
+.tcscan-cards .tcscan-card-done {
+  background: #15803d;
+}
+
+/* A timecard picture among the sources: upright. */
+.thumb-card img {
+  object-fit: cover;
+  object-position: top;
 }

@@ -11,6 +11,21 @@ export interface PhotoRecord {
   date: LocalDate;
   blob: Blob;
   createdAt: number;
+  /** A photo of the clock (the default), or the day's rows cut from a timecard (see cardId). */
+  kind?: 'clock' | 'timecard';
+  /** The timecard picture the rows were cut from. */
+  cardId?: string;
+}
+
+/** A picture of a printed timecard, kept as the source of the days read from it. */
+export interface CardRecord {
+  id: string;
+  /** "2026-03". */
+  month: string;
+  from?: string;
+  to?: string;
+  takenAt: number;
+  blob: Blob;
 }
 
 export interface SlipRecord {
@@ -38,6 +53,7 @@ class LonekollDB extends Dexie {
   slips!: Table<SlipRecord, string>;
   settings!: Table<SettingsRecord, string>;
   learning!: Table<LearningRecord, string>;
+  cards!: Table<CardRecord, string>;
 
   constructor() {
     super('lonekoll');
@@ -48,6 +64,7 @@ class LonekollDB extends Dexie {
       settings: 'id',
     });
     this.version(2).stores({ learning: 'id' });
+    this.version(3).stores({ cards: 'id, month' });
   }
 }
 

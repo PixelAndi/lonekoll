@@ -1,3 +1,4 @@
+import { useLiveQuery } from 'dexie-react-hooks';
 import { useMemo, useRef, useState } from 'react';
 import { useApp } from '../app-context.ts';
 import { db, deleteDay, saveDay } from '../db.ts';
@@ -8,6 +9,7 @@ import type { Absence, AbsenceType, DayRecord, OvertimeAs, ScheduledShift, Stamp
 import { scheduledShift } from '../domain/schedule.ts';
 import { addDays, formatDuration } from '../domain/time.ts';
 import { goBack, href } from '../router.ts';
+import { CardById } from './Sources.tsx';
 import { Card, Field, Icon, Modal, Notice, Page, PhotoThumb, usePhotoUrl } from './common.tsx';
 import { Cited } from './Cited.tsx';
 import { flushFocusedField, StampRowsEditor, TimeField } from './StampRowsEditor.tsx';
@@ -267,14 +269,25 @@ export function ShiftSummary({ result }: { result: ShiftResult }) {
 function PhotoViewer({ id, onClose, onDelete }: { id: string; onClose: () => void; onDelete: () => void }) {
   const { t } = useApp();
   const url = usePhotoUrl(id);
+  // Rows cut from a timecard: the whole card can be shown too.
+  const photo = useLiveQuery(() => db.photos.get(id), [id]);
+  const [card, setCard] = useState(false);
+  if (card && photo?.cardId) return <CardById id={photo.cardId} onClose={() => setCard(false)} />;
   return (
     <Modal
-      title={t('day.photos')}
+      title={photo?.kind === 'timecard' ? t('sources.fromCard') : t('day.photos')}
       onClose={onClose}
       footer={
-        <button type="button" className="button button-danger" onClick={onDelete}>
-          {t('common.delete')}
-        </button>
+        <>
+          <button type="button" className="button button-danger" onClick={onDelete}>
+            {t('common.delete')}
+          </button>
+          {photo?.cardId && (
+            <button type="button" className="button" onClick={() => setCard(true)}>
+              {t('sources.wholeCard')}
+            </button>
+          )}
+        </>
       }
     >
       {url && <img className="review-photo" src={url} alt="" />}

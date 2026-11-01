@@ -26,6 +26,8 @@ export interface Formatter {
   duration(minutes: number): string;
   date(date: LocalDate, style?: 'short' | 'long' | 'numeric'): string;
   month(date: LocalDate): string;
+  /** "mar", for a month in a calendar. */
+  monthShort(date: LocalDate): string;
 }
 
 export function formatter(lang: Language): Formatter {
@@ -51,6 +53,7 @@ export function formatter(lang: Language): Formatter {
           : { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' };
       return capitalizeFirst(new Intl.DateTimeFormat(locale(lang), options).format(asDate(d)));
     },
+    monthShort: (d) => new Intl.DateTimeFormat(locale(lang), { month: 'short', timeZone: 'UTC' }).format(asDate(d)).replace(/\.$/, ''),
     month: (d) =>
       capitalizeFirst(new Intl.DateTimeFormat(locale(lang), { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(asDate(d))),
   };

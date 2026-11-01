@@ -78,25 +78,37 @@ export class TesseractEngine implements OcrEngine {
    */
   async recognizeInStrips(image: GrayImage, mode: OcrMode, strips: number, overlap: number): Promise<OcrWord[]> {
     if (strips <= 1) return this.recognize(image, mode);
-    const paths = Object.fromEntries(Object.entries(this.paths).filter(([, v]) => v !== undefined));
-    while (this.helpers.length < strips - 1) this.helpers.push(createWorker('eng', 1, { ...paths, cacheMethod: 'none', gzip: true }));
     const { width, height, data } = image;
     const step = Math.ceil(height / strips);
-    const parts = Array.from({ length: strips }, (_, k) => {
-      const own = { from: k * step, to: Math.min(height, (k + 1) * step) };
-      const y0 = Math.max(0, own.from - overlap);
-      const y1 = Math.min(height, own.to + overlap);
-      return { own, y0, image: { width, height: y1 - y0, data: data.subarray(y0 * width, y1 * width) } };
-    });
-    const read = async (part: (typeof parts)[number], worker: Promise<Worker> | null) => {
-      const words = worker
-        ? await (async () => {
-            const w = await worker;
-            await w.setParameters({ ...PARAMS[mode], user_defined_dpi: '300', debug_file: '/dev/null' });
-            const result = await w.recognize(this.toImage(encodeGrayPng(part.image)) as Blob, {}, { blocks: true });
-            return wordsOf(result.data as unknown as PageLike);
-          })()
-        : await this.recognize(part.image, mode);
+    return this.recognizeStrips(
+      Array.from({ length: strips }, (_, k) => {
+        const own = { from: k * step, to: Math.min(height, (k + 1) * step) };
+        const y0 = Math.max(0, own.from - overlap);
+        const y1 = Math.min(height, own.to + overlap);
+        return { y0, own, png: encodeGrayPng({ width, height: y1 - y0, data: data.subarray(y0 * width, y1 * width) }) };
+      }),
+      mode,
+    );
+  }
+
+  /** Strips already packed as PNGs (by the preparing worker), read at the same time. */
+  async recognizeStrips(strips: { y0: number; own: { from: number; to: number }; png: Uint8Array }[], mode: OcrMode): Promise<OcrWord[]> {
+    const paths = Object.fromEntries(Object.entries(this.paths).filter(([, v]) => v !== undefined));
+    while (this.helpers.length < strips.length - 1) this.helpers.push(createWorker('eng', 1, { ...paths, cacheMethod: 'none', gzip: true }));
+    const read = async (part: (typeof strips)[number], worker: Promise<Worker> | null) => {
+      const run = async (w: Worker) => {
+        await w.setParameters({ ...PARAMS[mode], user_defined_dpi: '300', debug_file: '/dev/null' });
+        const result = await w.recognize(this.toImage(part.png) as Blob, {}, { blocks: true });
+        return wordsOf(result.data as unknown as PageLike);
+      };
+      let words: OcrWord[];
+      if (worker) words = await run(await worker);
+      else {
+        // The main worker takes its turn in the queue.
+        const job = this.queue.then(async () => run(await this.getWorker()));
+        this.queue = job.catch(() => undefined);
+        words = await job;
+      }
       const shift = (b: OcrWord['bbox']) => ({ ...b, y0: b.y0 + part.y0, y1: b.y1 + part.y0 });
       return words
         .map((w) => ({ ...w, bbox: shift(w.bbox), symbols: w.symbols?.map((c) => ({ ...c, bbox: shift(c.bbox) })) }))
@@ -105,7 +117,7 @@ export class TesseractEngine implements OcrEngine {
           return mid >= part.own.from && mid < part.own.to;
         });
     };
-    const results = await Promise.all(parts.map((p, k) => read(p, k === 0 ? null : this.helpers[k - 1])));
+    const results = await Promise.all(strips.map((p, k) => read(p, k === 0 ? null : this.helpers[k - 1])));
     return results.flat();
   }
 

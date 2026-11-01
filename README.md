@@ -96,23 +96,26 @@ report you can go through with your employer.
   explanations, assumptions, the day log and optionally the photos.
 - **Printed timecards (tidkort).** A small "Tidkort" button beside the scan
   button reads the time clock's printout from the employer: scanned live –
-  hold the whole card in the frame and the scanner reads the camera's live
-  4K picture when it is steady and sharp (no separate photo, which made the
-  camera refocus and change its colours), in three strips at once on the
-  phone's spare cores. It takes another picture only while some days are not
-  yet certain or the days don't add up to the card's own total Arb Tid
-  (summed from the exact stamped minutes, as the card does), at most four,
-  and between pictures the view must change a little: readings of the very
-  same picture would share their misreads. Every reading of a day is put to
+  hold the whole card in the frame and the scanner takes three quick
+  pictures of it from the camera's live 4K picture, the moment it is steady
+  and sharp (no separate photo, which made the camera refocus and change its
+  colours), each a little different (readings of the very same picture would
+  share their misreads). They are read in a queue while the next card is put
+  down: the page is prepared in a background worker and read in three strips
+  at once on the phone's spare cores, so the camera keeps running smoothly.
+  A row of cards shows how each stands; a card whose readings leave days
+  uncertain, or don't add up to its own total Arb Tid (summed from the exact
+  stamped minutes, as the card does), asks for another picture while it is in
+  view. "Done" reads what is still queued. Every reading of a day is put to
   the vote: tried on 20 real pictures of a card, a day that adds up to its
   Arb Tid as read was never wrong (254 of 254), one that adds up only after
   correcting a digit sometimes was, and one that doesn't add up mostly was –
   so the first decide, two alike of the second confirm, and the third are no
-  votes. A map shows which days are certain; a card scanned again (known by
-  its period) adds to the vote. Each day starts at its line of text in the
-  weekday and schedule columns, found from the ink: the date columns are
-  ruled apart from the times on this card and drift from them on a photo, so
-  the offset is measured locally by each worked day's Arb Tid row. Photos or PDFs work too,
+  votes. A card scanned again (known by its period) adds to the vote. Each
+  day starts at its line of text in the weekday and schedule columns, found
+  from the ink: the date columns are ruled apart from the times on this card
+  and drift from them on a photo, so the offset is measured locally by each
+  worked day's Arb Tid row. Photos or PDFs work too,
   several pages and months at once. The table's printed rules are found
   first (fitted one by one, so a tilted or slightly angled photo still works)
   and say where each row is; the lines are then removed before the text is
@@ -134,10 +137,18 @@ report you can go through with your employer.
   the day is put to the user. Days the app already has with other stamps,
   and ink in the Frånvaro box (handwritten sick or vacation notes, shown as a
   picture), are asked about before saving. The card itself is not stored.
-  A test mode (off by default, for troubleshooting the scanner) saves every
+  The timecards can be kept in the app (on by default, on this device only):
+  the picture of each card, shown under the month's sources, and each day's
+  rows cut from it beside the day (also in the report's sources), with the
+  whole card a tap away; they are in the backup, and the app asks the browser
+  to keep its storage. A test mode (off by default, for troubleshooting the scanner) saves every
   picture the scanner takes, what it read and a video of the camera to the
   phone's Downloads – nothing is sent anywhere; the user can choose to share
   the files.
+- **Months at a glance.** Tapping the month's name opens every month from
+  the first with days to now: how many days each has, the months in between
+  with none (a gap, also warned about on the days page with links to them),
+  and which have a pay slip.
 - **Set up from a pay slip.** For a new user's first pay slip (or while no
   wage is set), the slip's page suggests settings, each with the line it
   comes from: the hourly wage or monthly salary, the overtime limit per shift

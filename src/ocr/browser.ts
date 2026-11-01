@@ -1,7 +1,8 @@
 import type { RGBAImage, TableLocation } from './image.ts';
 import type { ClockReading, FoundTable } from './pipeline.ts';
 import type { TesseractEngine } from './tesseract.ts';
-import type { CheckedDay, TimecardHint } from './timecard.ts';
+import type { CheckedDay, Rule, TimecardHint } from './timecard.ts';
+import type { PreparedStrip, PrepareRequest, PrepareResponse } from './timecardWorker.ts';
 
 // Browser side of photo reading: decode the photo, keep a small JPEG copy as
 // evidence, and run the OCR pipeline with Tesseract served from ./ocr/.
@@ -121,30 +122,87 @@ export interface TimecardReading {
   totalWorked?: number;
 }
 
-/** A printed timecard page (photo or rendered PDF page): every day's stamps, checked, and its notes. */
-export async function readTimecardImage(source: HTMLCanvasElement, hint?: TimecardHint): Promise<TimecardReading> {
-  const [{ prepareTimecard, parseTimecard, rowHeight, checkDay, noteInk, hasNote }, ocr] = await Promise.all([import('./timecard.ts'), getEngine()]);
-  // Read at about 2400 px across: the card's small print is then large enough to read reliably.
+let preparer: Worker | null | undefined;
+let nextId = 0;
+const waitingFor = new Map<number, (r: PrepareResponse) => void>();
+
+/** The worker that prepares timecard pictures (null where workers can't be used: then it's done here). */
+function getPreparer(): Worker | null {
+  if (preparer !== undefined) return preparer;
+  try {
+    preparer = new Worker(new URL('./timecardWorker.ts', import.meta.url), { type: 'module' });
+    preparer.onmessage = (e: MessageEvent<PrepareResponse>) => {
+      waitingFor.get(e.data.id)?.(e.data);
+      waitingFor.delete(e.data.id);
+    };
+  } catch {
+    preparer = null;
+  }
+  return preparer;
+}
+
+/** The page scaled, cleaned, its rules found and packed in strips: in the worker, or here if need be. */
+async function prepare(source: HTMLCanvasElement, strips: number, overlap: number): Promise<{ width: number; height: number; clean: Uint8Array; rules: Rule[]; strips: PreparedStrip[] }> {
+  const worker = getPreparer();
+  if (worker) {
+    const bitmap = await createImageBitmap(source);
+    const id = ++nextId;
+    const answer = await new Promise<PrepareResponse>((resolve) => {
+      waitingFor.set(id, resolve);
+      worker.postMessage({ id, bitmap, width: TIMECARD_WIDTH, strips, overlap } satisfies PrepareRequest, [bitmap]);
+    });
+    if (!('error' in answer)) return answer;
+  }
+  const [{ prepareTimecard }, { encodeGrayPng }] = await Promise.all([import('./timecard.ts'), import('./png.ts')]);
   const canvas = resized(source, TIMECARD_WIDTH);
   const { width, height } = canvas;
   const rgba = canvas.getContext('2d')!.getImageData(0, 0, width, height).data;
   const gray = new Uint8Array(width * height);
   for (let i = 0; i < gray.length; i++) gray[i] = Math.round(0.299 * rgba[i * 4] + 0.587 * rgba[i * 4 + 1] + 0.114 * rgba[i * 4 + 2]);
   const { clean, rules } = prepareTimecard({ width, height, data: gray });
-  // In strips at the same time, on as many cores as the phone has to spare (three at most).
-  const strips = Math.max(1, Math.min(3, (navigator.hardwareConcurrency || 2) - 1));
-  const words = await ocr.recognizeInStrips(clean, 'find', strips, Math.round(width * 0.03));
-  const page = parseTimecard(words, width, { clean, rules }, hint);
-  const ink = noteInk(clean, page);
-  const days = page.days.map((day) => {
-    const checked: TimecardDayReading = checkDay(day);
-    if (hasNote(day, ink.get(day.date))) checked.noteImage = cropOf(canvas, page.notesFrom - width * 0.01, day.top - 6, width * 0.97, day.bottom + 6);
-    // The day's rows from the date to Arb Tid (where the stamps are).
-    if (checked.status !== 'empty') checked.rowImage = cropOf(canvas, width * 0.02, day.top - 8, page.notesFrom, day.bottom + 8);
-    return checked;
+  const step = Math.ceil(height / strips);
+  const parts = Array.from({ length: strips }, (_, k) => {
+    const own = { from: k * step, to: Math.min(height, (k + 1) * step) };
+    const y0 = Math.max(0, own.from - overlap);
+    const y1 = Math.min(height, own.to + overlap);
+    return { y0, own, png: encodeGrayPng({ width, height: y1 - y0, data: clean.data.subarray(y0 * width, y1 * width) }) };
   });
-  const row = rowHeight(rules, width);
-  return { from: page.from, to: page.to, printed: page.printed, totalWorked: page.totalWorked, days, pageImage: source.toDataURL('image/jpeg', 0.9), rowPixels: row === null ? undefined : (row * source.width) / width };
+  return { width, height, clean: clean.data, rules, strips: parts };
+}
+
+/** A printed timecard page (photo or rendered PDF page): every day's stamps, checked, and its notes. */
+export async function readTimecardImage(source: HTMLCanvasElement, hint?: TimecardHint): Promise<TimecardReading> {
+  const [{ parseTimecard, rowHeight, checkDay, noteInk, hasNote }, ocr] = await Promise.all([import('./timecard.ts'), getEngine()]);
+  // Read at about 2400 px across (the card's small print is then large enough to read reliably),
+  // in strips at the same time, on as many cores as the phone has to spare (three at most).
+  const strips = Math.max(1, Math.min(3, (navigator.hardwareConcurrency || 2) - 1));
+  const prepared = await prepare(source, strips, Math.round(TIMECARD_WIDTH * 0.03));
+  const { width, height } = prepared;
+  const clean = { width, height, data: prepared.clean };
+  const words = await ocr.recognizeStrips(prepared.strips, 'find');
+  const page = parseTimecard(words, width, { clean, rules: prepared.rules }, hint);
+  const ink = noteInk(clean, page);
+  // The page at reading size, for the pictures of the days' rows.
+  const canvas = resized(source, TIMECARD_WIDTH);
+  const days = await Promise.all(
+    page.days.map(async (day) => {
+      const checked: TimecardDayReading = checkDay(day);
+      if (hasNote(day, ink.get(day.date))) checked.noteImage = await cropOf(canvas, page.notesFrom - width * 0.01, day.top - 6, width * 0.97, day.bottom + 6);
+      // The day's rows from the date to Arb Tid (where the stamps are).
+      if (checked.status !== 'empty') checked.rowImage = await cropOf(canvas, width * 0.02, day.top - 8, page.notesFrom, day.bottom + 8);
+      return checked;
+    }),
+  );
+  const row = rowHeight(prepared.rules, width);
+  return {
+    from: page.from,
+    to: page.to,
+    printed: page.printed,
+    totalWorked: page.totalWorked,
+    days,
+    pageImage: URL.createObjectURL(await toBlob(source, 0.9)),
+    rowPixels: row === null ? undefined : (row * source.width) / width,
+  };
 }
 
 const TIMECARD_WIDTH = 2400;
@@ -160,13 +218,13 @@ function resized(source: HTMLCanvasElement, width: number): HTMLCanvasElement {
   return canvas;
 }
 
-/** A picture of part of the page, for showing what is written there. */
-function cropOf(canvas: HTMLCanvasElement, x0: number, y0: number, x1: number, y1: number): string {
+/** A picture of part of the page, for showing what is written there (encoded off the main thread). */
+async function cropOf(canvas: HTMLCanvasElement, x0: number, y0: number, x1: number, y1: number): Promise<string> {
   const crop = document.createElement('canvas');
   const x = Math.max(0, Math.round(x0));
   const y = Math.max(0, Math.round(y0));
   crop.width = Math.max(1, Math.round(Math.min(canvas.width, x1) - x));
   crop.height = Math.max(1, Math.round(Math.min(canvas.height, y1) - y));
   crop.getContext('2d')!.drawImage(canvas, x, y, crop.width, crop.height, 0, 0, crop.width, crop.height);
-  return crop.toDataURL('image/jpeg', 0.85);
+  return URL.createObjectURL(await toBlob(crop, 0.85));
 }

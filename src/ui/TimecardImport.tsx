@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useApp } from '../app-context.ts';
-import { saveDay } from '../db.ts';
+import { db, newId, requestPersistence, saveDay, saveSettings } from '../db.ts';
 import type { AbsenceType, DayRecord, StampPair } from '../domain/model.ts';
 import { loadPhoto, type TimecardDayReading, type TimecardReading } from '../ocr/browser.ts';
 import { combineReadings } from '../ocr/timecard.ts';
@@ -43,8 +43,31 @@ function guessAbsence(note?: string): AbsenceType | undefined {
   return undefined;
 }
 
+/** A page's picture, kept until the month is saved (the clearest two of each month). */
+interface PagePicture {
+  image: string;
+  from?: string;
+  to?: string;
+  /** Days that added up as read: the clearer the picture, the more. */
+  sure: number;
+}
+
+/** A picture (data URL) as a JPEG of at most 2000 px across, for keeping. */
+async function shrink(dataUrl: string, maxWidth = 2000): Promise<Blob> {
+  const img = new Image();
+  img.src = dataUrl;
+  await img.decode();
+  const scale = Math.min(1, maxWidth / img.width);
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(img.width * scale);
+  canvas.height = Math.round(img.height * scale);
+  canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+  return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('JPEG failed'))), 'image/jpeg', 0.85));
+}
+
 export function TimecardImport() {
-  const { t } = useApp();
+  const { t, settings } = useApp();
+  const [pages, setPages] = useState<Map<string, PagePicture[]>>(new Map());
   const photoInput = useRef<HTMLInputElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<FileState[]>([]);
@@ -85,6 +108,13 @@ export function TimecardImport() {
       next.set(month, byDate);
       return next;
     });
+    // The clearest two pictures of the month, to keep as its source when it is saved.
+    const pictures = readings
+      .filter((r) => r.pageImage)
+      .map((r) => ({ image: r.pageImage!, from: r.from, to: r.to, sure: r.days.filter((d) => d.status === 'ok').length }));
+    if (pictures.length) {
+      setPages((m) => new Map(m).set(month, [...(m.get(month) ?? []), ...pictures].sort((a, b) => b.sure - a.sure).slice(0, 2)));
+    }
     return { month, days: days.filter((d) => d.status !== 'empty').length };
   }, []);
   const onScanned = useCallback(
@@ -146,6 +176,12 @@ export function TimecardImport() {
         <input ref={fileInput} type="file" accept="image/*,application/pdf,.pdf" multiple hidden onChange={(e) => void add(e.target.files)} />
         <p className="muted small">{t('timecard.privacy')}</p>
         <label className="checkbox small">
+          <input type="checkbox" checked={settings.keepTimecards !== false} onChange={(e) => void saveSettings({ keepTimecards: e.target.checked })} />
+          <span>
+            {t('timecard.keep')} <span className="muted">{t('timecard.keepHelp')}</span>
+          </span>
+        </label>
+        <label className="checkbox small">
           <input type="checkbox" checked={test} onChange={(e) => toggleTest(e.target.checked)} />
           <span>
             {t('timecard.testMode')} <span className="muted">{t('timecard.testModeHelp')}</span>
@@ -172,14 +208,14 @@ export function TimecardImport() {
       </Card>
       {scanning && <TimecardScanner test={test} onPage={onScanned} onClose={() => setScanning(false)} />}
       {[...months.entries()].map(([month, days]) => (
-        <MonthReview key={month} month={month} days={days} />
+        <MonthReview key={month} month={month} days={days} pages={pages.get(month) ?? []} />
       ))}
     </Page>
   );
 }
 
-function MonthReview({ month, days }: { month: string; days: TimecardDayReading[] }) {
-  const { t, fmt, days: logged } = useApp();
+function MonthReview({ month, days, pages }: { month: string; days: TimecardDayReading[]; pages: PagePicture[] }) {
+  const { t, fmt, days: logged, settings } = useApp();
   const existing = new Map(logged.map((d) => [d.date, d]));
   const shown = days.filter((d) => d.status !== 'empty' || d.noteImage || d.note);
   const [chosen, setDecisions] = useState<Map<string, Decision>>(new Map());
@@ -199,6 +235,17 @@ function MonthReview({ month, days }: { month: string; days: TimecardDayReading[
 
   const save = async () => {
     let n = 0;
+    // The timecard kept as the source: its pictures, and each day's rows cut from it beside the day.
+    const keep = settings.keepTimecards !== false;
+    let cardId: string | undefined;
+    if (keep) {
+      for (const p of pages) {
+        const id = newId();
+        await db.cards.put({ id, month, from: p.from, to: p.to, takenAt: Date.now(), blob: await shrink(p.image) });
+        cardId ??= id;
+      }
+      void requestPersistence();
+    }
     for (const d of shown) {
       const choice = decisions.get(d.date);
       const before = existing.get(d.date);
@@ -207,10 +254,20 @@ function MonthReview({ month, days }: { month: string; days: TimecardDayReading[
       const keepRows = differs && !choice.useCard;
       const absence = choice.absence && choice.absence !== 'none' ? { type: choice.absence } : before?.absence;
       if (!rows.length && !absence) continue;
+      let photoIds = before?.photoIds ?? [];
+      if (keep && d.rowImage && !keepRows) {
+        // An earlier timecard's rows for the day are replaced; photos of the clock stay.
+        const earlier = (await db.photos.bulkGet(photoIds)).filter((p) => p?.kind === 'timecard').map((p) => p!.id);
+        await db.photos.bulkDelete(earlier);
+        const id = newId();
+        await db.photos.put({ id, date: d.date, blob: await shrink(d.rowImage), createdAt: Date.now(), kind: 'timecard', cardId });
+        photoIds = [...photoIds.filter((p) => !earlier.includes(p)), id];
+      }
       const day: DayRecord = {
         ...(before ?? { date: d.date, rows: [], photoIds: [] }),
         rows: keepRows ? before!.rows : rows.length ? rows : (before?.rows ?? []),
         absence,
+        photoIds,
         updatedAt: Date.now(),
       };
       await saveDay(day);

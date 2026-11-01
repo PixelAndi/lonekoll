@@ -9,6 +9,7 @@ import { href } from '../router.ts';
 import { Card, Notice, Page } from './common.tsx';
 import { Cited } from './Cited.tsx';
 import { MonthNav } from './DaysView.tsx';
+import { MonthSources } from './Sources.tsx';
 
 export const CATEGORY_ORDER: PayCategory[] = [
   'monthlySalary',
@@ -47,6 +48,7 @@ export function MonthView({ month }: { month?: string }) {
       <NetEstimate period={period} />
       <p className="muted small">{t('month.excludesVacation')} {t('month.paidNextMonth')}</p>
       <PeriodWarnings period={period} />
+      <MonthSources month={monthKey} />
       <Card title={t('month.shifts')}>
         {period.shifts.length === 0 ? (
           <p className="muted">{t('month.noData')}</p>

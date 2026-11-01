@@ -1,6 +1,9 @@
-import { useMemo } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { useMemo, useState } from 'react';
 import { useApp } from '../app-context.ts';
 import { calculatePeriod, calculateShifts } from '../domain/calc.ts';
+import { monthCoverage, type MonthCoverage } from '../domain/coverage.ts';
+import { db } from '../db.ts';
 import { specialDay } from '../domain/holidays.ts';
 import { datesInRange, monthEnd, todayLocal } from '../domain/time.ts';
 import { href, navigate } from '../router.ts';
@@ -16,16 +19,97 @@ export function shiftMonth(month: string, delta: number): string {
 
 export function MonthNav({ month, route }: { month: string; route: 'days' | 'month' }) {
   const { fmt, t } = useApp();
+  const coverage = useCoverage();
+  const [open, setOpen] = useState(false);
   return (
-    <nav className="month-nav">
-      <a className="icon-button" href={href({ name: route, month: shiftMonth(month, -1) })} aria-label={t('common.previous')}>
-        <Icon name="chevronLeft" />
-      </a>
-      <span className="month-nav-label">{fmt.month(`${month}-01`)}</span>
-      <a className="icon-button" href={href({ name: route, month: shiftMonth(month, 1) })} aria-label={t('common.next')}>
-        <Icon name="chevronRight" />
-      </a>
-    </nav>
+    <>
+      <nav className="month-nav">
+        <a className="icon-button" href={href({ name: route, month: shiftMonth(month, -1) })} aria-label={t('common.previous')}>
+          <Icon name="chevronLeft" />
+        </a>
+        <button type="button" className="month-nav-label" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+          {fmt.month(`${month}-01`)} <span aria-hidden="true">{open ? '▴' : '▾'}</span>
+        </button>
+        <a className="icon-button" href={href({ name: route, month: shiftMonth(month, 1) })} aria-label={t('common.next')}>
+          <Icon name="chevronRight" />
+        </a>
+      </nav>
+      {open && <MonthPicker coverage={coverage} current={month} route={route} onPick={() => setOpen(false)} />}
+    </>
+  );
+}
+
+/** Which months have days, from the first to now (pay slips counted for where the months start). */
+export function useCoverage(): MonthCoverage[] {
+  const { days } = useApp();
+  const slips = useLiveQuery(() => db.slips.toArray(), []);
+  return useMemo(() => monthCoverage(days, (slips ?? []).map((s) => s.periodStart.slice(0, 7)), todayLocal()), [days, slips]);
+}
+
+/**
+ * Every month from the first with days to now, a year to a row: green with
+ * the number of days, orange where a month in between has none, grey after
+ * the last; tap one to go there.
+ */
+function MonthPicker({ coverage, current, route, onPick }: { coverage: MonthCoverage[]; current: string; route: 'days' | 'month'; onPick: () => void }) {
+  const { t, fmt } = useApp();
+  const byMonth = new Map(coverage.map((c) => [c.month, c]));
+  const years = [...new Set([...coverage.map((c) => c.month.slice(0, 4)), current.slice(0, 4)])].sort();
+  return (
+    <div className="month-picker">
+      {years.map((year) => (
+        <div key={year} className="month-picker-year">
+          <span className="month-picker-label">{year}</span>
+          <div className="month-picker-grid">
+            {Array.from({ length: 12 }, (_, i) => {
+              const m = `${year}-${String(i + 1).padStart(2, '0')}`;
+              const c = byMonth.get(m);
+              const label = fmt.monthShort(`${m}-01`);
+              return (
+                <a
+                  key={m}
+                  href={href({ name: route, month: m })}
+                  onClick={onPick}
+                  className={`month-cell month-cell-${c?.status ?? 'none'} ${m === current ? 'month-cell-now' : ''}`}
+                  aria-current={m === current ? 'page' : undefined}
+                  title={c ? t(`months.${c.status}`, { n: c.days }) : undefined}
+                >
+                  <span>{label}</span>
+                  <small>{c?.status === 'ok' ? c.days : c?.status === 'gap' ? '!' : '\u00a0'}</small>
+                  {c?.slip && <i className="month-cell-slip" aria-label={t('months.slip')} />}
+                </a>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+      <p className="month-picker-key small">
+        <span className="month-cell-ok">{t('months.key.ok')}</span> <span className="month-cell-gap">{t('months.key.gap')}</span>{' '}
+        <span className="month-cell-after">{t('months.key.after')}</span> <span className="month-cell-slipkey">{t('months.key.slip')}</span>
+      </p>
+    </div>
+  );
+}
+
+/** Months with no days between months that have: easy to miss when catching up on old timecards. */
+export function GapNotice({ route = 'days' }: { route?: 'days' | 'month' }) {
+  const { t, fmt, lang } = useApp();
+  // In a sentence, Swedish and Polish months are written in lower case.
+  const inText = (m: string) => (lang === 'sv' || lang === 'pl' ? fmt.month(`${m}-01`).toLocaleLowerCase(lang) : fmt.month(`${m}-01`));
+  const coverage = useCoverage();
+  const gaps = coverage.filter((c) => c.status === 'gap');
+  if (!gaps.length) return null;
+  const withDays = coverage.filter((c) => c.status === 'ok');
+  return (
+    <Notice kind="warn">
+      {t('months.gaps', { n: gaps.length, from: inText(withDays[0].month), to: inText(withDays[withDays.length - 1].month) })}{' '}
+      {gaps.map((g, i) => (
+        <span key={g.month}>
+          {i > 0 && ', '}
+          <a href={href({ name: route, month: g.month })}>{inText(g.month)}</a>
+        </span>
+      ))}
+    </Notice>
   );
 }
 
@@ -75,6 +159,7 @@ export function DaysView({ month }: { month?: string }) {
       </div>
 
       <MonthNav month={monthKey} route="days" />
+      <GapNotice />
       <p className="month-summary">
         {t('days.summary', {
           shifts: period.shifts.length,
