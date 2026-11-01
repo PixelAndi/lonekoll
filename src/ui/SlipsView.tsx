@@ -1,4 +1,5 @@
 import { useLiveQuery } from 'dexie-react-hooks';
+import { withPayDay } from '../domain/payday.ts';
 import { useRef, useState } from 'react';
 import { useApp } from '../app-context.ts';
 import { db, newId, type SlipRecord } from '../db.ts';
@@ -45,7 +46,9 @@ export function SlipsView() {
       try {
         // A PDF, or a photo of the slip (read with the same text recognition as the scanners).
         const rate = hourlyRateOn(settings, todayLocal()) ?? undefined;
-        const slip = /^image\//.test(file.type) ? await (await import('../ocr/browser.ts')).readPaySlipImage(file, rate) : await readPaySlipPdf(file, rate);
+        const read = /^image\//.test(file.type) ? await (await import('../ocr/browser.ts')).readPaySlipImage(file, rate) : await readPaySlipPdf(file, rate);
+        // A pay day that couldn't be read: the one in the settings (shown on the check card).
+        const slip = withPayDay(read, settings.payDay);
         if (slip.lines.length === 0) {
           update(k, { status: 'none' });
           continue;

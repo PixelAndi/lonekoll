@@ -88,9 +88,9 @@ export function App() {
     document.documentElement.dir = isRightToLeft(data.lang) ? 'rtl' : 'ltr';
   }, [data]);
   useAutoSync(data?.settings.cloud);
-  // Once per start: slips an earlier version saved without a period are read again.
+  // Once per start: slips an earlier version saved without a period or pay day are put right.
   useEffect(() => {
-    void import('./pdf/browser.ts').then((m) => m.rereadUndatedSlips()).catch(() => undefined);
+    void import('./pdf/browser.ts').then((m) => m.tidySavedSlips()).catch(() => undefined);
   }, []);
   const theme = data?.settings.theme;
   useEffect(() => {

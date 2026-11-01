@@ -81,6 +81,16 @@ export function SettingsView() {
         <Field label={t('settings.employer')}>
           <LazyInput type="text" value={settings.employer} onCommit={(v) => save({ employer: v.trim() })} />
         </Field>
+        <Field label={t('settings.payDay')} hint={t('settings.payDayHint')}>
+          <select value={settings.payDay ?? ''} onChange={(e) => save({ payDay: e.target.value ? Number(e.target.value) : null })}>
+            <option value="">{t('payDay.none')}</option>
+            {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
+              <option key={d} value={d}>
+                {t('payDay.day', { day: d })}
+              </option>
+            ))}
+          </select>
+        </Field>
         <div className="field-row">
           <Field label={t('settings.employedSince')}>
             <input type="date" value={settings.employedSince ?? ''} onChange={(e) => save({ employedSince: e.target.value || undefined })} />

@@ -127,6 +127,8 @@ export interface Settings {
   wages: WagePeriod[];
   birthDate?: LocalDate;
   employedSince?: LocalDate;
+  /** The day of the month pay is paid out (the month after the period; moved back to a banking day), or null. */
+  payDay: number | null;
   traineeYear: 0 | 1 | 2 | 3;
   /** Employment rate in percent (100 = full time). */
   employmentPercent: number;
@@ -191,6 +193,7 @@ export const DEFAULT_SETTINGS: Settings = {
   name: '',
   employer: '',
   wages: [],
+  payDay: 25,
   traineeYear: 0,
   employmentPercent: 100,
   ordinaryShiftMinutes: 480,

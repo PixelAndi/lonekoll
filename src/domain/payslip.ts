@@ -52,6 +52,8 @@ export interface PaySlip {
   /** The user has looked at the period and the main figures and confirmed them. */
   checked?: boolean;
   payDate?: LocalDate;
+  /** The pay day couldn't be read: it is the pay day in the settings. */
+  payDateFrom?: 'setting';
   lines: SlipLine[];
   gross?: number;
   tax?: number;

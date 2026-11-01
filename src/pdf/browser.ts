@@ -10,29 +10,37 @@ export async function readPaySlipPdf(file: Blob, hourlyRate?: number): Promise<P
 }
 
 /**
- * Slips saved without a pay period by an earlier version (which didn't see
- * "Löneperiod:" with a colon, as older slips print it) are read again from
- * their PDF once a period can be found. Photos and slips kept only as a
- * preview are left as they are; their period can be set on the check card.
+ * Slips saved by earlier versions, put right once at start: those without a
+ * pay period (older slips print "Löneperiod:" with a colon, which wasn't seen)
+ * are read again from their PDF, and those without a pay day get the one in
+ * the settings (marked, so the check card says so). Photos and slips kept only
+ * as a preview aren't read again; their period can be set on the check card.
  * Returns how many were updated (their Drive copies move on the next sync).
  */
-export async function rereadUndatedSlips(): Promise<number> {
-  const [{ db, loadSettings }, { hourlyRateOn }, { todayLocal }] = await Promise.all([import('../db.ts'), import('../domain/model.ts'), import('../domain/time.ts')]);
-  const undated = (await db.slips.toArray()).filter(
-    (r) => !r.periodStart && !r.archived && !r.slip.checked && (r.pdf.type === 'application/pdf' || /\.pdf$/i.test(r.fileName)),
-  );
-  if (!undated.length) return 0;
+export async function tidySavedSlips(): Promise<number> {
+  const [{ db, loadSettings }, { hourlyRateOn }, { todayLocal }, { withPayDay }] = await Promise.all([
+    import('../db.ts'),
+    import('../domain/model.ts'),
+    import('../domain/time.ts'),
+    import('../domain/payday.ts'),
+  ]);
   const settings = await loadSettings();
   let updated = 0;
-  for (const record of undated) {
-    try {
-      const slip = await readPaySlipPdf(record.pdf, hourlyRateOn(settings, record.slip.payDate ?? todayLocal()) ?? undefined);
-      if (!slip.periodStart || slip.lines.length === 0) continue;
-      await db.slips.update(record.id, { slip, periodStart: slip.periodStart });
-      updated++;
-    } catch {
-      // Left as it was: the check card still lets the user set the period.
+  for (const record of await db.slips.toArray()) {
+    let slip = record.slip;
+    const pdf = record.pdf.type === 'application/pdf' || /\.pdf$/i.test(record.fileName);
+    if (!record.periodStart && !record.archived && !slip.checked && pdf) {
+      try {
+        const read = await readPaySlipPdf(record.pdf, hourlyRateOn(settings, slip.payDate ?? todayLocal()) ?? undefined);
+        if (read.periodStart && read.lines.length > 0) slip = read;
+      } catch {
+        // Left as it was: the check card still lets the user set the period.
+      }
     }
+    slip = withPayDay(slip, settings.payDay);
+    if (slip === record.slip) continue;
+    await db.slips.update(record.id, { slip, periodStart: slip.periodStart ?? '' });
+    updated++;
   }
   return updated;
 }

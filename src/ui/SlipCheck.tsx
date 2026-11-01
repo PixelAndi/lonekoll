@@ -2,6 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { useState } from 'react';
 import { useApp } from '../app-context.ts';
 import { db, type SlipRecord } from '../db.ts';
+import { payDateFor } from '../domain/payday.ts';
 import { datesIn, type PaySlip } from '../domain/payslip.ts';
 import { Card, Field, Notice } from './common.tsx';
 import { useBlobUrl } from './Sources.tsx';
@@ -35,7 +36,7 @@ export function SlipCheck({ id }: { id: string }) {
 }
 
 function CheckForm({ record, onDone }: { record: SlipRecord; onDone: () => void }) {
-  const { t, fmt, lang } = useApp();
+  const { t, fmt, lang, settings } = useApp();
   const slip = record.slip;
   const [draft, setDraft] = useState(() => ({
     start: slip.periodStart ?? '',
@@ -52,6 +53,8 @@ function CheckForm({ record, onDone }: { record: SlipRecord; onDone: () => void 
   const gross = numberOrUndefined(draft.gross);
   const valid = (d: string) => datesIn(d).length === 1;
   const periodOk = valid(draft.start) && valid(draft.end) && draft.start <= draft.end;
+  // The pay day the settings expect for this period, to set beside the one read.
+  const expectedPay = settings.payDay && valid(draft.start) ? payDateFor(draft.start.slice(0, 7), settings.payDay) : undefined;
 
   const save = async () => {
     const next: PaySlip = {
@@ -59,6 +62,7 @@ function CheckForm({ record, onDone }: { record: SlipRecord; onDone: () => void 
       periodStart: draft.start,
       periodEnd: draft.end,
       payDate: valid(draft.payDate) ? draft.payDate : undefined,
+      payDateFrom: draft.payDate === slip.payDate ? slip.payDateFrom : undefined,
       gross,
       tax: numberOrUndefined(draft.tax),
       net: numberOrUndefined(draft.net),
@@ -100,6 +104,11 @@ function CheckForm({ record, onDone }: { record: SlipRecord; onDone: () => void 
           <input type="text" inputMode="decimal" value={draft.net} onChange={set('net')} />
         </Field>
       </div>
+      {slip.payDateFrom === 'setting' && draft.payDate === slip.payDate ? (
+        <Notice kind="warn">{t('slipCheck.payDateFromSetting')}</Notice>
+      ) : (
+        expectedPay && valid(draft.payDate) && draft.payDate !== expectedPay && <Notice>{t('slipCheck.payDateDiffers', { date: fmt.date(expectedPay) })}</Notice>
+      )}
       {gross !== undefined && slip.lines.length > 0 && Math.abs(sum - gross) > 1 && (
         <Notice kind="warn">{t('slipCheck.sumDiffers', { sum: fmt.money(sum), gross: fmt.money(gross) })}</Notice>
       )}

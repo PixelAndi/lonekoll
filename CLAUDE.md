@@ -101,7 +101,7 @@ verified on the owner's real slips (40 PDFs): every one gets its
 period, pay day, gross, tax and net, and its lines add up to the gross.** The
 newer layout has not been verified from a photo yet. Older slips print
 "Löneperiod:" with a colon (versions before 0512ea8 missed it; such slips are
-re-read at start, `rereadUndatedSlips`). Hourly overtime is printed as the
+re-read at start, `tidySavedSlips`). Hourly overtime is printed as the
 supplement ("Övertid 1/2/3, timavlönad, 50%/75%/100%") plus "Timlön vid
 övertid" (the hour itself, read as wage). The 75 % level, seen only on
 Saturdays, isn't in the app's rules, so it is compared as overtime in total. The pay day and payout
@@ -113,6 +113,14 @@ without the word the pay day is the date 1–62 days after the period (year
 misread put right). If the payout is still unreadable it is gross − tax −
 other deductions, rounded up to whole kronor (as these slips do). One real
 photo still misses one of its 19 per-day lines (the check card warns).
+
+Pay day setting (`settings.payDay`, default 25; `src/domain/payday.ts`): the
+day of the month after the period, moved back to the last banking day
+(weekends, public holidays, midsommar-/jul-/nyårsafton). It matched all 47
+regular pay days on the owner's slips (2021–2026); one extra payout fell on
+another day. It fills a pay day that couldn't be read (`payDateFrom:
+'setting'`, said on the check card), and the check card notes a read pay day
+that differs from it. A date read from the slip always wins.
 
 The pay period is never taken from the import date: read from "Löneperiod"
 (year checked against the other dates on the slip), else worked out from the
