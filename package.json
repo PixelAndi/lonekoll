@@ -13,11 +13,13 @@
     "typecheck": "tsc -b"
   },
   "dependencies": {
+    "@gutenye/ocr-models": "^1.4.2",
     "@tesseract.js-data/eng": "^1.0.0",
     "@tesseract.js-data/swe": "^1.0.0",
     "dexie": "^4.4.7",
     "dexie-react-hooks": "^4.4.0",
     "fflate": "^0.8.3",
+    "onnxruntime-web": "^1.31.1",
     "pdfjs-dist": "^6.4.299",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",

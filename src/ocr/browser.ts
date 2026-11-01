@@ -300,3 +300,138 @@ function lightenBarsOf(
     context.putImageData(rows, 0, top);
   }
 }
+
+// ---- PaddleOCR for pay slips (see paddle.ts) ----
+
+interface PaddlePool {
+  workers: Worker[];
+  ready: Promise<void>;
+  ask: (k: number, msg: import('./paddleWorker.ts').PaddleRequest, transfer?: Transferable[]) => Promise<import('./paddleWorker.ts').PaddleResponse>;
+}
+let paddlePool: PaddlePool | null = null;
+let paddleIds = 0;
+
+/** The workers that read slips: as many as the phone has cores to spare (four at most); the first also finds the lines. */
+function getPaddle(): PaddlePool {
+  if (paddlePool) return paddlePool;
+  const count = Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 2) - 1));
+  const waiting = new Map<number, (r: import('./paddleWorker.ts').PaddleResponse) => void>();
+  const workers = Array.from({ length: count }, () => {
+    const w = new Worker(new URL('./paddleWorker.ts', import.meta.url), { type: 'module' });
+    w.onmessage = (e: MessageEvent<import('./paddleWorker.ts').PaddleResponse>) => {
+      waiting.get(e.data.id)?.(e.data);
+      waiting.delete(e.data.id);
+    };
+    return w;
+  });
+  const ask: PaddlePool['ask'] = (k, msg, transfer = []) =>
+    new Promise((resolve, reject) => {
+      waiting.set(msg.id, (r) => (r.kind === 'error' ? reject(new Error(r.error)) : resolve(r)));
+      workers[k].postMessage(msg, transfer);
+    });
+  const base = new URL('ocr/paddle/', document.baseURI).href;
+  const ready = Promise.all(workers.map((_, k) => ask(k, { id: ++paddleIds, kind: 'init', base, detect: k === 0 }))).then(() => undefined);
+  // A failed start (no WebAssembly, files missing) is tried again next time.
+  ready.catch(() => {
+    for (const w of workers) w.terminate();
+    paddlePool = null;
+  });
+  paddlePool = { workers, ready, ask };
+  return paddlePool;
+}
+
+/** Starts the slip reader now (while the camera opens), so a picture is read at once. */
+export function warmUpPaddle(): void {
+  getPaddle().ready.catch(() => undefined);
+}
+
+/** How wide the page is for finding its lines (a multiple of 32), and for cutting them out to read. */
+const DETECT_WIDTH = 960;
+const READ_WIDTH = 1600;
+
+/** A text line cut out of the page along its slope, 48 px high as the recognition model takes it. */
+function cutLine(page: HTMLCanvasElement, box: import('./paddle.ts').TextBox): { rgba: Uint8ClampedArray; width: number } {
+  const H = 48;
+  const width = Math.max(16, Math.min(2000, Math.round((H * box.length) / box.height)));
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, width, H);
+  ctx.translate(width / 2, H / 2);
+  ctx.scale(width / box.length, H / box.height);
+  ctx.rotate(-box.angle);
+  ctx.translate(-box.cx, -box.cy);
+  ctx.drawImage(page, 0, 0);
+  return { rgba: ctx.getImageData(0, 0, width, H).data, width };
+}
+
+/**
+ * A pay slip read from a picture of it with PaddleOCR: the lines found on a
+ * small copy, cut out of a larger one and read by the workers at the same
+ * time, the words placed on the page and given to the same parser as a PDF.
+ */
+export async function readPaySlipFast(source: Blob | HTMLCanvasElement, hourlyRate?: number): Promise<import('../domain/payslip.ts').PaySlip> {
+  const [{ slipItemsFromWords }, { parsePaySlip }, { wordsOfLine, restoreSwedish, restorePhrases }] = await Promise.all([
+    import('./slipPhoto.ts'),
+    import('../domain/payslip.ts'),
+    import('./paddle.ts'),
+  ]);
+  const pool = getPaddle();
+  // The page at reading size (upright, as the phone took it).
+  let page: HTMLCanvasElement;
+  if (source instanceof HTMLCanvasElement) page = resized(source, Math.min(READ_WIDTH, source.width));
+  else {
+    const bitmap = await createImageBitmap(source, { imageOrientation: 'from-image' });
+    page = draw(bitmap, READ_WIDTH);
+    bitmap.close();
+  }
+  // The grey bars (the pay day and payout are printed on one) lightened, as for Tesseract.
+  const { findDarkBars, lightenBar } = await import('./slipPhoto.ts');
+  lightenBarsOf(page, page.getContext('2d', { willReadFrequently: true })!, findDarkBars, lightenBar);
+  await pool.ready;
+  // Lines found on a small copy (a multiple of 32 each way, as the model needs).
+  const dw = DETECT_WIDTH;
+  const dh = Math.max(32, Math.ceil((page.height * dw) / page.width / 32) * 32);
+  const small = document.createElement('canvas');
+  small.width = dw;
+  small.height = dh;
+  const sctx = small.getContext('2d', { willReadFrequently: true })!;
+  sctx.drawImage(page, 0, 0, dw, dh);
+  const rgba = sctx.getImageData(0, 0, dw, dh).data;
+  const found = await pool.ask(0, { id: ++paddleIds, kind: 'detect', rgba, width: dw, height: dh }, [rgba.buffer]);
+  if (found.kind !== 'boxes') throw new Error('detection failed');
+  const sx = page.width / dw;
+  const sy = page.height / dh;
+  const boxes = found.boxes.map((b) => ({ ...b, cx: b.cx * sx, cy: b.cy * sy, length: b.length * sx, height: b.height * sy }));
+  // Each line cut out, then shared out to the workers, the longest first, to the least busy.
+  const cut = boxes.map((box, i) => ({ i, box, line: cutLine(page, box) })).sort((a, b) => b.line.width - a.line.width);
+  const shares = pool.workers.map(() => ({ load: 0, items: [] as typeof cut }));
+  for (const c of cut) {
+    const s = shares.reduce((a, b) => (b.load < a.load ? b : a));
+    s.items.push(c);
+    s.load += c.line.width;
+  }
+  const answers = await Promise.all(
+    shares.map((s, k) =>
+      s.items.length
+        ? pool.ask(k, { id: ++paddleIds, kind: 'read', lines: s.items.map((c) => c.line) }, s.items.map((c) => c.line.rgba.buffer))
+        : Promise.resolve(null),
+    ),
+  );
+  const words = shares.flatMap((s, k) => {
+    const answer = answers[k];
+    if (!answer || answer.kind !== 'lines') return [];
+    return s.items.flatMap((c, j) => {
+      const reading = answer.lines[j];
+      if (!reading || reading.confidence < 0.5) return [];
+      // Å, ä and ö put back, word by word and in phrases ("beräknad på") within the line.
+      return restorePhrases(wordsOfLine(reading, c.box).map((w) => ({ ...w, text: restoreSwedish(w.text) })));
+    });
+  });
+  const items = slipItemsFromWords(words, page.width);
+  const slip = parsePaySlip(items, hourlyRate);
+  if (slip.net === undefined && slip.gross !== undefined && slip.tax !== undefined) slip.net = Math.ceil(slip.gross - slip.tax - (slip.otherDeductions ?? 0) - 0.005);
+  return slip;
+}

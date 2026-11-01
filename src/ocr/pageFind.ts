@@ -20,10 +20,23 @@ export interface FoundPage {
   cut: { top: boolean; bottom: boolean; left: boolean; right: boolean };
 }
 
+/**
+ * How far apart blocks of print may be and still count as one page, across
+ * and down (both as shares of the picture's width). A timecard's print is one tight grid; a
+ * pay slip has a wide empty column in its table and empty bands between its
+ * header, table and summary.
+ */
+export interface PrintGaps {
+  across: number;
+  down: number;
+}
+export const CARD_GAPS: PrintGaps = { across: 1 / 40, down: 1 / 40 };
+export const SLIP_GAPS: PrintGaps = { across: 0.3, down: 0.45 };
+
 /** The sheet in a small grey copy of the frame; the print looked for in a finer copy (about 480 px across) when given. */
-export function findPage(img: Gray, fine?: Gray): FoundPage | null {
+export function findPage(img: Gray, fine?: Gray, gaps: PrintGaps = CARD_GAPS): FoundPage | null {
   // The print is what is read, and shows on any background; the paper's outline when no print is seen.
-  return findPrint(fine ?? img) ?? findPaper(img);
+  return findPrint(fine ?? img, gaps) ?? findPaper(img);
 }
 
 /**
@@ -112,7 +125,7 @@ function brightest(img: Gray, threshold: number) {
  * paper; folds and shadows in a background are smooth at this size), widened
  * by the page's margins.
  */
-export function findPrint(img: Gray): FoundPage | null {
+export function findPrint(img: Gray, gaps: PrintGaps = CARD_GAPS): FoundPage | null {
   const { width: w, height: h, data } = img;
   // Detail: how much a pixel differs from its neighbours.
   const detail = new Uint8Array(w * h);
@@ -127,8 +140,7 @@ export function findPrint(img: Gray): FoundPage | null {
   const cols = new Array<number>(w).fill(0);
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (detail[y * w + x]) rows[y]++;
   /** The longest run of busy lines (a gap of a few quiet ones allowed), as [first, last]. */
-  const gap = Math.max(4, Math.round(w / 40));
-  const span = (counts: number[], min: number): [number, number] | null => {
+  const span = (counts: number[], min: number, gap: number): [number, number] | null => {
     let best: [number, number] | null = null;
     let start = -1;
     let lastBusy = -1;
@@ -145,10 +157,10 @@ export function findPrint(img: Gray): FoundPage | null {
     }
     return best;
   };
-  const ys = span(rows, w * 0.1);
+  const ys = span(rows, w * 0.1, Math.max(4, Math.round(w * gaps.down)));
   if (!ys) return null;
   for (let y = ys[0]; y <= ys[1]; y++) for (let x = 0; x < w; x++) if (detail[y * w + x]) cols[x]++;
-  const xs = span(cols, (ys[1] - ys[0] + 1) * 0.1);
+  const xs = span(cols, (ys[1] - ys[0] + 1) * 0.1, Math.max(4, Math.round(w * gaps.across)));
   if (!xs) return null;
   const bw = xs[1] - xs[0] + 1;
   const bh = ys[1] - ys[0] + 1;

@@ -69,11 +69,19 @@ in Playwright by routing `https://accounts.google.com/gsi/client` and
   `payslip.ts` (pay slip parser for PDF and photo text), `raises.ts`,
   `coverage.ts`, `missing.ts`, `vacation.ts`, `tax.ts`, `sources.ts` (links to
   the agreement).
-- `src/ocr/` – on-device reading with tesseract.js (assets bundled, no
-  network): `pipeline.ts` (clock photos), `timecard.ts` (printed timecards:
-  rules, rows, day alignment, voting across readings), `slipPhoto.ts` (words →
-  table cells for a photographed slip), `browser.ts` (entry points; heavy work
-  in `timecardWorker.ts`), `pageFind.ts` (aiming the camera).
+- `src/ocr/` – on-device reading (assets bundled, no network): tesseract.js
+  for the clock and timecards – `pipeline.ts` (clock photos), `timecard.ts`
+  (printed timecards: rules, rows, day alignment, voting across readings);
+  PaddleOCR (PP-OCRv4 via onnxruntime-web, WASM workers) for pay slips –
+  `paddle.ts` (line finding, CTC decoding, word boxes, å/ä/ö put back),
+  `paddleWorker.ts`; `slipPhoto.ts` (words → table cells, grey bars
+  lightened), `browser.ts` (entry points: `readPaySlipFast` is PaddleOCR,
+  `readPaySlipImage` the older Tesseract fallback), `pageFind.ts` (aiming the
+  camera; `SLIP_GAPS` for slips). The trimmed recognition model is committed
+  in `ocr-models/` (`scripts/trim-paddle-rec.py` makes it from the npm model);
+  `scripts/copy-ocr-assets.mjs` copies all OCR files to `public/ocr`.
+- `src/ui/SlipScanner.tsx` – the live pay slip scanner; `src/ui/camera.ts`
+  holds the camera helpers it shares with `TimecardScanner.tsx`.
 - `src/pdf/` – pay slip PDFs via pdf.js (bundled).
 - `src/cloud/` – optional Google Drive copy: `google.ts` (only network file;
   OAuth client ID is here), `sync.ts` (upload, data.json for restore/merge,
@@ -129,7 +137,10 @@ line dates or the pay day and flagged (`periodDoubt`) for the user to check.
 ## Open items
 
 1. Verify reading of the newer (summed) slip layout from a real photo (PDFs
-   are verified). Ask the owner where the 75 % overtime level comes from
+   are verified), and the live slip scanner on the owner's phone (speed,
+   aiming). Measured on 4 real photos of older slips (cloud computer, 3
+   workers): PaddleOCR read all 4 completely in 6–7 s each, Tesseract 3 of 4
+   in 4–5 s. If too slow on the phone: try ONNX Runtime's WebGPU backend. Ask the owner where the 75 % overtime level comes from
    (Tilläggsavtal Bagerier or a local agreement) before adding it to the rules.
 2. Idea: for older per-day slips, compare each day's paid hours against the
    stamped days and name the exact dates that differ in the report.

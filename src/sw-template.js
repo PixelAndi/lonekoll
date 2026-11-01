@@ -9,6 +9,8 @@ const KEEP_VERSIONS = 3;
 // Servers may send "Vary: Origin"; module script requests carry an Origin
 // header that the precache requests don't, which would make every lookup miss.
 const MATCH = { ignoreVary: true };
+/** OCR files being fetched, so one asked for again meanwhile isn't fetched twice. */
+const inflight = new Map();
 // The page itself always comes from the server when online. GitHub Pages lets
 // browsers keep files for 10 minutes; a page kept from before an update would
 // ask for the old version's files, which are gone from the server.
@@ -57,9 +59,19 @@ self.addEventListener('fetch', (event) => {
       caches.open(OCR_CACHE).then(async (cache) => {
         const hit = await cache.match(request, MATCH);
         if (hit) return hit;
-        const response = await fetch(request);
-        if (response.ok) await cache.put(request, response.clone());
-        return response;
+        // A file asked for by several readers at once (the pay slip reader's workers) is fetched
+        // once; a copy that can't be kept (the cache full or busy) is still handed over.
+        let pending = inflight.get(url.href);
+        if (!pending) {
+          pending = fetch(request)
+            .then(async (response) => {
+              if (response.ok) await cache.put(request, response.clone()).catch(() => undefined);
+              return response;
+            })
+            .finally(() => inflight.delete(url.href));
+          inflight.set(url.href, pending);
+        }
+        return (await pending).clone();
       }),
     );
     return;

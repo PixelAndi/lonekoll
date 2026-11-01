@@ -1,6 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { withPayDay } from '../domain/payday.ts';
-import { useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useApp } from '../app-context.ts';
 import { db, newId, type SlipRecord } from '../db.ts';
 import { calculatePeriod } from '../domain/calc.ts';
@@ -16,11 +16,43 @@ import { applyOverrides, countFindings, slipPeriod, vacationBasisFor } from './s
 import { VacationProgress } from './VacationProgress.tsx';
 import { WageFromSlips } from './WageFromSlips.tsx';
 import { needsCheck } from './SlipCheck.tsx';
+import { completeness, SlipScanner, type SlipOutcome } from './SlipScanner.tsx';
+import type { PaySlip } from '../domain/payslip.ts';
+
+/** A slip's key for knowing it again: the same period, pay day and amounts. */
+const keyOf = (slip: SlipRecord['slip']) => `${slip.periodStart ?? ''}|${slip.payDate ?? ''}|${slip.lines.reduce((sum, l) => sum + (l.amount ?? 0), 0).toFixed(2)}`;
+
+/**
+ * A slip read (from a PDF, a photo or the scanner) saved, unless it was
+ * imported before or nothing could be read; a pay day it lacks is the one in
+ * the settings.
+ */
+async function storeSlip(read: PaySlip, file: Blob, fileName: string, payDay: number | null): Promise<SlipOutcome & { id?: string }> {
+  if (read.lines.length === 0) return { status: 'none' };
+  const slip = withPayDay(read, payDay);
+  const known = new Set((await db.slips.toArray()).map((r) => keyOf(r.slip)));
+  if (known.has(keyOf(slip))) return { status: 'duplicate', period: slip.periodStart };
+  const id = newId();
+  await db.slips.put({ id, fileName, importedAt: Date.now(), periodStart: slip.periodStart ?? '', slip, pdf: file });
+  return { status: 'saved', period: slip.periodStart, id, check: completeness(slip) < 7 };
+}
+
+/** A photo of a slip read: with PaddleOCR, or with Tesseract where that can't run. */
+async function readSlipPhoto(file: Blob, rate?: number): Promise<PaySlip> {
+  const ocr = await import('../ocr/browser.ts');
+  try {
+    return await ocr.readPaySlipFast(file, rate);
+  } catch {
+    return ocr.readPaySlipImage(file, rate);
+  }
+}
 
 export function SlipsView() {
   const { t, fmt, settings } = useApp();
   const input = useRef<HTMLInputElement>(null);
   const photo = useRef<HTMLInputElement>(null);
+  const [scanning, setScanning] = useState(false);
+  const [scanned, setScanned] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const slips = useLiveQuery(() => db.slips.orderBy('periodStart').reverse().toArray(), []);
@@ -36,9 +68,6 @@ export function SlipsView() {
     setBusy(true);
     setError(undefined);
     setResults(files.map((f) => ({ name: f.name, status: 'reading' })));
-    // A slip imported before (or twice in this batch) is skipped: the same period, pay day and amounts.
-    const keyOf = (slip: SlipRecord['slip']) => `${slip.periodStart ?? ''}|${slip.payDate ?? ''}|${slip.lines.reduce((sum, l) => sum + (l.amount ?? 0), 0).toFixed(2)}`;
-    const known = new Set((await db.slips.toArray()).map((r) => keyOf(r.slip)));
     const update = (k: number, patch: Partial<(typeof results)[number]>) => setResults((r) => r.map((x, i) => (i === k ? { ...x, ...patch } : x)));
     let lastId: string | undefined;
     let imported = 0;
@@ -46,23 +75,19 @@ export function SlipsView() {
       try {
         // A PDF, or a photo of the slip (read with the same text recognition as the scanners).
         const rate = hourlyRateOn(settings, todayLocal()) ?? undefined;
-        const read = /^image\//.test(file.type) ? await (await import('../ocr/browser.ts')).readPaySlipImage(file, rate) : await readPaySlipPdf(file, rate);
-        // A pay day that couldn't be read: the one in the settings (shown on the check card).
-        const slip = withPayDay(read, settings.payDay);
-        if (slip.lines.length === 0) {
+        const read = /^image\//.test(file.type) ? await readSlipPhoto(file, rate) : await readPaySlipPdf(file, rate);
+        // A slip imported before (or twice in this batch) is skipped: the same period, pay day and amounts.
+        const outcome = await storeSlip(read, file, file.name, settings.payDay);
+        if (outcome.status === 'none') {
           update(k, { status: 'none' });
           continue;
         }
-        const key = keyOf(slip);
-        if (known.has(key)) {
-          update(k, { status: 'duplicate', period: slip.periodStart });
+        if (outcome.status === 'duplicate') {
+          update(k, { status: 'duplicate', period: outcome.period });
           continue;
         }
-        known.add(key);
-        const id = newId();
-        await db.slips.put({ id, fileName: file.name, importedAt: Date.now(), periodStart: slip.periodStart ?? '', slip, pdf: file });
-        update(k, { status: 'done', period: slip.periodStart, id });
-        lastId = id;
+        update(k, { status: 'done', period: outcome.period, id: outcome.id });
+        lastId = outcome.id;
         imported++;
       } catch (e) {
         update(k, { status: 'failed' });
@@ -75,19 +100,41 @@ export function SlipsView() {
     if (files.length === 1 && imported === 0) setResults([]);
   };
 
+  /** A slip read by the scanner: saved at once (the scanner says how it went). */
+  const onScanned = useCallback(
+    async (slip: PaySlip, picture: Blob): Promise<SlipOutcome> => {
+      const outcome = await storeSlip(slip, picture, `${t('slipscan.title')} ${new Date().toISOString().slice(0, 10)}.jpg`, settings.payDay);
+      if (outcome.id) setScanned((ids) => [...ids, outcome.id!]);
+      return outcome;
+    },
+    [settings.payDay, t],
+  );
+  const closeScanner = () => {
+    setScanning(false);
+    // One slip scanned: straight to it (its check card); several: the list.
+    if (scanned.length === 1) navigate({ name: 'slip', id: scanned[0] });
+    setScanned([]);
+  };
+
   return (
     <Page title={t('nav.slips')}>
+      {scanning && (
+        <SlipScanner
+          onSlip={onScanned}
+          onClose={closeScanner}
+          onCameraFailed={() => {
+            setScanning(false);
+            photo.current?.click();
+          }}
+        />
+      )}
       <div className="actions-stack">
         {/* The PDF from the employer first; a photo of a paper slip beside it. */}
         <div className="scan-row">
           <button type="button" className="button button-primary button-large" disabled={busy} onClick={() => input.current?.click()}>
             <Icon name="slips" /> {t('slips.import')}
           </button>
-          <button type="button" className="button timecard-button" disabled={busy} onClick={() => {
-              // The text recognition gets ready while the photo is taken.
-              void import('../ocr/browser.ts').then((m) => m.warmUpSlipReading());
-              photo.current?.click();
-            }}>
+          <button type="button" className="button timecard-button" disabled={busy} onClick={() => setScanning(true)}>
             <Icon name="camera" />
             <span>{t('slips.photo')}</span>
           </button>

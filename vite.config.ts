@@ -2,6 +2,7 @@
 import react from '@vitejs/plugin-react';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { defineConfig, type Plugin } from 'vite';
 
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string };
@@ -59,6 +60,13 @@ function contentSecurityPolicy(): Plugin {
 export default defineConfig({
   // Relative paths so the app works from any folder, e.g. GitHub Pages.
   base: './',
+  resolve: {
+    alias: [
+      // ONNX Runtime (reading pay slip photos) without its WebAssembly bundled into the app: it is
+      // loaded from public/ocr/paddle when a slip is first read, and kept for offline use there.
+      { find: /^onnxruntime-web\/wasm$/, replacement: fileURLToPath(new URL('./node_modules/onnxruntime-web/dist/ort.wasm.min.mjs', import.meta.url)) },
+    ],
+  },
   plugins: [react(), serviceWorker(), contentSecurityPolicy()],
   define: { __APP_VERSION__: JSON.stringify(pkg.version) },
   build: { target: 'es2022', chunkSizeWarningLimit: 1500 },

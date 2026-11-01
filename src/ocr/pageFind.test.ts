@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { aimAt, aimAtPart, findPage } from './pageFind.ts';
+import { aimAt, aimAtPart, findPage, SLIP_GAPS } from './pageFind.ts';
 
 /** A grey background with a white sheet (printed lines on it) at the given place, 160 × 284 px. */
 function frame(x: number, y: number, w: number, h: number, background = 150, step = 8) {
@@ -68,5 +68,39 @@ describe('finding the timecard in the camera', () => {
     expect(aimAtPart(findPage(frame(-20, -10, 200, 304, 150, 3)), band)).toBe('left');
     // Too far away: the print is narrow.
     expect(aimAtPart(findPage(frame(50, 60, 60, 160, 150, 3)), band)).toBe('closer');
+  });
+});
+
+describe('finding a pay slip in the camera', () => {
+  /**
+   * A made-up slip on a white table (480 × 640, as the scanner's finer copy): a short header, a
+   * table whose names (left) and figures (right) have a wide empty column between them, and a
+   * summary further down – blocks of print with gaps a timecard doesn't have.
+   */
+  function slip() {
+    const W = 480;
+    const H = 640;
+    const data = new Uint8Array(W * H).fill(235);
+    const text = (x0: number, x1: number, y0: number, y1: number) => {
+      for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) if ((y - y0) % 10 < 4 && (x % 7) < 4) data[y * W + x] = 40;
+    };
+    text(40, 200, 60, 110);
+    text(40, 160, 160, 400);
+    text(300, 440, 160, 400);
+    text(40, 440, 480, 560);
+    return { width: W, height: H, data };
+  }
+
+  it('takes the whole page, gaps and all', () => {
+    const page = findPage(slip(), undefined, SLIP_GAPS)!;
+    expect(page.x).toBeLessThan(0.1);
+    expect(page.x + page.w).toBeGreaterThan(0.9);
+    expect(page.y).toBeLessThan(0.1);
+    expect(page.y + page.h).toBeGreaterThan(0.85);
+  });
+
+  it('would take only part of it with a timecard’s gaps', () => {
+    const page = findPage(slip())!;
+    expect(page.w).toBeLessThan(0.5);
   });
 });

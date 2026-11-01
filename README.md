@@ -155,12 +155,23 @@ report you can go through with your employer.
   Bagerier §1 prints it for the period and tier (and the youth share for 16-
   and 17-year-olds). Without a birth date the app assumes an adult, so it is
   then asked as a question rather than claimed.
-- **Pay slips photographed.** A "Fota" button beside the import (as the
-  timecard button beside the scanner): the photo is read on the phone with a
-  Swedish text model (å, ä, ö; loaded only for this), its words put back into
-  the table's cells – tilt taken out, a number never joined with a word – and
-  read by the same parser as a PDF (ocr/slipPhoto.ts). A payout on a dark bar
-  the photo can't read is gross less tax, in whole kronor.
+- **Pay slips scanned.** A "Skanna" button beside the import opens a live
+  scanner like the timecard scanner: hold the slip in the frame and the
+  picture is taken by itself when it is steady and sharp, cut to the page and
+  read while the next slip is put down; a reading that doesn't add up gets
+  another picture while the slip is still in view, and each slip is saved as
+  it is read (a photo chosen from the phone is read the same way). The reading
+  is PaddleOCR (PP-OCRv4) run by ONNX Runtime in WebAssembly workers, several
+  at once (src/ocr/paddle.ts, paddleWorker.ts): text lines are found by the
+  detection model and each is read by the recognition model, trimmed to Latin
+  letters, digits and signs (ocr-models/); å, ä and ö, which it doesn't know,
+  are put back from the words slips print. The words go back into the table's
+  cells (ocr/slipPhoto.ts) and the same parser as a PDF reads them. On real
+  slip photos it read every line where Tesseract missed some. The models and
+  ONNX Runtime (about 27 MB) are bundled, fetched the first time a slip is
+  scanned and then kept for offline use; nothing is sent anywhere. The grey
+  bar with the pay day and payout is lightened before reading; a payout still
+  unreadable is gross less tax, in whole kronor.
 - **Several pay slips at once.** Pick many PDFs in one go: they are read one
   after another with how each went; a slip already in the app (same period,
   pay day and amounts) is skipped.
@@ -391,7 +402,9 @@ Code layout:
   building, pay calculation, pay slip parsing and comparison (no browser APIs;
   all unit-tested).
 - `src/ocr/`: locating the clock table by colour, preprocessing, Tesseract
-  wrapper, voting, and the live frame checks used by the scanner.
+  wrapper, voting, and the live frame checks used by the scanners; PaddleOCR
+  for pay slips (`paddle.ts`, `paddleWorker.ts`; the trimmed recognition
+  model is in `ocr-models/`, made by `scripts/trim-paddle-rec.py`).
 - `src/pdf/`: pdf.js text extraction.
 - `src/ui/`: React screens; `src/db.ts` (Dexie/IndexedDB), `src/backup.ts`,
   `src/i18n.ts` (Swedish and English), `src/i18n-pl.ts` (Polish) and
