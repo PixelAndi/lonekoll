@@ -18,6 +18,7 @@ import { WageFromSlips } from './WageFromSlips.tsx';
 export function SlipsView() {
   const { t, fmt, settings } = useApp();
   const input = useRef<HTMLInputElement>(null);
+  const photo = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const slips = useLiveQuery(() => db.slips.orderBy('periodStart').reverse().toArray(), []);
@@ -28,6 +29,7 @@ export function SlipsView() {
   const onFiles = async (list: FileList | null) => {
     const files = [...(list ?? [])];
     if (input.current) input.current.value = '';
+    if (photo.current) photo.current.value = '';
     if (!files.length) return;
     setBusy(true);
     setError(undefined);
@@ -40,7 +42,9 @@ export function SlipsView() {
     let imported = 0;
     for (const [k, file] of files.entries()) {
       try {
-        const slip = await readPaySlipPdf(file, hourlyRateOn(settings, todayLocal()) ?? undefined);
+        // A PDF, or a photo of the slip (read with the same text recognition as the scanners).
+        const rate = hourlyRateOn(settings, todayLocal()) ?? undefined;
+        const slip = /^image\//.test(file.type) ? await (await import('../ocr/browser.ts')).readPaySlipImage(file, rate) : await readPaySlipPdf(file, rate);
         if (slip.lines.length === 0) {
           update(k, { status: 'none' });
           continue;
@@ -70,10 +74,18 @@ export function SlipsView() {
   return (
     <Page title={t('nav.slips')}>
       <div className="actions-stack">
-        <button type="button" className="button button-primary button-large" disabled={busy} onClick={() => input.current?.click()}>
-          <Icon name="slips" /> {t('slips.import')}
-        </button>
-        <input ref={input} type="file" accept="application/pdf,.pdf" multiple hidden onChange={(e) => void onFiles(e.target.files)} />
+        {/* The PDF from the employer first; a photo of a paper slip beside it. */}
+        <div className="scan-row">
+          <button type="button" className="button button-primary button-large" disabled={busy} onClick={() => input.current?.click()}>
+            <Icon name="slips" /> {t('slips.import')}
+          </button>
+          <button type="button" className="button timecard-button" disabled={busy} onClick={() => photo.current?.click()}>
+            <Icon name="camera" />
+            <span>{t('slips.photo')}</span>
+          </button>
+        </div>
+        <input ref={photo} type="file" accept="image/*" capture="environment" hidden onChange={(e) => void onFiles(e.target.files)} />
+        <input ref={input} type="file" accept="application/pdf,.pdf,image/*" multiple hidden onChange={(e) => void onFiles(e.target.files)} />
         <p className="muted small">{t('slips.importMany')}</p>
         <p className="slip-privacy small">
           <Icon name="lock" /> <span>{t('slips.privacy')}</span>

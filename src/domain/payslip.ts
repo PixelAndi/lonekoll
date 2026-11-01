@@ -169,6 +169,8 @@ function parseItemLine(line: TextItem[], hourlyRate?: number): SlipLine | null {
     amount = before[0];
   }
   const text = textParts.join(' ');
+  // No figures and no dates: not a pay line (e.g. a postcode in the address of a photographed slip).
+  if (quantity === undefined && amount === undefined && unitPrice === undefined && !from) return null;
   return {
     code,
     text,
@@ -187,7 +189,8 @@ function valuesAfter(lines: TextItem[][], label: RegExp): { label: TextItem; val
   const found: { label: TextItem; value: string }[] = [];
   for (const line of lines) {
     line.forEach((item, i) => {
-      if (!label.test(item.str.trim())) return;
+      // "Löneperiod:" on some slips.
+      if (!label.test(item.str.trim().replace(/:$/, ''))) return;
       const next = line.slice(i + 1).find((n) => n.x > item.x + item.width - 1);
       if (next) found.push({ label: item, value: next.str.trim() });
     });
@@ -214,7 +217,8 @@ export function parsePaySlip(items: TextItem[], hourlyRate?: number): PaySlip {
   for (const line of lines) {
     const idx = line.findIndex((i) => /^Utbetalas\b/i.test(i.str.trim()));
     if (idx < 0) continue;
-    const date = line[idx].str.match(/\d{4}-\d{2}-\d{2}/)?.[0];
+    // The date in the same text, or (a photographed slip) the next cell.
+    const date = line[idx].str.match(/\d{4}-\d{2}-\d{2}/)?.[0] ?? line[idx + 1]?.str.trim().match(/^\d{4}-\d{2}-\d{2}$/)?.[0];
     if (date) slip.payDate = date;
     const amount = line.slice(idx + 1).find((i) => NUMBER.test(i.str.trim()));
     if (amount) slip.net = parseSwedishNumber(amount.str);

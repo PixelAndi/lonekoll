@@ -158,6 +158,12 @@ report you can go through with your employer.
   Bagerier §1 prints it for the period and tier (and the youth share for 16-
   and 17-year-olds). Without a birth date the app assumes an adult, so it is
   then asked as a question rather than claimed.
+- **Pay slips photographed.** A "Fota" button beside the import (as the
+  timecard button beside the scanner): the photo is read on the phone with a
+  Swedish text model (å, ä, ö; loaded only for this), its words put back into
+  the table's cells – tilt taken out, a number never joined with a word – and
+  read by the same parser as a PDF (ocr/slipPhoto.ts). A payout on a dark bar
+  the photo can't read is gross less tax, in whole kronor.
 - **Several pay slips at once.** Pick many PDFs in one go: they are read one
   after another with how each went; a slip already in the app (same period,
   pay day and amounts) is skipped.

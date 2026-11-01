@@ -26,7 +26,8 @@ export async function exportBackup(): Promise<Blob> {
   ]);
   const files: Record<string, Uint8Array> = {};
   for (const p of photos) files[`photos/${p.id}.jpg`] = new Uint8Array(await p.blob.arrayBuffer());
-  for (const s of slips) files[`slips/${s.id}.pdf`] = new Uint8Array(await s.pdf.arrayBuffer());
+  // A slip is its PDF, or a photo of a paper slip.
+  for (const s of slips) files[`slips/${s.id}.${/^image\//.test(s.pdf.type) ? 'jpg' : 'pdf'}`] = new Uint8Array(await s.pdf.arrayBuffer());
   for (const c of cards) files[`timecards/${c.id}.jpg`] = new Uint8Array(await c.blob.arrayBuffer());
   const data: BackupData = {
     app: 'lonekoll',
@@ -55,7 +56,9 @@ export async function importBackup(file: Blob): Promise<void> {
   }));
   const slips: SlipRecord[] = data.slips.map((s) => ({
     ...s,
-    pdf: new Blob([(files[`slips/${s.id}.pdf`] ?? new Uint8Array()) as BlobPart], { type: 'application/pdf' }),
+    pdf: files[`slips/${s.id}.jpg`]
+      ? new Blob([files[`slips/${s.id}.jpg`] as BlobPart], { type: 'image/jpeg' })
+      : new Blob([(files[`slips/${s.id}.pdf`] ?? new Uint8Array()) as BlobPart], { type: 'application/pdf' }),
   }));
   const cards: CardRecord[] = (data.cards ?? []).map((c) => ({
     ...c,

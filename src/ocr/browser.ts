@@ -7,17 +7,24 @@ import type { PreparedStrip, PrepareRequest, PrepareResponse } from './timecardW
 // Browser side of photo reading: decode the photo, keep a small JPEG copy as
 // evidence, and run the OCR pipeline with Tesseract served from ./ocr/.
 
-let engine: Promise<TesseractEngine> | null = null;
+const engines = new Map<string, Promise<TesseractEngine>>();
 
-function getEngine(): Promise<TesseractEngine> {
-  engine ??= import('./tesseract.ts').then(({ TesseractEngine }) => {
-    const base = (path: string) => new URL(path, document.baseURI).href;
-    return new TesseractEngine(
-      { langPath: base('ocr/lang'), corePath: base('ocr/core'), workerPath: base('ocr/worker.min.js') },
-      (png) => new Blob([png as BlobPart], { type: 'image/png' }),
+/** Text recognition with a language model: English by default, Swedish for pay slips. */
+function getEngine(lang = 'eng'): Promise<TesseractEngine> {
+  if (!engines.has(lang)) {
+    engines.set(
+      lang,
+      import('./tesseract.ts').then(({ TesseractEngine }) => {
+        const base = (path: string) => new URL(path, document.baseURI).href;
+        return new TesseractEngine(
+          { langPath: base('ocr/lang'), corePath: base('ocr/core'), workerPath: base('ocr/worker.min.js') },
+          (png) => new Blob([png as BlobPart], { type: 'image/png' }),
+          lang,
+        );
+      }),
     );
-  });
-  return engine;
+  }
+  return engines.get(lang)!;
 }
 
 function draw(bitmap: ImageBitmap, maxWidth: number): HTMLCanvasElement {
@@ -227,4 +234,28 @@ async function cropOf(canvas: HTMLCanvasElement, x0: number, y0: number, x1: num
   crop.height = Math.max(1, Math.round(Math.min(canvas.height, y1) - y));
   crop.getContext('2d')!.drawImage(canvas, x, y, crop.width, crop.height, 0, 0, crop.width, crop.height);
   return URL.createObjectURL(await toBlob(crop, 0.85));
+}
+
+/**
+ * A photographed pay slip, read like a PDF one: the page prepared as a
+ * timecard is (lines removed, read in strips at once), its words put back
+ * into the table's cells (see slipPhoto.ts) and given to the same parser.
+ */
+export async function readPaySlipImage(file: Blob, hourlyRate?: number): Promise<import('../domain/payslip.ts').PaySlip> {
+  const [{ slipItemsFromWords }, { parsePaySlip }, ocr] = await Promise.all([import('./slipPhoto.ts'), import('../domain/payslip.ts'), getEngine('swe')]);
+  const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+  const canvas = document.createElement('canvas');
+  canvas.width = bitmap.width;
+  canvas.height = bitmap.height;
+  canvas.getContext('2d')!.drawImage(bitmap, 0, 0);
+  bitmap.close();
+  const strips = Math.max(1, Math.min(3, (navigator.hardwareConcurrency || 2) - 1));
+  const prepared = await prepare(canvas, strips, Math.round(TIMECARD_WIDTH * 0.03));
+  const words = await ocr.recognizeStrips(prepared.strips, 'find');
+  const items = slipItemsFromWords(words, prepared.width);
+  const slip = parsePaySlip(items, hourlyRate);
+  // The payout is often printed on a dark bar a photo can't read: then it is gross pay less tax and
+  // other deductions, in whole kronor (öresutjämning).
+  if (slip.net === undefined && slip.gross !== undefined && slip.tax !== undefined) slip.net = Math.round(slip.gross - slip.tax - (slip.otherDeductions ?? 0));
+  return slip;
 }

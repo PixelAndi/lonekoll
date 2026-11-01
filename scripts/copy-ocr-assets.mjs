@@ -17,6 +17,8 @@ const copies = [
     path.join('core', f),
   ]),
   [path.join(pkgDir('@tesseract.js-data/eng'), '4.0.0_best_int', 'eng.traineddata.gz'), path.join('lang', 'eng.traineddata.gz')],
+  // Swedish, for photographed pay slips (å, ä and ö): loaded only when one is read.
+  [path.join(pkgDir('@tesseract.js-data/swe'), '4.0.0_best_int', 'swe.traineddata.gz'), path.join('lang', 'swe.traineddata.gz')],
 ];
 
 for (const [from, to] of copies) {

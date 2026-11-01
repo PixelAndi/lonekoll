@@ -39,15 +39,19 @@ export class TesseractEngine implements OcrEngine {
   private readonly paths: TesseractPaths;
   private readonly toImage: (png: Uint8Array) => unknown;
 
-  constructor(paths: TesseractPaths, toImage: (png: Uint8Array) => unknown) {
+  /** The language model: English (digits and the clock's screen), or Swedish for pay slips. */
+  private readonly lang: string;
+
+  constructor(paths: TesseractPaths, toImage: (png: Uint8Array) => unknown, lang = 'eng') {
     this.paths = paths;
     this.toImage = toImage;
+    this.lang = lang;
   }
 
   private getWorker(): Promise<Worker> {
     // Only pass paths that are set: undefined would override the library defaults.
     const paths = Object.fromEntries(Object.entries(this.paths).filter(([, v]) => v !== undefined));
-    this.worker ??= createWorker('eng', 1, { ...paths, cacheMethod: 'none', gzip: true });
+    this.worker ??= createWorker(this.lang, 1, { ...paths, cacheMethod: 'none', gzip: true });
     return this.worker;
   }
 
@@ -94,7 +98,7 @@ export class TesseractEngine implements OcrEngine {
   /** Strips already packed as PNGs (by the preparing worker), read at the same time. */
   async recognizeStrips(strips: { y0: number; own: { from: number; to: number }; png: Uint8Array }[], mode: OcrMode): Promise<OcrWord[]> {
     const paths = Object.fromEntries(Object.entries(this.paths).filter(([, v]) => v !== undefined));
-    while (this.helpers.length < strips.length - 1) this.helpers.push(createWorker('eng', 1, { ...paths, cacheMethod: 'none', gzip: true }));
+    while (this.helpers.length < strips.length - 1) this.helpers.push(createWorker(this.lang, 1, { ...paths, cacheMethod: 'none', gzip: true }));
     const read = async (part: (typeof strips)[number], worker: Promise<Worker> | null) => {
       const run = async (w: Worker) => {
         await w.setParameters({ ...PARAMS[mode], user_defined_dpi: '300', debug_file: '/dev/null' });
