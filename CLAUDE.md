@@ -85,6 +85,14 @@ in Playwright by routing `https://accounts.google.com/gsi/client` and
   `src/ui/camera.ts` holds the camera helpers it shares with
   `TimecardScanner.tsx`, and `chime()` (tones made with Web Audio, no files;
   `settings.scanSound`, toggled by the speaker button in both scanners).
+- `src/domain/basis.ts` – what a slip's comparison rests on (`periodBasis`):
+  none (nothing logged: the report claims nothing, shows only what the slip
+  pays), partial (days the slip pays without stamps; or, on summed slips,
+  unlogged weekdays when the slip pays more hours than were logged) or full.
+  With a partial basis, points where the slip shows *more* than the
+  calculation become questions ("kan bero på saknade dagar"); where it shows
+  less they stay claims (missing days can't explain them). Shown in the report
+  (`BasisNote.tsx`, written for both employee and employer) and on the slip page.
 - `src/ui/SlipsView.tsx` – the pay slip page: what was just read, "Att
   kontrollera" (incomplete readings, uncertain periods, the same slip saved
   more than once), the slips by year (`Fold`), then wage and vacation pay as
@@ -152,8 +160,9 @@ line dates or the pay day and flagged (`periodDoubt`) for the user to check.
    workers): PaddleOCR read all 4 completely in 6–7 s each, Tesseract 3 of 4
    in 4–5 s. If too slow on the phone: try ONNX Runtime's WebGPU backend. Ask the owner where the 75 % overtime level comes from
    (Tilläggsavtal Bagerier or a local agreement) before adding it to the rules.
-2. Idea: for older per-day slips, compare each day's paid hours against the
-   stamped days and name the exact dates that differ in the report.
+2. Partly done (`src/domain/basis.ts`, the report's "Underlag"): per-day slips
+   name the exact days paid but not logged. Still open: compare each logged
+   day's paid hours against its stamps and name the dates that differ.
 3. A crash ("Något gick fel") on the Days tab with real data: reproduced with
    a slip saved without a period (its "" month broke the month list); fixed.
    If it comes back, ask the owner for a screenshot of the error screen.

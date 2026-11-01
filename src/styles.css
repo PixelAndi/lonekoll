@@ -2915,3 +2915,26 @@ input[type='checkbox'] {
   line-height: 44px;
   cursor: pointer;
 }
+
+/* The report's basis: what the comparison rests on */
+.report-basis .basis-alert {
+  border-left: 4px solid var(--warn);
+  background: var(--warn-soft);
+  padding: 8px 12px;
+  border-radius: 6px;
+}
+.report-basis-none .basis-alert {
+  border-left-color: var(--error);
+  background: var(--error-soft);
+}
+.report-log-missing td {
+  color: var(--warn);
+  font-style: italic;
+}
+@media print {
+  .report-basis .basis-alert {
+    background: none;
+    border: 1px solid #000;
+    border-left-width: 4px;
+  }
+}

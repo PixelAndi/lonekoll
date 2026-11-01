@@ -122,6 +122,9 @@ const EDITIONS: Record<Edition, EditionInfo> = {
 /** The edition of the agreement in force on a date (the current one for a date after the last known). */
 export const editionOn = (date?: string): Edition => (!date || date >= '2025-04-01' ? '2025' : date >= '2023-04-01' ? '2023' : '2020');
 
+/** The years of the agreement edition in force on a date, as named on its cover ("2025–2027"). */
+export const editionYears = (date?: string): string => ({ '2020': '2020–2023', '2023': '2023–2025', '2025': '2025–2027' })[editionOn(date)];
+
 export interface Citation {
   source: Source;
   /** "5.1.3", "10" (of "§10–11"), or '' for the document as a whole; as numbered in the edition. */

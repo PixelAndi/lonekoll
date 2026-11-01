@@ -158,7 +158,7 @@ export function checkReport(input: ReportCheckInput): ReportCheck {
  * with stamps or an absence (sick, vacation…) in at least half of the weeks.
  * Monday–Friday until there are two weeks to go by.
  */
-function usualWeekdays(days: DayRecord[], end: LocalDate): Set<number> {
+export function usualWeekdays(days: DayRecord[], end: LocalDate): Set<number> {
   const from = addDays(end, -56);
   const logged = days.filter((d) => d.date >= from && d.date <= end && (d.rows.length > 0 || d.absence));
   const weeks = new Set(logged.map((d) => weekStart(d.date)));

@@ -207,7 +207,16 @@ export function PointCard({ point: p, comparison, settings, end, taxYear, t, fmt
         ) : (
           <>
             <span>☐ {t('point.answer.ok')}</span>
-            <span>☐ {t(p.reason === 'local-overtime' || p.reason === 'local-monthly' ? 'point.answer.local' : 'point.answer.no')}</span>
+            <span>
+              ☐{' '}
+              {t(
+                p.reason === 'local-overtime' || p.reason === 'local-monthly'
+                  ? 'point.answer.local'
+                  : p.reason === 'missing-data'
+                    ? 'point.answer.dataOnly'
+                    : 'point.answer.no',
+              )}
+            </span>
           </>
         )}
         <span>{t('point.answer.comment')}</span>

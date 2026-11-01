@@ -122,3 +122,24 @@ describe('the agreement’s minimum wage', () => {
     expect([p.kind, p.reason]).toEqual(['question', 'minimum-age']);
   });
 });
+
+describe('the report’s points with days missing from the log', () => {
+  it('asks whether missing days explain a difference instead of claiming it', () => {
+    const period = calculatePeriod(days, settings, '2026-10-01', '2026-10-31');
+    const lines = [line('Timlön', 40, HOURLY, 'wage')];
+    const slip: PaySlip = { periodStart: '2026-10-01', periodEnd: '2026-10-31', lines, gross: lines[0].amount, balances: {} };
+    const comparison = comparePeriod(period, slip, days, settings);
+    const claimed = reportPoints(comparison, period, days, settings).find((p) => p.keys.includes('wage'))!;
+    const asked = reportPoints(comparison, period, days, settings, true).find((p) => p.keys.includes('wage'))!;
+    expect(claimed.reason).not.toBe('missing-data');
+    expect(asked).toMatchObject({ kind: 'question', reason: 'missing-data', amount: claimed.amount });
+  });
+
+  it('keeps a claim where the slip pays less than the log: missing days can’t explain that', () => {
+    const period = calculatePeriod(days, settings, '2026-10-01', '2026-10-31');
+    const lines = [line('Timlön', 30, HOURLY, 'wage')];
+    const slip: PaySlip = { periodStart: '2026-10-01', periodEnd: '2026-10-31', lines, gross: lines[0].amount, balances: {} };
+    const point = reportPoints(comparePeriod(period, slip, days, settings), period, days, settings, true).find((p) => p.keys.includes('wage'))!;
+    expect(point.reason).not.toBe('missing-data');
+  });
+});

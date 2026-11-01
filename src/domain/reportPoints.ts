@@ -109,7 +109,7 @@ export function minimumQuotes(settings: Settings, date: LocalDate): Quote[] {
 }
 
 /** Why a point is a question rather than a correction asked for. */
-export type QuestionReason = 'local-overtime' | 'estimate' | 'local-monthly' | 'slip-more' | 'only-on-slip' | 'minimum-age';
+export type QuestionReason = 'local-overtime' | 'estimate' | 'local-monthly' | 'slip-more' | 'only-on-slip' | 'minimum-age' | 'missing-data';
 
 /** One part of a point's sum: hours × rate = amount (owed to the employee when positive). */
 export interface PointLine {
@@ -231,7 +231,12 @@ function minutesByDate(column: DayColumn, period: PeriodResult, days: Map<LocalD
   return out;
 }
 
-export function reportPoints(comparison: Comparison, period: PeriodResult, days: DayRecord[], settings: Settings): ReportPoint[] {
+/**
+ * The differences as numbered points. With days missing from the log (`incomplete`), a difference
+ * where the slip shows more than the calculation may be those days rather than the pay: such a point
+ * is a question, not a claim.
+ */
+export function reportPoints(comparison: Comparison, period: PeriodResult, days: DayRecord[], settings: Settings, incomplete = false): ReportPoint[] {
   const byDate = new Map(days.map((d) => [d.date, d]));
   const monthly = !!period.totals.monthlySalary;
   const rows = comparison.rows.filter((r) => REVIEW.has(r.status) && !NOT_POINTS.has(r.key));
@@ -259,6 +264,10 @@ export function reportPoints(comparison: Comparison, period: PeriodResult, days:
     // birth date the app assumes an adult, so it is asked rather than claimed.
     const belowMinimum = members.flatMap((r) => r.notes).filter((n) => n.code === 'wage-below-minimum');
     if (belowMinimum.length && !reason && !settings.birthDate) reason = 'minimum-age';
+    // Days missing from the log can only explain the slip showing more than the calculation (hours
+    // the log doesn't have); where it shows less, missing days would only add to the difference.
+    const slipShowsMore = members.every((r) => (r.diff.hours !== undefined ? r.diff.hours > 0.005 : (r.diff.amount ?? 0) > 0));
+    if (incomplete && lead !== 'tax' && !belowMinimum.length && slipShowsMore) reason = 'missing-data';
 
     const columns = COLUMNS[lead] ?? [];
     const perColumn = columns.map((c) => minutesByDate(c, period, byDate));

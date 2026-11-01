@@ -9,6 +9,9 @@ import { Card, Notice, Page, Spinner, StatusBadge } from './common.tsx';
 import { Cited } from './Cited.tsx';
 import { SlipSetupCard } from './SlipSetup.tsx';
 import { SlipCheck } from './SlipCheck.tsx';
+import { BasisNotice } from './BasisNote.tsx';
+import { periodBasis } from '../domain/basis.ts';
+import { todayLocal } from '../domain/time.ts';
 import { PeriodWarnings } from './MonthView.tsx';
 import { SlipNotFound } from './SlipsView.tsx';
 import { diffText, noteText, rowLabel, rowReference, sideText, useSlipComparison } from './slipComparison.ts';
@@ -56,12 +59,13 @@ export function totalText(c: Comparison, t: Translate, fmt: Formatter): { text: 
 }
 
 export function CompareView({ id }: { id: string }) {
-  const { t, fmt, settings } = useApp();
+  const { t, fmt, settings, days } = useApp();
   const data = useSlipComparison(id);
   if (data === undefined) return <Spinner />;
   if (data === null) return <SlipNotFound />;
   const { slip, comparison, period, start, end, taxYear } = data;
   const total = totalText(comparison, t, fmt);
+  const basis = periodBasis(slip, days, settings, start, end, todayLocal(), period.totals.wage?.hours);
 
   const setCategory = (code: string, category: string) =>
     saveSettings({ codeOverrides: { ...settings.codeOverrides, [code]: category } });
@@ -79,14 +83,14 @@ export function CompareView({ id }: { id: string }) {
       </p>
       <SlipCheck id={id} />
       <SlipSetupCard id={id} slip={slip} start={start} end={end} />
-      {comparison.coverage.map((c) => (
-        <Notice key={c.code} kind="warn">
-          {coverageText(c, t, fmt)}
+      {/* Which days the comparison rests on, and which are missing (the same as the report says). */}
+      <BasisNotice basis={basis} t={t} fmt={fmt} />
+      {basis.state !== 'none' && (
+        <Notice kind={total.kind}>
+          <strong>{total.text}</strong>
+          {basis.state === 'partial' && Math.abs(comparison.totalDifference ?? 0) > 1 && <> {t('basis.summaryPartial')}</>}
         </Notice>
-      ))}
-      <Notice kind={total.kind}>
-        <strong>{total.text}</strong>
-      </Notice>
+      )}
 
       <div className="compare-rows">
         {comparison.rows.map((row) => (

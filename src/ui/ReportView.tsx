@@ -14,6 +14,9 @@ import { diffText, rowLabel, sideText, useSlipComparison } from './slipCompariso
 import { ReportCheckDialog, useReportCheck } from './ReportCheck.tsx';
 import { needsReview, rowCertainty, type ReportCheck } from '../domain/reportCheck.ts';
 import { reportPoints } from '../domain/reportPoints.ts';
+import { periodBasis } from '../domain/basis.ts';
+import { editionYears } from '../domain/sources.ts';
+import { BasisSection } from './BasisNote.tsx';
 import { LogStamps } from './LogStamps.tsx';
 import { PointCard, PointsOverview } from './ReportPoints.tsx';
 
@@ -126,13 +129,19 @@ function ReportPage({
   const { slip, comparison, start, end, period, tax, taxYear } = data;
   const settings = app.settings;
   const total = totalText(comparison, t, fmt);
+  // What the comparison rests on: with nothing logged there is nothing to claim, only what the slip pays;
+  // with days missing every difference may be those days, so the points are questions.
+  const basis = periodBasis(slip, app.days, settings, start, end, todayLocal(), period.totals.wage?.hours);
   // Differences as numbered points to go through together.
-  const points = reportPoints(comparison, period, app.days, settings);
+  const points = basis.state === 'none' ? [] : reportPoints(comparison, period, app.days, settings, basis.state === 'partial');
   const reviewSummary =
-    points.length > 0 && comparison.totalDifference !== undefined && Math.abs(comparison.totalDifference) > 1
-      ? t('report.reviewSummary', { n: points.length, amount: fmt.money(Math.abs(comparison.totalDifference)) }) +
-        (comparison.netDifference !== undefined ? ` ${t('compare.netDiff', { amount: fmt.money(Math.abs(comparison.netDifference)) })}` : '')
-      : null;
+    basis.state === 'none'
+      ? t('basis.summaryNone')
+      : points.length > 0 && comparison.totalDifference !== undefined && Math.abs(comparison.totalDifference) > 1
+        ? t('report.reviewSummary', { n: points.length, amount: fmt.money(Math.abs(comparison.totalDifference)) }) +
+          (comparison.netDifference !== undefined ? ` ${t('compare.netDiff', { amount: fmt.money(Math.abs(comparison.netDifference)) })}` : '') +
+          (basis.state === 'partial' ? ` ${t('basis.summaryPartial')}` : '')
+        : null;
   const matched = check?.items.find((i) => i.code === 'settings-matched');
   const certainties = comparison.rows.map((r) => rowCertainty(r, period, settings));
   const notApplied = [
@@ -159,7 +168,9 @@ function ReportPage({
   ];
   const monthlyPay = monthlyPayOn(settings, end);
   const byDate = new Map(app.days.map((d) => [d.date, d]));
-  const logDates = datesInRange(start, end).filter((d) => byDate.has(d));
+  // The log, with the days the slip pays that are missing from it (so they can be looked up).
+  const missingPaid = new Map(basis.paidNotLogged.map((d) => [d.date, d.hours]));
+  const logDates = datesInRange(start, end).filter((d) => byDate.has(d) || missingPaid.has(d));
   const pointDates = new Set(points.flatMap((p) => p.days.map((d) => d.date)));
   const photoIds = logDates
     .filter((d) => withPhotos || pointDates.has(d))
@@ -204,6 +215,8 @@ function ReportPage({
           </table>
         </header>
 
+        <BasisSection basis={basis} t={t} fmt={fmt} />
+
         <section>
           <h2>{t('report.summary')}</h2>
           <p className="report-total">
@@ -211,10 +224,27 @@ function ReportPage({
           </p>
           {matched && <p className="muted small">{t('report.settingsMatched', { months: matched.months.map((m) => fmt.month(m)).join(', ') })}</p>}
           {points.length > 0 && <PointsOverview points={points} comparison={comparison} t={t} fmt={fmt} />}
-          <h3 className="report-compare-title">{t('report.compareTitle')}</h3>
-          {comparison.coverage.map((c) => (
-            <p key={c.code}>{coverageText(c, t, fmt)}</p>
-          ))}
+          <h3 className="report-compare-title">{t(basis.state === 'none' ? 'basis.slipPays' : 'report.compareTitle')}</h3>
+          {basis.state !== 'none' &&
+            comparison.coverage.map((c) => (
+              <p key={c.code}>{coverageText(c, t, fmt)}</p>
+            ))}
+          {basis.state === 'none' ? (
+            <div className="table-scroll">
+              <table className="report-table">
+                <tbody>
+                  {comparison.rows
+                    .filter((row) => row.slip.amount !== undefined || row.slip.hours !== undefined)
+                    .map((row) => (
+                      <tr key={row.key} className={row.key === 'gross' ? 'report-sum' : ''}>
+                        <td>{rowLabel(row, t)}</td>
+                        <td className="num">{sideText(row.slip, row.key, fmt)}</td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
           <div className="table-scroll">
           <table className="report-table">
             <thead>
@@ -242,7 +272,8 @@ function ReportPage({
             </tbody>
           </table>
           </div>
-          {certainties.some(Boolean) && <p className="report-ref">{t('report.sureNote')}</p>}
+          )}
+          {basis.state !== 'none' && certainties.some(Boolean) && <p className="report-ref">{t('report.sureNote')}</p>}
         </section>
 
         {points.length > 0 && (
@@ -309,7 +340,18 @@ function ReportPage({
             </thead>
             <tbody>
               {logDates.map((date) => {
-                const day = byDate.get(date)!;
+                const day = byDate.get(date);
+                if (!day)
+                  return (
+                    <tr key={date} className="report-log-missing">
+                      <td>{fmt.date(date)}</td>
+                      <td>–</td>
+                      <td />
+                      <td />
+                      <td />
+                      <td>{t('basis.logMissing', { hours: fmt.number(missingPaid.get(date) ?? 0, 2) })}</td>
+                    </tr>
+                  );
                 const shifts = shiftResults.filter((r) => r.shift.date === date);
                 const worked = shifts.reduce((s, r) => s + r.shift.workedMinutes, 0);
                 const ob = shifts.reduce((s, r) => s + r.obMinutes[1] + r.obMinutes[2] + r.obMinutes[3] + r.obMinutes[4], 0);
@@ -352,7 +394,7 @@ function ReportPage({
         )}
 
         <footer className="report-disclaimer">
-          <Cited t={t} date={end} text={t('report.disclaimer')} />
+          <Cited t={t} date={end} text={t('report.disclaimer', { edition: editionYears(end) })} />
         </footer>
       </article>
   );
