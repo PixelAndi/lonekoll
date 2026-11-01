@@ -3,6 +3,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { applyTheme } from './theme.ts';
 import { AppContext, type AppData } from './app-context.ts';
 import { db, loadSettings } from './db.ts';
+import { useAutoSync } from './cloud/useCloud.ts';
+import { CloudBanner } from './ui/settings/CloudSettings.tsx';
 import { formatter } from './format.ts';
 import { isRightToLeft, LANGUAGE_TAGS, translator } from './i18n.ts';
 import { href, useRoute, type Route } from './router.ts';
@@ -85,6 +87,7 @@ export function App() {
     document.documentElement.lang = LANGUAGE_TAGS[data.lang];
     document.documentElement.dir = isRightToLeft(data.lang) ? 'rtl' : 'ltr';
   }, [data]);
+  useAutoSync(data?.settings.cloud);
   const theme = data?.settings.theme;
   useEffect(() => {
     if (theme) applyTheme(theme);
@@ -105,6 +108,7 @@ export function App() {
           </header>
         )}
         <UpdateBanner text={t('update.available')} action={t('update.reload')} />
+        <CloudBanner />
         <ErrorBoundary title={t('error.title')} text={t('error.text')} back={t('error.back')} resetKey={JSON.stringify(route)}>
           <Screen route={route} />
         </ErrorBoundary>

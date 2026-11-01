@@ -15,6 +15,8 @@ export interface PhotoRecord {
   kind?: 'clock' | 'timecard';
   /** The timecard picture the rows were cut from. */
   cardId?: string;
+  /** The original is in Google Drive; `blob` is a small preview of it. */
+  archived?: boolean;
 }
 
 /** A picture of a printed timecard, kept as the source of the days read from it. */
@@ -26,6 +28,16 @@ export interface CardRecord {
   to?: string;
   takenAt: number;
   blob: Blob;
+  /** The original is in Google Drive; `blob` is a small preview of it. */
+  archived?: boolean;
+}
+
+/** A file copied to Google Drive: which, where, and when ("photo:<id>", "card:<id>", "slip:<id>"). */
+export interface CloudFileRecord {
+  key: string;
+  driveId: string;
+  size: number;
+  at: number;
 }
 
 export interface SlipRecord {
@@ -34,7 +46,10 @@ export interface SlipRecord {
   importedAt: number;
   periodStart: string;
   slip: PaySlip;
+  /** The PDF (or photo) of the slip; a small preview when `archived`. */
   pdf: Blob;
+  /** The original is in Google Drive (everything the app needs from it was read into `slip`). */
+  archived?: boolean;
 }
 
 /** What the scanner has learned of the clock's digits (see ocr/glyphs.ts). */
@@ -54,6 +69,7 @@ class LonekollDB extends Dexie {
   settings!: Table<SettingsRecord, string>;
   learning!: Table<LearningRecord, string>;
   cards!: Table<CardRecord, string>;
+  cloud!: Table<CloudFileRecord, string>;
 
   constructor() {
     super('lonekoll');
@@ -65,6 +81,7 @@ class LonekollDB extends Dexie {
     });
     this.version(2).stores({ learning: 'id' });
     this.version(3).stores({ cards: 'id, month' });
+    this.version(4).stores({ cloud: 'key' });
   }
 }
 

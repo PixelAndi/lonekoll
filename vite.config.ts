@@ -32,13 +32,16 @@ function serviceWorker(): Plugin {
  * connection to another server, so nothing can leave the device. (Dev mode
  * needs inline scripts for hot reload, so this is build-only.)
  */
+// Google: only the user's own Drive, and only once they turn it on and sign in
+// (src/cloud/google.ts; the exact addresses are checked by src/privacy.test.ts).
 const CSP = [
   "default-src 'self'",
-  "script-src 'self' 'wasm-unsafe-eval' blob:",
+  "script-src 'self' 'wasm-unsafe-eval' blob: https://accounts.google.com/gsi/client",
   "worker-src 'self' blob:",
-  "connect-src 'self' blob: data:",
+  "connect-src 'self' blob: data: https://www.googleapis.com/drive/v3/ https://www.googleapis.com/upload/drive/v3/ https://accounts.google.com/gsi/",
+  "frame-src https://accounts.google.com/gsi/",
   "img-src 'self' blob: data:",
-  "style-src 'self' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style",
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'none'",

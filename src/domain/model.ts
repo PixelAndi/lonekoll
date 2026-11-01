@@ -160,7 +160,30 @@ export interface Settings {
   vacationYearStartMonth: 1 | 4;
   /** Keep the pictures of scanned timecards in the app (on this device), to look up the source later. */
   keepTimecards?: boolean;
+  /** Where the data is kept: on this device only (the default), or also in the user's Google Drive. */
+  cloud?: CloudSettings;
 }
+
+/**
+ * Saving to the user's own Google Drive. The app always works on the copy on
+ * the device; Drive gets a copy in the background (when the app is open).
+ */
+export interface CloudSettings {
+  mode: 'local' | 'drive';
+  /** When to sync: each time the app is opened, every 15 or 60 minutes while it is open, or by hand. */
+  interval: 'open' | '15' | '60' | 'manual';
+  /** Upload pictures and PDFs only on wifi (where the phone says which network it is on). */
+  wifiOnly: boolean;
+  /** Days after which an original kept in Drive is replaced on the device by a small preview; null: never. */
+  reduceAfterDays: number | null;
+  /** The account, as Google says (shown in the settings). */
+  email?: string;
+  lastSync?: number;
+  /** This device, so a copy written from another can be told apart and merged. */
+  deviceId?: string;
+}
+
+export const DEFAULT_CLOUD: CloudSettings = { mode: 'local', interval: 'open', wifiOnly: true, reduceAfterDays: 30 };
 
 export const DEFAULT_SETTINGS: Settings = {
   language: 'sv',

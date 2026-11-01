@@ -230,10 +230,13 @@ hosts the app. This is a design rule, and it is enforced:
 
 - Everything is stored in the browser (IndexedDB) on the user's device. There
   is no server, no account and no analytics.
-- The built app ships a strict Content Security Policy (`connect-src 'self'`),
-  so the browser blocks any connection to another server.
-- The app has no way of sending data out: no network calls of its own, no
-  sharing to other apps. The offline cache (`src/sw-template.js`) only passes
+- The built app ships a strict Content Security Policy: the browser blocks any
+  connection except to the app itself and to Google Drive's API and sign-in
+  (for the optional copy below).
+- The app has no other way of sending data out. Its only network calls are in
+  `src/cloud/google.ts` (Drive, used only once the user turns it on and signs
+  in) and its only sharing is `src/share.ts` (the share sheet, after a tap).
+  The offline cache (`src/sw-template.js`) only passes
   on the app's own requests for its own files.
 - Every rule the app cites ("Bilaga F §5", "§3.1.2") links to where it can be
   read in full: the agreement as published by Livsmedelsarbetareförbundet,
@@ -251,7 +254,31 @@ hosts the app. This is a design rule, and it is enforced:
   deploy, so a change that adds a way to send data out, or loosens the
   security policy, fails the build and is never published.
 - The only things that leave the device are what the user chooses to save:
-  a backup zip and the printed report.
+  a backup zip, the printed report, files they share, and – if they turn it
+  on – a copy in their own Google Drive.
+
+### Optional copy in Google Drive
+
+Under Settings › *Var dina data sparas* the user picks *Bara på telefonen*
+(the default) or *Telefon + Google Drive*, and signs in with Google once.
+
+- The permission asked for is `drive.file`: the app sees only the files it
+  creates, nothing else in the user's Drive. Files go straight from the phone
+  to the user's Drive; there is no server in between.
+- Files are sorted for finding by hand: `Lönekoll/2026/2026-09 september/`
+  with `Lönebesked …pdf`, `Tidkort/` and `Stämpelklocka/`. `Lönekoll/Appdata/`
+  holds the app's data (`lonekoll-data.json`) and the timecard row crops, so
+  a new phone is restored by signing in.
+- Sync runs when the app is opened (or every 15/60 minutes while open, or
+  only on a tap), on wifi only by default.
+- Originals that Drive has confirmed (same size) and that are older than 30
+  days (the user can pick 7/30/90/365 or never) are replaced on the phone by
+  small previews; everything read from them stays. *Visa original* fetches
+  the full file. Turning Drive off offers to fetch the originals back first.
+- A second phone adds what the other added; nothing is deleted by a sync.
+- The owner of the app's Google Cloud project sets up the OAuth client once
+  (authorised JavaScript origin `https://pixelandi.github.io`); its client ID
+  is in `src/cloud/google.ts`. Users only tap *Logga in med Google*.
 - The app is served by GitHub Pages. Like any website host, GitHub sees which
   addresses download the app's files; the repository owner gets no visitor
   logs, and no app data is ever sent.

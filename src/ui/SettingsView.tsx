@@ -16,6 +16,7 @@ import { TaxSettings } from './settings/TaxSettings.tsx';
 import { WorkPattern } from './settings/WorkPattern.tsx';
 import { WageSettings } from './settings/WageSettings.tsx';
 import { WageFromSlips } from './WageFromSlips.tsx';
+import { CloudSettings } from './settings/CloudSettings.tsx';
 
 export function SettingsView() {
   const { t, settings } = useApp();
@@ -187,6 +188,8 @@ export function SettingsView() {
           <LazyInput type="text" placeholder={t('settings.localDealsPlaceholder')} value={settings.localDeals} onCommit={(v) => save({ localDeals: v.trim() })} />
         </Field>
       </Card>
+
+      <CloudSettings />
 
       <Card title={t('settings.data')}>
         <p className="muted small">{t('settings.exportHint')}</p>

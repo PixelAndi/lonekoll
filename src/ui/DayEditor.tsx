@@ -9,7 +9,8 @@ import type { Absence, AbsenceType, DayRecord, OvertimeAs, ScheduledShift, Stamp
 import { scheduledShift } from '../domain/schedule.ts';
 import { addDays, formatDuration } from '../domain/time.ts';
 import { goBack, href } from '../router.ts';
-import { CardById } from './Sources.tsx';
+import { CardById, OriginalButton, PreviewNote, useBlobUrl } from './Sources.tsx';
+import { useOriginal } from '../cloud/useCloud.ts';
 import { Card, Field, Icon, Modal, Notice, Page, PhotoThumb, usePhotoUrl } from './common.tsx';
 import { Cited } from './Cited.tsx';
 import { flushFocusedField, StampRowsEditor, TimeField } from './StampRowsEditor.tsx';
@@ -272,6 +273,8 @@ function PhotoViewer({ id, onClose, onDelete }: { id: string; onClose: () => voi
   // Rows cut from a timecard: the whole card can be shown too.
   const photo = useLiveQuery(() => db.photos.get(id), [id]);
   const [card, setCard] = useState(false);
+  const original = useOriginal(`photo:${id}`);
+  const originalUrl = useBlobUrl(original.blob);
   if (card && photo?.cardId) return <CardById id={photo.cardId} onClose={() => setCard(false)} />;
   return (
     <Modal
@@ -282,6 +285,7 @@ function PhotoViewer({ id, onClose, onDelete }: { id: string; onClose: () => voi
           <button type="button" className="button button-danger" onClick={onDelete}>
             {t('common.delete')}
           </button>
+          {photo?.archived && !original.blob && <OriginalButton busy={original.busy} onClick={() => void original.load()} />}
           {photo?.cardId && (
             <button type="button" className="button" onClick={() => setCard(true)}>
               {t('sources.wholeCard')}
@@ -290,7 +294,8 @@ function PhotoViewer({ id, onClose, onDelete }: { id: string; onClose: () => voi
         </>
       }
     >
-      {url && <img className="review-photo" src={url} alt="" />}
+      <PreviewNote archived={photo?.archived} fetched={!!original.blob} error={original.error} />
+      {(originalUrl ?? url) && <img className="review-photo" src={originalUrl ?? url} alt="" />}
     </Modal>
   );
 }

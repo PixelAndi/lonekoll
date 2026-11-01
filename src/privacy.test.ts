@@ -1,15 +1,26 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { DEFAULT_CLOUD } from './domain/model.ts';
 
 // The app's promise: what a user enters never leaves their device, and nobody,
-// including whoever runs or develops the app, can see it. These checks fail
+// including whoever runs or develops the app, can see it – unless the user
+// themselves turns on a copy in their own Google Drive, or shares files to an
+// app they pick. These checks fail
 // (and with them the build and the deploy) if a change could break that
 // promise: a connection to another server, a way of sending data out, or a
 // looser security policy. A deliberate exception must change this file, in
 // the open.
 
 const root = path.resolve(__dirname, '..');
+
+/** The only addresses outside the app: Google's sign-in and Drive, for the user's own copy. */
+const GOOGLE = {
+  script: 'https://accounts.google.com/gsi/client',
+  style: 'https://accounts.google.com/gsi/style',
+  frame: 'https://accounts.google.com/gsi/',
+  connect: ['https://www.googleapis.com/drive/v3/', 'https://www.googleapis.com/upload/drive/v3/', 'https://accounts.google.com/gsi/'],
+};
 
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
@@ -29,18 +40,48 @@ function csp(): Map<string, string[]> {
 }
 
 describe('privacy: nothing leaves the device', () => {
-  it('the browser may only connect to the app itself', () => {
+  it('the browser may only connect to the app itself, and to the user’s Google Drive', () => {
     const policy = csp();
     expect(policy.get('default-src')).toEqual(["'self'"]);
-    expect(policy.get('connect-src')).toEqual(["'self'", 'blob:', 'data:']);
+    expect(policy.get('connect-src')).toEqual(["'self'", 'blob:', 'data:', ...GOOGLE.connect]);
+    expect(policy.get('script-src')).toEqual(["'self'", "'wasm-unsafe-eval'", 'blob:', GOOGLE.script]);
+    expect(policy.get('frame-src')).toEqual([GOOGLE.frame]);
+    expect(policy.get('style-src')).toEqual(["'self'", "'unsafe-inline'", GOOGLE.style]);
     expect(policy.get('form-action')).toEqual(["'none'"]);
     expect(policy.get('object-src')).toEqual(["'none'"]);
     // No other server, and no wildcard, anywhere in the policy.
+    const google = new Set([...GOOGLE.connect, GOOGLE.script, GOOGLE.frame, GOOGLE.style]);
     for (const [name, values] of policy) {
-      for (const value of values) {
+      for (const value of values.filter((v) => !google.has(v))) {
         expect(value, `${name} ${value}`).not.toMatch(/^(https?:|wss?:|\*|[a-z0-9-]+\.[a-z])/i);
       }
     }
+  });
+
+  it('Google Drive is reached only from one file, only at Google’s addresses, and only the app’s own files there', () => {
+    const code = readFileSync(path.join(root, 'src', 'cloud', 'google.ts'), 'utf8');
+    expect(code.match(/https?:\/\/[^'`\s]+/g)).toEqual([
+      'https://www.googleapis.com/auth/drive.file',
+      GOOGLE.script,
+      'https://www.googleapis.com/drive/v3',
+      'https://www.googleapis.com/upload/drive/v3',
+    ]);
+    // drive.file: only files the app made, never the rest of the user's Drive.
+    expect(code).toContain("const SCOPE = 'https://www.googleapis.com/auth/drive.file';");
+    // Every request goes to one of those, with nothing but the user's own sign-in.
+    expect([...code.matchAll(/\bfetch\s*\(([^)]*)\)/g)].map((m) => m[1])).toEqual(['url, { ...init, headers: { ...init.headers, Authorization: `Bearer ${token}` } }']);
+    expect([...code.matchAll(/call\(`([^`$]*)/g)].map((m) => m[1]).every((start) => start === '')).toBe(true);
+    expect([...code.matchAll(/call\(`\$\{(\w+)\}/g)].map((m) => m[1]).every((base) => base === 'API' || base === 'UPLOAD')).toBe(true);
+    // It is used only when the user has turned on Drive (sync.ts checks the setting first).
+    const sync = readFileSync(path.join(root, 'src', 'cloud', 'sync.ts'), 'utf8');
+    expect(sync).toContain("if (cloud.mode !== 'drive') return;");
+    expect(DEFAULT_CLOUD.mode).toBe('local');
+  });
+
+  it('files go to another app only through the share sheet, after a tap', () => {
+    const code = readFileSync(path.join(root, 'src', 'share.ts'), 'utf8');
+    expect(code.match(/navigator\.share\(/g)).toHaveLength(1);
+    expect(code).not.toMatch(/fetch|https?:/);
   });
 
   it('the app’s code has no way of sending data out', () => {
@@ -62,8 +103,10 @@ describe('privacy: nothing leaves the device', () => {
     // and the links to the agreement and the law are fixed addresses (both checked below).
     const serviceWorker = path.join(root, 'src', 'sw-template.js');
     const sources = path.join(root, 'src', 'domain', 'sources.ts');
+    // The user's Google Drive and the share sheet (both checked above).
+    const allowed = [serviceWorker, sources, path.join(root, 'src', 'cloud', 'google.ts'), path.join(root, 'src', 'share.ts')];
     const found: string[] = [];
-    for (const file of [...sourceFiles(path.join(root, 'src')), path.join(root, 'index.html')].filter((f) => f !== serviceWorker && f !== sources)) {
+    for (const file of [...sourceFiles(path.join(root, 'src')), path.join(root, 'index.html')].filter((f) => !allowed.includes(f))) {
       // Comments may mention addresses (e.g. sources of the rules); only code counts.
       const code = readFileSync(file, 'utf8')
         .replace(/\/\*[\s\S]*?\*\//g, '')

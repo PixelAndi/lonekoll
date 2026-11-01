@@ -1,5 +1,5 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
-import { db, type CardRecord, type PhotoRecord, type SlipRecord } from './db.ts';
+import { db, type CardRecord, type CloudFileRecord, type PhotoRecord, type SlipRecord } from './db.ts';
 import type { DayRecord, Settings } from './domain/model.ts';
 
 // A backup is a zip: data.json plus the photos, timecard pictures and pay slip PDFs as files.
@@ -14,15 +14,18 @@ interface BackupData {
   slips: Omit<SlipRecord, 'pdf'>[];
   /** Timecard pictures (from backups made after they were kept). */
   cards?: Omit<CardRecord, 'blob'>[];
+  /** Which files are in the user's Google Drive (pictures kept only as previews are fetched from there). */
+  cloud?: CloudFileRecord[];
 }
 
 export async function exportBackup(): Promise<Blob> {
-  const [settings, days, photos, slips, cards] = await Promise.all([
+  const [settings, days, photos, slips, cards, cloud] = await Promise.all([
     db.settings.get('settings'),
     db.days.toArray(),
     db.photos.toArray(),
     db.slips.toArray(),
     db.cards.toArray(),
+    db.cloud.toArray(),
   ]);
   const files: Record<string, Uint8Array> = {};
   for (const p of photos) files[`photos/${p.id}.jpg`] = new Uint8Array(await p.blob.arrayBuffer());
@@ -38,6 +41,7 @@ export async function exportBackup(): Promise<Blob> {
     photos: photos.map(({ blob: _blob, ...rest }) => rest),
     slips: slips.map(({ pdf: _pdf, ...rest }) => rest),
     cards: cards.map(({ blob: _blob, ...rest }) => rest),
+    cloud,
   };
   files['data.json'] = strToU8(JSON.stringify(data, null, 1));
   // Photos and PDFs are already compressed.
@@ -64,19 +68,20 @@ export async function importBackup(file: Blob): Promise<void> {
     ...c,
     blob: new Blob([(files[`timecards/${c.id}.jpg`] ?? new Uint8Array()) as BlobPart], { type: 'image/jpeg' }),
   }));
-  await db.transaction('rw', [db.settings, db.days, db.photos, db.slips, db.learning, db.cards], async () => {
-    await Promise.all([db.settings.clear(), db.days.clear(), db.photos.clear(), db.slips.clear(), db.learning.clear(), db.cards.clear()]);
+  await db.transaction('rw', [db.settings, db.days, db.photos, db.slips, db.learning, db.cards, db.cloud], async () => {
+    await Promise.all([db.settings.clear(), db.days.clear(), db.photos.clear(), db.slips.clear(), db.learning.clear(), db.cards.clear(), db.cloud.clear()]);
     if (data.settings) await db.settings.put({ id: 'settings', value: data.settings });
     await db.days.bulkPut(data.days);
     await db.photos.bulkPut(photos);
     await db.slips.bulkPut(slips);
     await db.cards.bulkPut(cards);
+    await db.cloud.bulkPut(data.cloud ?? []);
   });
 }
 
 export async function deleteEverything(): Promise<void> {
-  await db.transaction('rw', [db.settings, db.days, db.photos, db.slips, db.learning, db.cards], async () => {
-    await Promise.all([db.settings.clear(), db.days.clear(), db.photos.clear(), db.slips.clear(), db.learning.clear(), db.cards.clear()]);
+  await db.transaction('rw', [db.settings, db.days, db.photos, db.slips, db.learning, db.cards, db.cloud], async () => {
+    await Promise.all([db.settings.clear(), db.days.clear(), db.photos.clear(), db.slips.clear(), db.learning.clear(), db.cards.clear(), db.cloud.clear()]);
   });
 }
 
