@@ -115,10 +115,16 @@ h3 {
 
 .app-header {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 12px;
-  padding: 14px 0 6px;
-  flex-wrap: wrap;
+  padding: 8px 0 4px;
+}
+.app-tagline {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .app-title {
@@ -3065,4 +3071,88 @@ input[type='checkbox'] {
 }
 .wage-patterns {
   padding-left: 1.1rem;
+}
+
+/* The pay slip scanner's guide (SlipHud), on the clock scanner's styles. */
+.scanner-video.scanner-video-cover {
+  object-fit: cover;
+}
+.slip-hud-page {
+  fill: none;
+  stroke: rgb(255 255 255 / 0.7);
+  stroke-width: 1.5px;
+  stroke-dasharray: 5 4;
+  vector-effect: non-scaling-stroke;
+}
+.hud-locked .slip-hud-page {
+  stroke: var(--hud-green);
+}
+.slip-hud-busy {
+  animation: slip-hud-busy 0.9s ease-in-out infinite alternate;
+}
+@keyframes slip-hud-busy {
+  from {
+    opacity: 0.35;
+  }
+}
+.tcscan-note-info {
+  background: rgb(0 0 0 / 0.6);
+  color: #fff;
+}
+
+/* Ärenden: what the app found, and what has been answered. */
+.issues-heading {
+  font-size: 1rem;
+  margin: 1rem 0 0.5rem;
+}
+.issue-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  color: inherit;
+  text-decoration: none;
+  min-height: 48px;
+}
+.issue-line {
+  border-color: var(--warn);
+  background: var(--warn-soft);
+  font-weight: 600;
+}
+.owed-suggestion {
+  border-left: 3px solid var(--primary);
+  padding-left: 0.6rem;
+  margin: 0.5rem 0;
+}
+.owed-suggestion p {
+  margin: 0 0 0.25rem;
+}
+.owed-actions {
+  margin-top: 0.5rem;
+}
+.tab-badge {
+  position: absolute;
+  top: 2px;
+  margin-left: 14px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--error);
+  color: #fff;
+  font-size: 11px;
+  line-height: 18px;
+  font-weight: 700;
+}
+.tabbar a {
+  position: relative;
+}
+.app-help {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  color: inherit;
 }

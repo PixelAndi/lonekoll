@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { useApp } from '../app-context.ts';
 import type { RowStatus } from '../domain/compare.ts';
 import { db } from '../db.ts';
@@ -32,7 +32,20 @@ export function Fold({ title, sub, open: initial = false, warn = false, id, chil
   );
 }
 
+/** Inside it, a card with a title opens on a tap (a long page of cards becomes a list of their titles). */
+export const FoldCards = createContext(false);
+
 export function Card({ title, children, className = '' }: { title?: ReactNode; children: ReactNode; className?: string }) {
+  const fold = useContext(FoldCards);
+  if (fold && title)
+    return (
+      <details className={`card fold ${className}`}>
+        <summary>
+          <span className="fold-title">{title}</span>
+        </summary>
+        <div className="fold-body">{children}</div>
+      </details>
+    );
   return (
     <section className={`card ${className}`}>
       {title && <h2 className="card-title">{title}</h2>}
@@ -138,6 +151,8 @@ const icons = {
   lock: 'M12 2a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7a5 5 0 0 0-5-5Zm-3 8V7a3 3 0 1 1 6 0v3H9Z',
   chevronLeft: 'M15.4 7.4 14 6l-6 6 6 6 1.4-1.4L10.8 12l4.6-4.6Z',
   chevronRight: 'M8.6 16.6 10 18l6-6-6-6-1.4 1.4 4.6 4.6-4.6 4.6Z',
+  // A flag: things to look at.
+  issues: 'M5 2h2v1h12l-2 5 2 5H7v9H5V2Z',
   // A question mark in a ring (drawn even-odd).
   help: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 2a8 8 0 1 1 0 16 8 8 0 0 1 0-16Zm-.1 2.2c-2 0-3.5 1.1-3.9 2.9l2 .5c.2-.8.8-1.3 1.8-1.3s1.6.5 1.6 1.2c0 .6-.4.9-1.1 1.4-.9.6-1.6 1.2-1.6 2.5v.9h2.1v-.6c0-.6.3-.9 1-1.4.9-.6 1.8-1.4 1.8-2.9 0-1.9-1.6-3.2-3.7-3.2Zm-.1 9.5a1.3 1.3 0 1 0 0 2.6 1.3 1.3 0 0 0 0-2.6Z',
 } as const;

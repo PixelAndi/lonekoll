@@ -14,9 +14,8 @@ import { href, navigate } from '../router.ts';
 import { Card, Fold, Icon, Notice, Page, Spinner } from './common.tsx';
 import { applyOverrides, countFindings, slipPeriod, vacationBasisFor } from './slipComparison.ts';
 import { VacationProgress } from './VacationProgress.tsx';
-import { WageFromSlips, WageQuestions } from './WageFromSlips.tsx';
-import { AgreementCheck } from './AgreementFindings.tsx';
-import { OwedCard } from './Owed.tsx';
+import { WageFromSlips } from './WageFromSlips.tsx';
+import { IssuesLine } from './IssuesView.tsx';
 import { needsCheck, readCompletely } from './SlipCheck.tsx';
 import { completeness, SlipScanner, type SlipOutcome } from './SlipScanner.tsx';
 import type { PaySlip } from '../domain/payslip.ts';
@@ -166,10 +165,8 @@ export function SlipsView() {
       {slips && slips.length === 0 && <p className="muted">{t('slips.empty')}</p>}
       {slips && slips.length > 0 && (
         <>
-          <WageQuestions />
-          <OwedCard />
+          <IssuesLine />
           <ToCheck slips={slips} />
-          <AgreementCheck />
           <YearList slips={slips} />
           <WageFromSlips />
           <Fold title={t('vacation.title')}>

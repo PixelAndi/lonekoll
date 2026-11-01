@@ -1,4 +1,4 @@
-import type { AgreementFinding } from './agreementCheck.ts';
+import { correctionsAfter, type AgreementFinding } from './agreementCheck.ts';
 import { addYears, monthEnd, type LocalDate } from './time.ts';
 import type { PaySlip } from './payslip.ts';
 
@@ -9,8 +9,11 @@ import type { PaySlip } from './payslip.ts';
 //    log, counted only where every day is logged and the settings' wage is the
 //    one the slips pay (otherwise the difference may be the app's, not the pay).
 // A month is counted from one source only: a month with an agreement finding
-// is left out of the second number. Amounts marked as settled are set aside;
-// later lines that may have corrected something are named, not subtracted.
+// is left out of the second number. Later lines that may have corrected
+// something are suggested, not subtracted: the user says whether a line put
+// it right (then that line's amount covers it, as far as it goes – a line can
+// cover more than one item, never more than its amount), marks it settled,
+// or says it is no error at all (the app got it wrong). Each can be undone.
 // Net is rough: each slip's own tax share. Amounts paid more than two years
 // ago are flagged (the time limit for claims under a collective agreement).
 
@@ -21,11 +24,43 @@ export interface MonthComparison {
   difference: number;
 }
 
+/** A later line that may have put something right. */
+export interface Correction {
+  month: LocalDate;
+  text: string;
+  amount: number;
+}
+
+/** What the user said about an item. */
+export type Resolution =
+  | { kind: 'settled'; date: LocalDate }
+  | { kind: 'notError'; date: LocalDate }
+  | { kind: 'linked'; date: LocalDate; line: Correction };
+
+export interface OwedAnswers {
+  resolutions: Record<string, Resolution>;
+  /** Suggestions the user said were not the correction: `${item key}>${line key}`. */
+  rejected: string[];
+  /** Keys marked settled before resolutions existed. */
+  settled?: string[];
+}
+
+export const lineKey = (c: Correction) => `${c.month}|${c.text}|${c.amount}`;
+export const rejectionKey = (itemKey: string, c: Correction) => `${itemKey}>${lineKey(c)}`;
+
 export interface OwedItem {
   key: string;
   source: 'agreement' | 'comparison';
   months: LocalDate[];
+  /** What is still owed: the whole amount, less what a linked line covers. */
   amount: number;
+  /** The whole amount before any linked line. */
+  whole: number;
+  /** The part a linked line covers. */
+  covered: number;
+  resolution?: Resolution;
+  /** Later lines that may have put it right, still to be answered. */
+  suggestions: Correction[];
   /** After tax, roughly (the slips' own tax share); null when no slip shows its tax. */
   net: number | null;
   /** The part paid out more than two years ago. */
@@ -61,7 +96,7 @@ function paidOn(slip: PaySlip | undefined, month: LocalDate): LocalDate {
   return m === 12 ? `${y + 1}-01-25` : `${y}-${String(m + 1).padStart(2, '0')}-25`;
 }
 
-export function owedEstimate(findings: AgreementFinding[], comparisons: MonthComparison[], slips: PaySlip[], settled: string[], today: LocalDate): Owed {
+export function owedEstimate(findings: AgreementFinding[], comparisons: MonthComparison[], slips: PaySlip[], answers: OwedAnswers, today: LocalDate): Owed {
   const slipOf = new Map(slips.filter((s) => s.periodStart).map((s) => [s.periodStart!, s]));
   // A share above 60 % is a misread figure, not a tax.
   const shareOf = (s: PaySlip | undefined) => (s?.gross && s.gross > 0 && s.tax !== undefined && s.tax >= 0 && s.tax <= s.gross * 0.6 ? s.tax / s.gross : null);
@@ -89,6 +124,9 @@ export function owedEstimate(findings: AgreementFinding[], comparisons: MonthCom
       source,
       months,
       amount: round2(amount),
+      whole: round2(amount),
+      covered: 0,
+      suggestions: [],
       net: netKnown ? round2(net) : null,
       old: round2(old),
       finding,
@@ -101,19 +139,48 @@ export function owedEstimate(findings: AgreementFinding[], comparisons: MonthCom
     .filter((c) => c.difference <= -LEAST_DIFFERENCE && !agreementMonths.has(c.month))
     .map((c) => item(comparisonKey(c.month), 'comparison', { [c.month]: -c.difference }));
 
-  const isSettled = (i: OwedItem) => settled.includes(i.key);
-  const likely = fromAgreement.filter((i) => !isSettled(i));
-  const investigate = fromComparison.filter((i) => !isSettled(i)).sort((a, b) => a.months[0].localeCompare(b.months[0]));
+  const all = [...fromAgreement, ...fromComparison].sort((a, b) => a.months[0].localeCompare(b.months[0]));
+  const resolutionOf = (key: string): Resolution | undefined =>
+    answers.resolutions[key] ?? (answers.settled?.includes(key) ? { kind: 'settled', date: today } : undefined);
+  // What each line has left after the items linked to it (oldest first).
+  const used = new Map<string, number>();
+  for (const i of all) {
+    i.resolution = resolutionOf(i.key);
+    if (i.resolution?.kind !== 'linked') continue;
+    const line = i.resolution.line;
+    const left = Math.max(0, line.amount - (used.get(lineKey(line)) ?? 0));
+    i.covered = round2(Math.min(i.whole, left));
+    used.set(lineKey(line), (used.get(lineKey(line)) ?? 0) + i.covered);
+    scale(i, round2(i.whole - i.covered));
+  }
+  for (const i of all) {
+    const lines = i.finding ? i.finding.corrections : correctionsAfter(slips, i.months[i.months.length - 1], i.whole);
+    i.suggestions = (lines ?? []).filter(
+      (c) => !answers.rejected.includes(rejectionKey(i.key, c)) && c.amount - (used.get(lineKey(c)) ?? 0) >= 1 && !(i.resolution?.kind === 'linked' && lineKey(i.resolution.line) === lineKey(c)),
+    );
+  }
+  // Open: no answer, or a linked line that covers only part of it.
+  const isOpen = (i: OwedItem) => !i.resolution || (i.resolution.kind === 'linked' && i.amount >= 1);
+  const likely = fromAgreement.filter(isOpen);
+  const investigate = fromComparison.filter(isOpen).sort((a, b) => a.months[0].localeCompare(b.months[0]));
   const sum = (items: OwedItem[]) => round2(items.reduce((s, i) => s + i.amount, 0));
   const sumNet = (items: OwedItem[]) => (items.some((i) => i.net === null) ? null : round2(items.reduce((s, i) => s + (i.net ?? 0), 0)));
   return {
     likely,
     investigate,
-    settled: [...fromAgreement, ...fromComparison].filter(isSettled),
+    settled: all.filter((i) => !isOpen(i)),
     likelyTotal: sum(likely),
     likelyNet: sumNet(likely),
     investigateTotal: sum(investigate),
     investigateNet: sumNet(investigate),
     old: round2([...likely, ...investigate].reduce((s, i) => s + i.old, 0)),
   };
+}
+
+/** An item's amounts scaled to what is still owed (net and the old part in proportion). */
+function scale(i: OwedItem, amount: number) {
+  const f = i.whole > 0 ? amount / i.whole : 0;
+  i.amount = amount;
+  if (i.net !== null) i.net = round2(i.net * f);
+  i.old = round2(i.old * f);
 }

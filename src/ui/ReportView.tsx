@@ -18,7 +18,10 @@ import { periodBasis } from '../domain/basis.ts';
 import { editionYears } from '../domain/sources.ts';
 import { BasisSection } from './BasisNote.tsx';
 import { FindingItem } from './AgreementFindings.tsx';
-import { slipFindings } from '../domain/agreementCheck.ts';
+import { checkAgainstAgreement, slipFindings, type AgreementFinding } from '../domain/agreementCheck.ts';
+import { findingKey, type Resolution } from '../domain/owed.ts';
+import type { Formatter } from '../format.ts';
+import type { Translate } from '../i18n.ts';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db.ts';
 import { applyOverrides } from './slipComparison.ts';
@@ -142,7 +145,16 @@ function ReportPage({
   // The slip against the agreement on its own (needs no clock data): its own section.
   const allSlips = useLiveQuery(() => db.slips.toArray(), []);
   const slipsAll = (allSlips ?? []).map((r) => applyOverrides(r.slip, settings.codeOverrides));
-  const findings = slipFindings(slip, slipsAll, settings);
+  // What the user said about each finding (kept on the finding joined over months): one said to be
+  // no error is left out; one put right says how.
+  const joined = checkAgainstAgreement(slipsAll, settings);
+  const resolutionOf = (f: AgreementFinding): Resolution | undefined => {
+    const j = joined.find((x) => x.rule === f.rule && x.cause === f.cause && x.level === f.level && x.months.includes(f.months[0]));
+    if (!j) return undefined;
+    const key = findingKey(j);
+    return settings.owedResolutions?.[key] ?? (settings.settledOwed?.includes(key) ? { kind: 'settled', date: todayLocal() } : undefined);
+  };
+  const findings = slipFindings(slip, slipsAll, settings).filter((f) => resolutionOf(f)?.kind !== 'notError');
   // The slips paying another wage than the settings in the period, and what the user said about it.
   const wageQuestions = wagePatterns(wageHistory(slipsAll, settings), settings)
     .filter((p) => p.differs && p.from <= end && p.to >= start)
@@ -252,7 +264,9 @@ function ReportPage({
           {findings.length ? (
             <ul className="findings">
               {findings.map((f, i) => (
-                <FindingItem key={i} f={f} settings={settings} t={t} fmt={fmt} report />
+                <FindingItem key={i} f={resolutionOf(f) ? { ...f, corrections: undefined } : f} settings={settings} t={t} fmt={fmt} report>
+                  <ResolutionNote r={resolutionOf(f)} t={t} fmt={fmt} />
+                </FindingItem>
               ))}
             </ul>
           ) : (
@@ -443,3 +457,15 @@ function ReportPage({
   );
 }
 
+
+/** How a finding was put right, as the employee has said: for both to see in the report. */
+function ResolutionNote({ r, t, fmt }: { r: Resolution | undefined; t: Translate; fmt: Formatter }) {
+  if (!r || r.kind === 'notError') return null;
+  return (
+    <p className="small ok">
+      {r.kind === 'linked'
+        ? t('report.agr.linked', { text: r.line.text, amount: fmt.money(r.line.amount), month: fmt.month(r.line.month) })
+        : t('report.agr.settled', { date: fmt.date(r.date, 'numeric') })}
+    </p>
+  );
+}

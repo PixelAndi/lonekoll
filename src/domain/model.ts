@@ -159,6 +159,10 @@ export interface Settings {
   codeOverrides: Record<string, string>;
   /** Amounts in the owed estimate the user has marked as settled (their keys, see owed.ts). */
   settledOwed: string[];
+  /** What the user said about each item in the owed estimate (see owed.ts). */
+  owedResolutions: Record<string, import('./owed.ts').Resolution>;
+  /** Suggested corrections the user said were not it. */
+  rejectedCorrections: string[];
   /**
    * The user's answers about wages the slips keep paying (key: the pattern's, see wageHistory.ts):
    * agreed – it is the deal, set in the settings; disputed – the settings hold the deal, the slips
@@ -217,6 +221,8 @@ export const DEFAULT_SETTINGS: Settings = {
   localDeals: '',
   codeOverrides: {},
   settledOwed: [],
+  owedResolutions: {},
+  rejectedCorrections: [],
   wageAnswers: {},
   scheduleMode: 'none',
   schedule: { startMonday: '2026-01-05', weeks: [[null, null, null, null, null, null, null]] },

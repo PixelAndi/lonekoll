@@ -5,6 +5,7 @@ import { db, saveSettings } from '../db.ts';
 import { applyPattern, stepsNotInSettings, wageHistory, wagePatterns, type WageAnswer, type WagePattern, type WageStep } from '../domain/wageHistory.ts';
 import { wagePeriodOn, type Settings } from '../domain/model.ts';
 import { Card } from './common.tsx';
+import { useIssues } from './issues-context.tsx';
 import { wageRowText } from './wageText.ts';
 import type { TextKey } from '../i18n.ts';
 import { href } from '../router.ts';
@@ -37,7 +38,7 @@ export function WageFromSlips({ onlyChanges = false }: { onlyChanges?: boolean }
     if (!off.length) return null;
     return (
       <Notice kind="info">
-        {t('wageSlips.settingsNote', { n: off.length })} <a href={`${href({ name: 'slips' })}`}>{t('wageSlips.settingsLink')}</a>
+        {t('wageSlips.settingsNote', { n: off.length })} <a href={href({ name: 'issues' })}>{t('wageSlips.settingsLink')}</a>
       </Notice>
     );
   }
@@ -145,14 +146,44 @@ function answerPattern(settings: Settings, p: WagePattern, answer: WageAnswer | 
  * The wages the slips keep paying that the settings don't have, each asked about: is it the deal
  * between you and the employer (then into the settings), or is the slip wrong (then into the report)?
  */
+/** The wages the slips keep paying, and those of them still to be asked about. */
+export function useWagePatternsComputed(): { patterns: WagePattern[]; open: WagePattern[] } {
+  const { settings } = useApp();
+  const records = useLiveQuery(() => db.slips.toArray(), []);
+  return useMemo(() => {
+    const patterns = wagePatterns(wageHistory((records ?? []).map((r) => applyOverrides(r.slip, settings.codeOverrides)), settings), settings);
+    const open = patterns.filter((p) => p.differs && settings.wageAnswers?.[p.key] !== 'disputed' && settings.wageAnswers?.[p.key] !== 'unsure');
+    return { patterns, open };
+  }, [records, settings]);
+}
+
+/** Answers given about wages: what was said, and the way to ask again. */
+export function AnsweredWages() {
+  const { t, fmt, settings } = useApp();
+  const { patterns } = useIssues().wages;
+  const answered = patterns.filter((p) => p.differs && (settings.wageAnswers?.[p.key] === 'disputed' || settings.wageAnswers?.[p.key] === 'unsure'));
+  if (!answered.length) return null;
+  return (
+    <ul className="owed-items">
+      {answered.map((p) => (
+        <li key={p.key}>
+          <strong>
+            {fmt.date(p.from, 'numeric')}–{fmt.date(p.to, 'numeric')}: {wageRowText(p.row, t, fmt)}
+          </strong>
+          <br />
+          <span className="small">{t(`wageQ.answered.${settings.wageAnswers[p.key]}` as TextKey)}</span>{' '}
+          <button type="button" className="owed-settle small" onClick={() => answerPattern(settings, p, undefined)}>
+            {t('wageQ.change')}
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function WageQuestions() {
   const { t, fmt, settings } = useApp();
-  const records = useLiveQuery(() => db.slips.toArray(), []);
-  const patterns = useMemo(
-    () => wagePatterns(wageHistory((records ?? []).map((r) => applyOverrides(r.slip, settings.codeOverrides)), settings), settings),
-    [records, settings],
-  );
-  const open = patterns.filter((p) => p.differs && settings.wageAnswers?.[p.key] !== 'disputed' && settings.wageAnswers?.[p.key] !== 'unsure');
+  const { open } = useIssues().wages;
   if (!open.length) return null;
   return (
     <Card title={t('wageQ.title')} className="card-highlight wage-questions">

@@ -212,7 +212,7 @@ function allSeen(slips: PaySlip[], settings: Settings): Seen[] {
  * Lines on later slips that may have put a finding right: a retroactive line, or a payment the
  * app can't place ("Övrig ersättning"). They are named, not counted: only the employer can say.
  */
-function correctionsAfter(slips: PaySlip[], month: LocalDate, amount: number): AgreementFinding['corrections'] {
+export function correctionsAfter(slips: PaySlip[], month: LocalDate, amount: number): AgreementFinding['corrections'] {
   // Small sums (a regular allowance) are left out: a correction is at least a tenth of what is owed.
   const least = Math.max(100, amount * 0.1);
   const out = slips

@@ -1,15 +1,10 @@
-import { useLiveQuery } from 'dexie-react-hooks';
-import { useMemo, type ReactNode } from 'react';
-import { useApp } from '../app-context.ts';
-import { db } from '../db.ts';
+import type { ReactNode } from 'react';
 import { agreementFor } from '../domain/agreement.ts';
-import { checkAgainstAgreement, uncheckedMonths, type AgreementFinding } from '../domain/agreementCheck.ts';
+import type { AgreementFinding } from '../domain/agreementCheck.ts';
 import { higherMinimumFrom, type Settings } from '../domain/model.ts';
 import type { Formatter } from '../format.ts';
 import type { TextKey, Translate } from '../i18n.ts';
 import { Cited } from './Cited.tsx';
-import { Fold } from './common.tsx';
-import { applyOverrides } from './slipComparison.ts';
 
 // The pay slips against the collective agreement: what the agreement sets
 // (minimum wage, lowest raise, OB, overtime, sick pay, holiday pay), what the
@@ -73,38 +68,5 @@ export function FindingItem({ f, settings, t, fmt, report = false, children }: {
       )}
       {children}
     </li>
-  );
-}
-
-/** The check over every slip, on the pay slip page. */
-export function AgreementCheck() {
-  const { t, fmt, settings } = useApp();
-  const records = useLiveQuery(() => db.slips.toArray(), []);
-  const slips = useMemo(() => (records ?? []).map((r) => applyOverrides(r.slip, settings.codeOverrides)), [records, settings.codeOverrides]);
-  const findings = useMemo(() => checkAgainstAgreement(slips, settings), [slips, settings]);
-  const unchecked = useMemo(() => uncheckedMonths(slips, settings), [slips, settings]);
-  if (!slips.length) return null;
-  const total = findings.reduce((s, f) => s + f.amount, 0);
-  const notChecked = [...unchecked.missing, ...unchecked.unread].sort();
-  return (
-    <Fold
-      title={t('agr.title')}
-      sub={findings.length ? t('agr.subFound', { n: findings.length, amount: fmt.money(total) }) : t('agr.subNone')}
-      warn={findings.length > 0}
-      open={findings.length > 0}
-    >
-      <p className="small">{t('agr.intro')}</p>
-      {!settings.employedSince && <p className="small warn-text">{t('agr.noEmployed')}</p>}
-      {!settings.birthDate && <p className="small muted">{t('agr.noBirth')}</p>}
-      {findings.length > 0 && (
-        <ul className="findings">
-          {findings.map((f, i) => (
-            <FindingItem key={i} f={f} settings={settings} t={t} fmt={fmt} />
-          ))}
-        </ul>
-      )}
-      {notChecked.length > 0 && <p className="small">{t('agr.unchecked', { months: monthRanges(notChecked, fmt) })}</p>}
-      {findings.length > 0 && <p className="small muted">{t('agr.disclaimer')}</p>}
-    </Fold>
   );
 }

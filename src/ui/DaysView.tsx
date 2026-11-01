@@ -10,8 +10,7 @@ import { href, navigate } from '../router.ts';
 import { Card, Icon, Notice, Page } from './common.tsx';
 import { missingCount, useMissing } from './MissingView.tsx';
 import { PhotoImportButton } from './PhotoImport.tsx';
-import { OwedLine } from './Owed.tsx';
-import { NightWorkQuestion } from './NightWork.tsx';
+import { IssuesLine } from './IssuesView.tsx';
 import { hasManual, stampText } from './stamps.ts';
 
 export function shiftMonth(month: string, delta: number): string {
@@ -118,7 +117,9 @@ export function GapNotice({ route = 'days' }: { route?: 'days' | 'month' }) {
   return (
     <Notice kind="warn">
       {t('months.gaps', { n: gaps.length, from: inText(withDays[0].month), to: inText(withDays[withDays.length - 1].month) })}{' '}
-      {gaps.map((g, i) => (
+      {/* Many months: the list is on the page of what is missing, not here above the days. */}
+      {gaps.length > 4 && <a href={href({ name: 'missing' })}>{t('months.gapsShow')}</a>}
+      {gaps.length <= 4 && gaps.map((g, i) => (
         <span key={g.month}>
           {i > 0 && ', '}
           <a href={href({ name: route, month: g.month })}>{inText(g.month)}</a>
@@ -162,7 +163,7 @@ export function DaysView({ month }: { month?: string }) {
           </div>
         </Card>
       )}
-      <NightWorkQuestion />
+      <IssuesLine />
       <div className="actions-stack">
         <PhotoImportButton />
         <p className="muted small">{t('days.photoHint')}</p>
@@ -177,7 +178,6 @@ export function DaysView({ month }: { month?: string }) {
       <MonthNav month={monthKey} route="days" />
       <GapNotice />
       <MissingLink />
-      <OwedLine />
       <p className="month-summary">
         {t('days.summary', {
           shifts: period.shifts.length,

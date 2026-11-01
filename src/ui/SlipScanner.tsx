@@ -5,6 +5,7 @@ import { aimAt, findPage, SLIP_GAPS, type Aim, type FoundPage } from '../ocr/pag
 import { saveSettings } from '../db.ts';
 import { chime, cropToPage, difference, frameShare, onScreen, picture, prepareChime, sharpness, shrinkBy3, videoSample } from './camera.ts';
 import { readCompletely } from './SlipCheck.tsx';
+import { SlipHud } from './SlipHud.tsx';
 
 // A live scanner for paper pay slips, like the timecard scanner: hold the
 // slip in the frame and the picture is taken by itself the moment it is
@@ -53,7 +54,10 @@ export function SlipScanner({ onSlip, onClose, onCameraFailed }: { onSlip: (slip
   const ding = (kind: Parameters<typeof chime>[0]) => sound.current && chime(kind);
   const [phase, setPhase] = useState<Phase>({ kind: 'starting' });
   const [error, setError] = useState(false);
-  const [note, setNote] = useState<{ text: string; kind: 'ok' | 'warn' } | null>(null);
+  const [note, setNote] = useState<{ text: string; kind: 'ok' | 'warn' | 'info' } | null>(null);
+  /** The picture was just taken: a flash and a check mark. */
+  const [grabbed, setGrabbed] = useState(false);
+  const [view, setView] = useState<{ w: number; h: number } | null>(null);
   const [list, setList] = useState<{ key: number; text: string; kind: 'ok' | 'warn' }[]>([]);
   const [pending, setPending] = useState(0);
   const [closing, setClosing] = useState(false);
@@ -132,6 +136,7 @@ export function SlipScanner({ onSlip, onClose, onCameraFailed }: { onSlip: (slip
       found.current = page;
       const frame = frameShare(v, PAGE_RATIO);
       setFrameOnScreen(onScreen(v, frame));
+      setView({ w: v.clientWidth, h: v.clientHeight });
       // A whole slip is taller than wide: print wider than tall is part of one (the phone too close).
       const shape = page ? (page.h * v.videoHeight) / (page.w * v.videoWidth) : 1;
       const aim = page && shape < 1.15 ? 'further' : aimAt(page, frame);
@@ -184,7 +189,9 @@ export function SlipScanner({ onSlip, onClose, onCameraFailed }: { onSlip: (slip
         setPending(queue.length + (working ? 1 : 0));
         navigator.vibrate?.(30);
         ding('shot');
-        setNote({ text: t('slipscan.taken'), kind: 'ok' });
+        setNote({ text: t('slipscan.taken'), kind: 'info' });
+        setGrabbed(true);
+        window.setTimeout(() => alive && setGrabbed(false), 700);
         void work();
       } catch {
         if (alive) setNote({ text: t('slipscan.failed'), kind: 'warn' });
@@ -283,13 +290,15 @@ export function SlipScanner({ onSlip, onClose, onCameraFailed }: { onSlip: (slip
   return (
     <div className="scanner" role="dialog" aria-modal="true" aria-label={t('slipscan.title')}>
       <div className="scanner-view">
-        <video ref={video} className="scanner-video" playsInline muted />
-        {frameOnScreen && <div className="tcscan-frame" style={frameOnScreen} aria-hidden="true" />}
-        {outline && (
-          <div
-            className={`tcscan-page ${outline.ready ? 'tcscan-page-ready' : ''}`}
-            style={{ left: outline.left, top: outline.top, width: outline.width, height: outline.height }}
-            aria-hidden="true"
+        <video ref={video} className="scanner-video scanner-video-cover" playsInline muted />
+        {frameOnScreen && view && (
+          <SlipHud
+            view={view}
+            frame={frameOnScreen}
+            page={outline}
+            state={grabbed ? 'grabbed' : !outline ? 'searching' : outline.ready ? 'ready' : 'aiming'}
+            hint={phase.kind === 'aiming' && phase.hint !== 'steady' ? phase.hint : null}
+            reading={pending > 0}
           />
         )}
         <button
@@ -323,7 +332,7 @@ export function SlipScanner({ onSlip, onClose, onCameraFailed }: { onSlip: (slip
         )}
         <div className="scanner-status">
           {note && <div className={`tcscan-note tcscan-note-${note.kind}`}>{note.text}</div>}
-          {!list.length && !pending && !note && <div className="tcscan-do">{t('slipscan.do')}</div>}
+          {!list.length && !pending && !note && !outline && <div className="tcscan-do">{t('slipscan.do')}</div>}
           <div className="scanner-pill">
             {status}
             {pending > 0 && <div className="tcscan-count">{t('slipscan.queue', { n: pending })}</div>}

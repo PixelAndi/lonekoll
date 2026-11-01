@@ -20,14 +20,22 @@ import { ErrorBoundary } from './ui/ErrorBoundary.tsx';
 import { TimecardImport } from './ui/TimecardImport.tsx';
 import { MissingView } from './ui/MissingView.tsx';
 import { SlipsView } from './ui/SlipsView.tsx';
+import { IssuesView } from './ui/IssuesView.tsx';
+import { IssuesProvider, useIssues } from './ui/issues-context.tsx';
 
 const TABS = [
   { route: { name: 'days' }, icon: 'days', label: 'nav.days', match: ['days', 'day', 'timecard'] },
   { route: { name: 'month' }, icon: 'month', label: 'nav.month', match: ['month'] },
   { route: { name: 'slips' }, icon: 'slips', label: 'nav.slips', match: ['slips', 'slip'] },
-  { route: { name: 'help' }, icon: 'help', label: 'nav.help', match: ['help'] },
-  { route: { name: 'settings' }, icon: 'settings', label: 'nav.settings', match: ['settings'] },
+  { route: { name: 'issues' }, icon: 'issues', label: 'nav.issues', match: ['issues', 'missing'] },
+  { route: { name: 'settings' }, icon: 'settings', label: 'nav.settings', match: ['settings', 'help'] },
 ] as const;
+
+/** How many things are open in Ärenden, on its tab. */
+function IssuesBadge() {
+  const { count } = useIssues();
+  return count ? <span className="tab-badge">{count > 99 ? '99+' : count}</span> : null;
+}
 
 function Screen({ route }: { route: Route }) {
   switch (route.name) {
@@ -49,6 +57,8 @@ function Screen({ route }: { route: Route }) {
       return <TimecardImport />;
     case 'missing':
       return <MissingView />;
+    case 'issues':
+      return <IssuesView />;
     default:
       return <DaysView month={route.month} />;
   }
@@ -109,10 +119,14 @@ export function App() {
               {t('app.title')}
             </a>
             <span className="app-tagline">{t('app.tagline')}</span>
+            <a href={href({ name: 'help' })} className="app-help" aria-label={t('nav.help')}>
+              <Icon name="help" />
+            </a>
           </header>
         )}
         <UpdateBanner text={t('update.available')} action={t('update.reload')} />
         <CloudBanner />
+        <IssuesProvider>
         <ErrorBoundary title={t('error.title')} text={t('error.text')} back={t('error.back')} details={t('error.details')} reload={t('error.reload')} resetKey={JSON.stringify(route)}>
           <Screen route={route} />
         </ErrorBoundary>
@@ -121,11 +135,13 @@ export function App() {
             {TABS.map((tab) => (
               <a key={tab.label} href={href(tab.route)} className={(tab.match as readonly string[]).includes(route.name) ? 'active' : ''}>
                 <Icon name={tab.icon} />
+                {tab.route.name === 'issues' && <IssuesBadge />}
                 <span>{t(tab.label)}</span>
               </a>
             ))}
           </nav>
         )}
+        </IssuesProvider>
       </div>
     </AppContext.Provider>
   );

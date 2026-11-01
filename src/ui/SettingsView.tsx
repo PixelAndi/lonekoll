@@ -5,7 +5,8 @@ import { isPersisted, requestPersistence, saveSettings } from '../db.ts';
 import type { KompMode, OvertimeAs, Settings } from '../domain/model.ts';
 import { formatDuration, todayLocal, parseDuration } from '../domain/time.ts';
 import { LANGUAGE_NAMES } from '../i18n.ts';
-import { Card, Field, Notice, Page } from './common.tsx';
+import { Card, Field, FoldCards, Icon, Notice, Page } from './common.tsx';
+import { href } from '../router.ts';
 import { Cited } from './Cited.tsx';
 import { decimalText, LazyInput, numberOrUndefined } from './settings/inputs.tsx';
 import { TimeField } from './StampRowsEditor.tsx';
@@ -48,13 +49,14 @@ export function SettingsView() {
 
   return (
     <Page title={t('nav.settings')}>
+      <a className="card issue-link" href={href({ name: 'help' })}>
+        <span>
+          <Icon name="help" /> {t('settings.helpLink')}
+        </span>
+        <Icon name="chevronRight" />
+      </a>
       <WageFromSlips onlyChanges />
-      <WageSettings />
-      <WorkPattern />
-      <ScheduleSettings />
-      <SupplementSettings />
-      <TaxSettings />
-
+      <FoldCards.Provider value={true}>
       <Card title={t('settings.you')}>
         <Field label={t('settings.language')}>
           <select value={settings.language} onChange={(e) => save({ language: e.target.value as Settings['language'] })}>
@@ -126,6 +128,12 @@ export function SettingsView() {
           </Field>
         </div>
       </Card>
+      <WageSettings />
+      <WorkPattern />
+      <ScheduleSettings />
+      <SupplementSettings />
+      <TaxSettings />
+
 
       <Card title={t('settings.rules')}>
         {/* With a schedule, overtime follows the schedule instead of these limits. */}
@@ -238,6 +246,7 @@ export function SettingsView() {
         <p className="small">{t('privacy.full')}</p>
         <p className="muted small">Version {__APP_VERSION__}</p>
       </Card>
+      </FoldCards.Provider>
     </Page>
   );
 }

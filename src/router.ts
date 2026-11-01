@@ -8,6 +8,7 @@ export type Route =
   | { name: 'day'; date: string }
   | { name: 'month'; month?: string }
   | { name: 'slips' }
+  | { name: 'issues' }
   | { name: 'slip'; id: string }
   | { name: 'report'; id: string }
   | { name: 'settings' }
@@ -29,6 +30,8 @@ export function parseHash(hash: string): Route {
       return { name: 'month', month: arg };
     case 'slips':
       return { name: 'slips' };
+    case 'issues':
+      return { name: 'issues' };
     case 'slip':
       if (arg) return { name: 'slip', id: arg };
       break;

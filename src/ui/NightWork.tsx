@@ -6,16 +6,23 @@ import { nightWork } from '../domain/night.ts';
 import { todayLocal } from '../domain/time.ts';
 import { href } from '../router.ts';
 import { Card } from './common.tsx';
+import { useIssues } from './issues-context.tsx';
 
 // Permanent night work found in the stamps, asked about once: the agreement
 // gives it a 38-hour week, paid as skiftformstillägg 5.3 % per hour on an
 // hourly wage (a monthly salary stays whole). Yes switches the supplement on
 // from the first night of the stretch; no is remembered.
 
-export function NightWorkQuestion() {
-  const { t, fmt, days, settings } = useApp();
+/** Night work found in the stamps and not yet asked about. */
+export function useNightComputed() {
+  const { days, settings } = useApp();
   const asking = settings.shiftForm === 'none' && !settings.nightAsked;
-  const found = useMemo(() => (asking ? nightWork(days) : null), [asking, days]);
+  return useMemo(() => (asking ? nightWork(days) : null), [asking, days]);
+}
+
+export function NightWorkQuestion() {
+  const { t, fmt, settings } = useApp();
+  const found = useIssues().night;
   if (!found) return null;
   const monthly = monthlyPayOn(settings, todayLocal()) !== null;
   const values = { from: fmt.date(found.from, 'inText'), nights: found.nights, shifts: found.shifts };

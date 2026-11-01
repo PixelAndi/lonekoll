@@ -82,6 +82,9 @@ in Playwright by routing `https://accounts.google.com/gsi/client` and
   `scripts/copy-ocr-assets.mjs` copies all OCR files to `public/ocr`.
 - `src/ui/SlipScanner.tsx` – the live pay slip scanner (crops to the found
   print's height but the camera's full width; refuses print wider than tall);
+  its guide is `SlipHud.tsx` (like the clock's ScannerHud). The video is shown
+  with object-fit: cover (`scanner-video-cover`), which `onScreen`/`frameBox`
+  in camera.ts assume – with `contain` the frame was drawn off the page;
   `src/ui/camera.ts` holds the camera helpers it shares with
   `TimecardScanner.tsx`, and `chime()` (tones made with Web Audio, no files;
   `settings.scanSound`, toggled by the speaker button in both scanners).
@@ -114,9 +117,21 @@ in Playwright by routing `https://accounts.google.com/gsi/client` and
   (`NightWork.tsx`, `settings.nightAsked`); yes sets `shiftForm` from the
   stretch's first night (`settings.shiftFormFrom`, used by calc and by the
   agreement check's `shiftForm` rule). Help section `night` (38/36 h weeks).
-- `src/domain/owed.ts` + `src/ui/Owed.tsx` – the rough owed estimate: card at
-  the top of the pay slip page, one line on the Days tab, only when there is
-  something. "Troligen för lite betalt" = agreement findings only; "Att utreda"
+- **Ärenden** (`src/ui/IssuesView.tsx`, tab with a badge; `issues-context.tsx`
+  works out everything once for the app): questions only the user can answer
+  (wage patterns, night work, slips to check), what may have been underpaid,
+  what is missing, and a fold of what has been answered or put right, each
+  with undo. Days and the pay slip page show one line linking here. Tabs:
+  Dagar, Månad, Lönebesked, Ärenden, Inställningar; help is the ? in the
+  header and a link at the top of Settings, whose sections are folds
+  (`FoldCards` in common.tsx).
+- `src/domain/owed.ts` + `src/ui/Owed.tsx` – the rough owed estimate, shown
+  in Ärenden. Each item: a later line suggested as its correction ("Ja,
+  koppla den hit" links it – a line covers items oldest first, never more
+  than its amount; "Nej, inte den" rejects it), "Markera som rättat", or
+  "Inget fel" (the app was wrong); `settings.owedResolutions`,
+  `settings.rejectedCorrections` (old `settledOwed` still read). The report
+  leaves out findings said to be no error and says how others were put right. "Troligen för lite betalt" = agreement findings only; "Att utreda"
   = gross comparison differences, only for slips read reliably, with a wage
   read that the settings pay, a full basis and no absences the log lacks. A
   month counts from one source only; settled keys in `settings.settledOwed`;

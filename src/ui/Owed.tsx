@@ -1,30 +1,42 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useMemo } from 'react';
 import { useApp } from '../app-context.ts';
-import { db, saveSettings } from '../db.ts';
+import { db, saveSettings, type SlipRecord } from '../db.ts';
 import { checkAgainstAgreement } from '../domain/agreementCheck.ts';
 import { periodBasis } from '../domain/basis.ts';
 import { calculatePeriod } from '../domain/calc.ts';
 import { comparePeriod } from '../domain/compare.ts';
-import { owedEstimate, type MonthComparison, type Owed, type OwedItem } from '../domain/owed.ts';
+import { owedEstimate, rejectionKey, type Correction, type MonthComparison, type Owed, type OwedItem, type Resolution } from '../domain/owed.ts';
 import { todayLocal } from '../domain/time.ts';
 import { stepsNotInSettings, wageHistory, wagePatterns } from '../domain/wageHistory.ts';
 import { href } from '../router.ts';
 import { FindingItem, monthRanges } from './AgreementFindings.tsx';
-import { Card, Fold } from './common.tsx';
+import type { Settings } from '../domain/model.ts';
 import { needsCheck } from './SlipCheck.tsx';
 import { applyOverrides, slipPeriod, vacationBasisFor } from './slipComparison.ts';
 
-// A rough estimate of what may be owed, at the top of the pay slip page and
-// as one line on the days page: what the slips pay below the agreement, and
-// apart from it, months where the slip pays less than the log adds up to.
-// Only shown when there is something; each amount can be marked as settled.
+// A rough estimate of what may be owed, on the Ärenden page: what the slips
+// pay below the agreement, and apart from it, months where the slip pays less
+// than the log adds up to. Each item can be linked to a later line that put
+// it right (suggested by the app), marked as settled, or said to be no error
+// (the app got it wrong) – and each answer can be undone.
 
-export function useOwed(): (Owed & { ids: Map<string, string> }) | null {
+export type OwedWithIds = Owed & { ids: Map<string, string> };
+
+export function useOwedComputed(): OwedWithIds | null {
   const { days, settings } = useApp();
   const records = useLiveQuery(() => db.slips.toArray(), []);
   return useMemo(() => {
     if (!records?.length) return null;
+    try {
+      return compute(records);
+    } catch {
+      // A slip the estimate can't make sense of must not take the app down with it.
+      return null;
+    }
+  }, [records, days, settings]);
+
+  function compute(records: SlipRecord[]): OwedWithIds {
     const today = todayLocal();
     const slips = records.map((r) => applyOverrides(r.slip, settings.codeOverrides));
     const findings = checkAgainstAgreement(slips, settings);
@@ -57,56 +69,36 @@ export function useOwed(): (Owed & { ids: Map<string, string> }) | null {
         });
     });
     return {
-      ...owedEstimate(findings, comparisons, slips, settings.settledOwed ?? [], today),
+      ...owedEstimate(
+        findings,
+        comparisons,
+        slips,
+        { resolutions: settings.owedResolutions ?? {}, rejected: settings.rejectedCorrections ?? [], settled: settings.settledOwed },
+        today,
+      ),
       ids,
     };
-  }, [records, days, settings]);
+  }
 }
 
-const settle = (keys: string[], key: string, on: boolean) =>
-  void saveSettings({
-    settledOwed: on ? [...new Set([...keys, key])] : keys.filter((k) => k !== key),
-  });
 
-/** The card on the pay slip page. */
-export function OwedCard() {
-  const { t, fmt, settings } = useApp();
-  const owed = useOwed();
-  if (!owed) return null;
-  const settled = settings.settledOwed ?? [];
-  const something = owed.likely.length > 0 || owed.investigate.length > 0;
-  if (!something && !owed.settled.length) return null;
-  const amounts = (gross: number, net: number | null) =>
-    net === null ? t('owed.gross', { gross: fmt.money(gross) }) : t('owed.grossNet', { gross: fmt.money(gross), net: fmt.money(net) });
-  const settleButton = (i: OwedItem, on: boolean) => (
-    <button type="button" className="owed-settle small" onClick={() => settle(settled, i.key, on)}>
-      {on ? t('owed.settle') : t('owed.unsettle')}
-    </button>
-  );
-  const settledList = owed.settled.length > 0 && (
-    <Fold title={t('owed.settledTitle', { n: owed.settled.length })}>
-      <ul className="owed-items">
-        {owed.settled.map((i) => (
-          <li key={i.key}>
-            <span>
-              {i.finding
-                ? t(`agr.rule.${i.finding.rule === 'minimum' ? `minimum.${i.finding.cause}` : i.finding.rule}` as 'agr.rule.ob', {
-                    level: i.finding.level ?? '',
-                  })
-                : t('owed.cmpItem')}
-            </span>{' '}
-            <span className="muted">
-              {monthRanges(i.months, fmt)} · {fmt.money(i.amount)}
-            </span>{' '}
-            {settleButton(i, false)}
-          </li>
-        ))}
-      </ul>
-    </Fold>
-  );
-  if (!something) return <>{settledList}</>;
+/** Saves what the user said about an item (none: undone, asked again). */
+export function resolveItem(settings: Settings, key: string, r: Resolution | undefined) {
+  const resolutions = { ...settings.owedResolutions };
+  if (r) resolutions[key] = r;
+  else delete resolutions[key];
+  void saveSettings({ owedResolutions: resolutions, settledOwed: (settings.settledOwed ?? []).filter((k) => k !== key) });
+}
+
+const rejectSuggestion = (settings: Settings, key: string, c: Correction) =>
+  void saveSettings({ rejectedCorrections: [...(settings.rejectedCorrections ?? []), rejectionKey(key, c)] });
+
+/** The items still open, in two parts, with their totals; each with what can be done about it. */
+export function OwedSection({ owed }: { owed: OwedWithIds }) {
+  const { t, fmt } = useApp();
+  const amounts = (gross: number, net: number | null) => (net === null ? t('owed.gross', { gross: fmt.money(gross) }) : t('owed.grossNet', { gross: fmt.money(gross), net: fmt.money(net) }));
   return (
-    <Card title={t('owed.title')} className="owed-card">
+    <>
       {owed.likely.length > 0 && (
         <section className="owed-part">
           <h3>{t('owed.likely')}</h3>
@@ -114,9 +106,7 @@ export function OwedCard() {
           <p className="small muted">{t('owed.likelyWhy')}</p>
           <ul className="findings">
             {owed.likely.map((i) => (
-              <FindingItem key={i.key} f={i.finding!} settings={settings} t={t} fmt={fmt}>
-                {settleButton(i, true)}
-              </FindingItem>
+              <OwedItemView key={i.key} item={i} ids={owed.ids} />
             ))}
           </ul>
         </section>
@@ -126,19 +116,9 @@ export function OwedCard() {
           <h3>{t('owed.investigate')}</h3>
           <p className="owed-amount">≈ {amounts(owed.investigateTotal, owed.investigateNet)}</p>
           <p className="small muted">{t('owed.investigateWhy')}</p>
-          <ul className="owed-items">
+          <ul className="findings">
             {owed.investigate.map((i) => (
-              <li key={i.key}>
-                <a
-                  href={href({
-                    name: 'slip',
-                    id: owed.ids.get(i.months[0]) ?? '',
-                  })}
-                >
-                  {fmt.month(i.months[0])}
-                </a>
-                : {t('owed.cmpLess', { amount: fmt.money(i.amount) })} {settleButton(i, true)}
-              </li>
+              <OwedItemView key={i.key} item={i} ids={owed.ids} />
             ))}
           </ul>
         </section>
@@ -146,25 +126,95 @@ export function OwedCard() {
       {owed.old > 0 && <p className="small warn-text">{t('owed.old', { amount: fmt.money(owed.old) })}</p>}
       <p className="small">{t('owed.vacation')}</p>
       <p className="small muted">{t('owed.disclaimer')}</p>
-      {settledList}
-    </Card>
+    </>
   );
 }
 
-/** One line on the days page, only when there is something. */
-export function OwedLine() {
-  const { t, fmt } = useApp();
-  const owed = useOwed();
-  if (!owed || (!owed.likely.length && !owed.investigate.length)) return null;
+/** One item: what it is, the lines that may have put it right (yes / no), and settled / no error. */
+function OwedItemView({ item: i, ids }: { item: OwedItem; ids: Map<string, string> }) {
+  const { t, fmt, settings } = useApp();
+  const today = todayLocal();
+  const rejected = (settings.rejectedCorrections ?? []).filter((k) => k.startsWith(`${i.key}>`));
+  const body = (
+    <>
+      {i.covered > 0 && i.resolution?.kind === 'linked' && (
+        <p className="small ok">
+          {t('owed.partly', { text: i.resolution.line.text, covered: fmt.money(i.covered), month: fmt.month(i.resolution.line.month), left: fmt.money(i.amount) })}{' '}
+          <button type="button" className="owed-settle" onClick={() => resolveItem(settings, i.key, undefined)}>
+            {t('owed.unsettle')}
+          </button>
+        </p>
+      )}
+      {i.suggestions.map((c) => (
+        <div key={`${c.month}${c.text}${c.amount}`} className="owed-suggestion">
+          <p className="small">{t('owed.maybe', { text: c.text, amount: fmt.money(c.amount), month: fmt.month(c.month) })}</p>
+          <div className="button-row">
+            <button type="button" className="button button-small button-primary" onClick={() => resolveItem(settings, i.key, { kind: 'linked', date: today, line: c })}>
+              {t('owed.link')}
+            </button>
+            <button type="button" className="button button-small" onClick={() => rejectSuggestion(settings, i.key, c)}>
+              {t('owed.notIt')}
+            </button>
+          </div>
+        </div>
+      ))}
+      <div className="button-row owed-actions">
+        <button type="button" className="button button-small" onClick={() => resolveItem(settings, i.key, { kind: 'settled', date: today })}>
+          {t('owed.settle')}
+        </button>
+        <button type="button" className="button button-small" onClick={() => resolveItem(settings, i.key, { kind: 'notError', date: today })}>
+          {t('owed.notError')}
+        </button>
+      </div>
+      {rejected.length > 0 && (
+        <button type="button" className="owed-settle small" onClick={() => void saveSettings({ rejectedCorrections: (settings.rejectedCorrections ?? []).filter((k) => !rejected.includes(k)) })}>
+          {t('owed.showRejected', { n: rejected.length })}
+        </button>
+      )}
+    </>
+  );
+  if (i.finding)
+    return (
+      <FindingItem f={{ ...i.finding, corrections: undefined }} settings={settings} t={t} fmt={fmt}>
+        {body}
+      </FindingItem>
+    );
   return (
-    <p className="small owed-line">
-      <a href={href({ name: 'slips' })}>
-        {owed.likely.length > 0
-          ? t('owed.line', { amount: fmt.money(owed.likelyTotal) })
-          : t('owed.lineInvestigate', {
-              amount: fmt.money(owed.investigateTotal),
-            })}
-      </a>
-    </p>
+    <li className="finding">
+      <strong>
+        <a href={href({ name: 'slip', id: ids.get(i.months[0]) ?? '' })}>{fmt.month(i.months[0])}</a>
+      </strong>
+      <p>{t('owed.cmpLess', { amount: fmt.money(i.whole) })}</p>
+      {body}
+    </li>
+  );
+}
+
+/** What has been answered: how each item was put right (or that it was none), with the way to undo it. */
+export function SettledList({ owed }: { owed: Owed }) {
+  const { t, fmt, settings } = useApp();
+  if (!owed.settled.length) return null;
+  const title = (i: OwedItem) =>
+    i.finding
+      ? t(`agr.rule.${i.finding.rule === 'minimum' ? `minimum.${i.finding.cause}` : i.finding.rule}` as 'agr.rule.ob', { level: i.finding.level ?? '' })
+      : t('owed.cmpItem');
+  const how = (i: OwedItem) => {
+    const r = i.resolution!;
+    if (r.kind === 'linked') return t('owed.how.linked', { text: r.line.text, amount: fmt.money(r.line.amount), month: fmt.month(r.line.month) });
+    return t(r.kind === 'notError' ? 'owed.how.notError' : 'owed.how.settled', { date: fmt.date(r.date, 'numeric') });
+  };
+  return (
+    <ul className="owed-items">
+      {owed.settled.map((i) => (
+        <li key={i.key}>
+          <strong>{title(i)}</strong> <span className="muted">· {monthRanges(i.months, fmt)} · {fmt.money(i.whole)}</span>
+          <br />
+          <span className="small">{how(i)}</span>{' '}
+          <button type="button" className="owed-settle small" onClick={() => resolveItem(settings, i.key, undefined)}>
+            {t('owed.unsettle')}
+          </button>
+        </li>
+      ))}
+    </ul>
   );
 }

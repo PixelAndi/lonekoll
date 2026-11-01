@@ -344,7 +344,7 @@ export function TimecardScanner({ onPage, onClose }: { onPage: (page: ScannedPag
   return (
     <div className="scanner" role="dialog" aria-modal="true" aria-label={t('tcscan.title')}>
       <div className="scanner-view">
-        <video ref={video} className="scanner-video" playsInline muted />
+        <video ref={video} className="scanner-video scanner-video-cover" playsInline muted />
         {frameOnScreen && <div className="tcscan-frame" style={frameOnScreen} aria-hidden="true" />}
         {outline && (
           <div
