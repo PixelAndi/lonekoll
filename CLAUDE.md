@@ -30,9 +30,10 @@ README.md describes the features and rules in detail – read it first.
   choice. Network calls exist only in `src/cloud/google.ts` (the user's own
   Google Drive, `drive.file` scope) and sharing only in `src/share.ts`. Don't
   loosen this; a deliberate exception must change the test, in the open.
-- Never rewrite published history without the owner's explicit approval. (An
-  old commit message contains a real value; the owner hasn't decided whether
-  to force-push it away.)
+- Never rewrite published history without the owner's explicit approval. (Old
+  history holds a real worked-hours figure in commit 62f406d's message and
+  two stamp times in a test file before e9ed513; the owner has seen them and
+  decided to leave them.)
 - Commit to `main` and push when the owner asks (they test on the live site).
   No pull requests unless asked. No model names in commits or code.
 
