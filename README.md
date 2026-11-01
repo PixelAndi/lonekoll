@@ -149,6 +149,9 @@ report you can go through with your employer.
   the first with days to now: how many days each has, the months in between
   with none (a gap, also warned about on the days page with links to them),
   and which have a pay slip.
+- **Several pay slips at once.** Pick many PDFs in one go: they are read one
+  after another with how each went; a slip already in the app (same period,
+  pay day and amounts) is skipped.
 - **Raises from the pay slips.** The wage paid on every imported slip, in
   order (a raise in the middle of a period by the wage lines' own dates;
   retroactive pay left out but noted): where it changed and the settings say

@@ -16,31 +16,55 @@ import { VacationProgress } from './VacationProgress.tsx';
 import { WageFromSlips } from './WageFromSlips.tsx';
 
 export function SlipsView() {
-  const { t, settings } = useApp();
+  const { t, fmt, settings } = useApp();
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const slips = useLiveQuery(() => db.slips.orderBy('periodStart').reverse().toArray(), []);
 
-  const onFile = async (file: File | undefined) => {
+  /** Each file picked, and how its import went (several can be picked at once). */
+  const [results, setResults] = useState<{ name: string; status: 'reading' | 'done' | 'duplicate' | 'none' | 'failed'; period?: string; id?: string }[]>([]);
+
+  const onFiles = async (list: FileList | null) => {
+    const files = [...(list ?? [])];
     if (input.current) input.current.value = '';
-    if (!file) return;
+    if (!files.length) return;
     setBusy(true);
     setError(undefined);
-    try {
-      const slip = await readPaySlipPdf(file, hourlyRateOn(settings, todayLocal()) ?? undefined);
-      if (slip.lines.length === 0) {
-        setError(t('slips.noLines'));
-        return;
+    setResults(files.map((f) => ({ name: f.name, status: 'reading' })));
+    // A slip imported before (or twice in this batch) is skipped: the same period, pay day and amounts.
+    const keyOf = (slip: SlipRecord['slip']) => `${slip.periodStart ?? ''}|${slip.payDate ?? ''}|${slip.lines.reduce((sum, l) => sum + (l.amount ?? 0), 0).toFixed(2)}`;
+    const known = new Set((await db.slips.toArray()).map((r) => keyOf(r.slip)));
+    const update = (k: number, patch: Partial<(typeof results)[number]>) => setResults((r) => r.map((x, i) => (i === k ? { ...x, ...patch } : x)));
+    let lastId: string | undefined;
+    let imported = 0;
+    for (const [k, file] of files.entries()) {
+      try {
+        const slip = await readPaySlipPdf(file, hourlyRateOn(settings, todayLocal()) ?? undefined);
+        if (slip.lines.length === 0) {
+          update(k, { status: 'none' });
+          continue;
+        }
+        const key = keyOf(slip);
+        if (known.has(key)) {
+          update(k, { status: 'duplicate', period: slip.periodStart });
+          continue;
+        }
+        known.add(key);
+        const id = newId();
+        await db.slips.put({ id, fileName: file.name, importedAt: Date.now(), periodStart: slip.periodStart ?? '', slip, pdf: file });
+        update(k, { status: 'done', period: slip.periodStart, id });
+        lastId = id;
+        imported++;
+      } catch (e) {
+        update(k, { status: 'failed' });
+        if (files.length === 1) setError(t('slips.failed', { error: e instanceof Error ? e.message : String(e) }));
       }
-      const id = newId();
-      await db.slips.put({ id, fileName: file.name, importedAt: Date.now(), periodStart: slip.periodStart ?? '', slip, pdf: file });
-      navigate({ name: 'slip', id });
-    } catch (e) {
-      setError(t('slips.failed', { error: e instanceof Error ? e.message : String(e) }));
-    } finally {
-      setBusy(false);
     }
+    setBusy(false);
+    // One slip: straight to its comparison, as before. Several: the list, with how each went.
+    if (files.length === 1 && imported === 1 && lastId) navigate({ name: 'slip', id: lastId });
+    if (files.length === 1 && imported === 0) setResults([]);
   };
 
   return (
@@ -49,12 +73,31 @@ export function SlipsView() {
         <button type="button" className="button button-primary button-large" disabled={busy} onClick={() => input.current?.click()}>
           <Icon name="slips" /> {t('slips.import')}
         </button>
-        <input ref={input} type="file" accept="application/pdf,.pdf" hidden onChange={(e) => onFile(e.target.files?.[0])} />
+        <input ref={input} type="file" accept="application/pdf,.pdf" multiple hidden onChange={(e) => void onFiles(e.target.files)} />
+        <p className="muted small">{t('slips.importMany')}</p>
         <p className="slip-privacy small">
           <Icon name="lock" /> <span>{t('slips.privacy')}</span>
         </p>
-        {busy && <Spinner label={t('slips.importing')} />}
+        {busy && <Spinner label={results.length > 1 ? t('slips.importingMany', { done: results.filter((r) => r.status !== 'reading').length, n: results.length }) : t('slips.importing')} />}
         {error && <Notice kind="error">{error}</Notice>}
+        {results.length > 1 && (
+          <ul className="timecard-files">
+            {results.map((r, i) => (
+              <li key={i}>
+                <span>{r.name}</span>
+                {r.status === 'reading' && <span className="muted">…</span>}
+                {r.status === 'done' && (
+                  <a className="ok" href={href({ name: 'slip', id: r.id! })}>
+                    ✓ {r.period ? fmt.month(r.period) : t('slips.result.done')}
+                  </a>
+                )}
+                {r.status === 'duplicate' && <span className="muted">{t('slips.result.duplicate', { month: r.period ? fmt.month(r.period) : '' })}</span>}
+                {r.status === 'none' && <span className="warn-text">{t('slips.noLines')}</span>}
+                {r.status === 'failed' && <span className="warn-text">{t('slips.result.failed')}</span>}
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
       {slips && slips.length === 0 && <p className="muted">{t('slips.empty')}</p>}
       <WageFromSlips />
