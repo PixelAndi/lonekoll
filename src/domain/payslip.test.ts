@@ -150,3 +150,44 @@ describe('the pay period', () => {
     expect([slip.periodStart, slip.periodEnd, slip.periodDoubt]).toEqual(['2026-09-01', '2026-09-30', 'guessed']);
   });
 });
+
+describe('an older slip, one line per day, photographed', () => {
+  // Made-up figures in the older layout: "1106 Timlön" for each day worked, with its date.
+  // As a tilted photo gives it: each code and name a third of a line below its figures.
+  const day = (y: number, date: string, hours: string, amount: string): TextItem[] => [
+    ...row(y - 4, [['1106', 60, 18], ['Timlön', 85, 25]]),
+    ...row(y, [[`${date} - ${date}`, 300, 60], [hours, 380, 16], ['Timmar', 400, 26], ['150,00', 442, 24], [amount, 486, 34]]),
+  ];
+  const slip = parsePaySlip([
+    ...row(760, [['Bageriet AB', 60, 130], ['Lönebesked', 340, 90]]),
+    ...row(684, [['Löneperiod:', 60, 50], ['2024-03-01 - 2024-03-31', 150, 90]]),
+    ...row(629, [['Datum', 293, 25], ['Kvantitet Enhet', 347, 60], ['A-pris', 435, 25], ['Belopp', 482, 28]]),
+    ...row(609, [['1106', 60, 18], ['Timlön', 85, 25], ['0,00', 378, 16], ['Timmar', 398, 26], ['150,00', 440, 24]]),
+    ...day(596, '240304', '8,00', '1 200,00'),
+    ...day(583, '240305', '9,50', '142500'), // the comma not seen
+    ...day(570, '240306', '7,00', '1@5O,0O'), // a smudge
+    ...day(557, '240307', '8,00', '1 200,00').map((i) => (i.str === '150,00' ? { ...i, str: '160,00' } : i)), // the price misread
+    ...row(233, [['Bruttolön', 460, 30], ['4 875,00', 520, 30]]),
+  ]);
+
+  it('reads every day, joining each code to its figures', () => {
+    expect(slip.lines.map((l) => [l.from, l.quantity, l.amount])).toEqual([
+      [undefined, 0, undefined],
+      ['2024-03-04', 8, 1200],
+      ['2024-03-05', 9.5, 1425],
+      ['2024-03-06', 7, 1050],
+      ['2024-03-07', 8, 1200],
+    ]);
+    expect(slip.lines.every((l) => l.code === '1106' && l.category === 'wage')).toBe(true);
+  });
+
+  it('takes a lone figure under À-pris as the price, and puts a misread price right', () => {
+    expect(slip.lines[0].unitPrice).toBe(150);
+    expect(slip.lines[4].unitPrice).toBe(150);
+  });
+
+  it('adds up to the gross pay', () => {
+    expect(slip.lines.reduce((sum, l) => sum + (l.amount ?? 0), 0)).toBe(slip.gross);
+    expect([slip.periodStart, slip.periodDoubt]).toEqual(['2024-03-01', undefined]);
+  });
+});

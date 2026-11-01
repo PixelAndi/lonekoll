@@ -264,7 +264,7 @@ export async function readPaySlipImage(file: Blob, hourlyRate?: number): Promise
   const items = slipItemsFromWords(words, prepared.width);
   const slip = parsePaySlip(items, hourlyRate);
   // The payout is often printed on a dark bar a photo can't read: then it is gross pay less tax and
-  // other deductions, in whole kronor (öresutjämning).
-  if (slip.net === undefined && slip.gross !== undefined && slip.tax !== undefined) slip.net = Math.round(slip.gross - slip.tax - (slip.otherDeductions ?? 0));
+  // other deductions, rounded up to whole kronor (öresutjämning, as these slips do).
+  if (slip.net === undefined && slip.gross !== undefined && slip.tax !== undefined) slip.net = Math.ceil(slip.gross - slip.tax - (slip.otherDeductions ?? 0) - 0.005);
   return slip;
 }

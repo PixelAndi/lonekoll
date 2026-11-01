@@ -225,26 +225,60 @@ export function classifyLine(text: string, amount: number | undefined, unitPrice
   return 'other';
 }
 
-function parseItemLine(line: TextItem[], hourlyRate?: number): SlipLine | null {
+/** Where a slip's À-pris and Belopp columns end (right edges, in points), from the lines that have both. */
+interface Columns {
+  price?: number;
+  amount?: number;
+}
+
+const median = (xs: number[]) => (xs.length ? [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)] : undefined);
+const right = (i: TextItem) => i.x + i.width;
+/** A figure as a photo may read it: "1198.,76" for "1198,76". */
+const tidyFigure = (s: string) => s.replace(/(\d)[.,]{2,}(\d)/, '$1,$2');
+
+function findColumns(lines: TextItem[][]): Columns {
+  const prices: number[] = [];
+  const amounts: number[] = [];
+  for (const line of lines) {
+    if (!/^\d{3,5}$/.test(line[0]?.str.trim() ?? '')) continue;
+    const u = line.findIndex((i) => UNIT.test(i.str.trim()));
+    if (u < 0) continue;
+    const figures = line.slice(u + 1).filter((i) => NUMBER.test(tidyFigure(i.str.trim())));
+    if (figures.length < 2) continue;
+    prices.push(right(figures[figures.length - 2]));
+    amounts.push(right(figures[figures.length - 1]));
+  }
+  return { price: median(prices), amount: median(amounts) };
+}
+
+function parseItemLine(line: TextItem[], hourlyRate?: number, columns: Columns = {}): SlipLine | null {
   if (line.length < 2 || !/^\d{3,5}$/.test(line[0].str.trim())) return null;
   const code = line[0].str.trim();
   const textParts: string[] = [];
   const before: number[] = [];
-  const after: number[] = [];
+  const after: { value: number; item: TextItem }[] = [];
+  /** After the unit: whole numbers that may be an amount whose comma wasn't seen, and text that couldn't be read. */
+  const bare: { digits: string; item: TextItem }[] = [];
+  let unreadable = false;
   let unit: string | undefined;
   let from: LocalDate | undefined;
   let to: LocalDate | undefined;
   for (const item of line.slice(1)) {
-    const s = item.str.trim();
+    const s = tidyFigure(item.str.trim());
     const range = s.match(DATE_RANGE);
     if (range) {
       from = toIsoDate(range[1]);
       to = toIsoDate(range[2]);
     } else if (NUMBER.test(s)) {
-      (unit ? after : before).push(parseSwedishNumber(s)!);
+      if (unit) after.push({ value: parseSwedishNumber(s)!, item });
+      else before.push(parseSwedishNumber(s)!);
     } else if (UNIT.test(s) && !unit) {
       unit = s;
-    } else if (before.length === 0 && !unit) {
+    } else if (unit && /^\d[\d ]{2,8}$/.test(s)) {
+      bare.push({ digits: s.replace(/\s/g, ''), item });
+    } else if (unit) {
+      unreadable = true;
+    } else if (before.length === 0) {
       textParts.push(s);
     }
   }
@@ -253,8 +287,22 @@ function parseItemLine(line: TextItem[], hourlyRate?: number): SlipLine | null {
   let amount: number | undefined;
   if (unit) {
     quantity = before[0];
-    if (after.length >= 2) [unitPrice, amount] = after;
-    else if (after.length === 1) amount = after[0];
+    if (after.length >= 2) [unitPrice, amount] = [after[0].value, after[after.length - 1].value];
+    else if (after.length === 1) {
+      // One figure after the unit: the À-pris or the Belopp column, whichever it is under.
+      const x = right(after[0].item);
+      const isPrice = columns.price !== undefined && columns.amount !== undefined ? Math.abs(x - columns.price) < Math.abs(x - columns.amount) : quantity === 0;
+      if (isPrice) unitPrice = after[0].value;
+      else amount = after[0].value;
+    }
+    // An amount read without its comma ("126927"): it is the hours times the price.
+    if (amount === undefined && quantity !== undefined && unitPrice !== undefined) {
+      const expected = Math.round(quantity * unitPrice * 100) / 100;
+      const fits = bare.find((b) => Math.abs(Number(b.digits) / 100 - expected) <= 0.02);
+      if (fits) amount = Number(fits.digits) / 100;
+      // Unreadable where the amount is printed (a smudge on a photo): the hours times the price.
+      else if (unreadable || bare.length) amount = expected;
+    }
   } else if (before.length >= 3) {
     [quantity, unitPrice, amount] = before;
   } else if (before.length === 2) {
@@ -278,6 +326,51 @@ function parseItemLine(line: TextItem[], hourlyRate?: number): SlipLine | null {
   };
 }
 
+/**
+ * A price misread on a photo ("160,00" among lines at "150,00"): when the
+ * line's hours times the price its other lines share give its amount, that
+ * price is the one printed.
+ */
+function fixMisreadPrices(lines: SlipLine[]) {
+  for (const line of lines) {
+    const { quantity: q, unitPrice: p, amount: a } = line;
+    if (!q || p === undefined || a === undefined || Math.abs(q * p - a) <= 0.05) continue;
+    const shared = lines.filter((o) => o !== line && o.code === line.code && o.unitPrice !== undefined).map((o) => o.unitPrice!);
+    const price = shared.find((x) => shared.filter((y) => y === x).length >= 2 && Math.abs(q * x - a) <= 0.05);
+    if (price !== undefined) line.unitPrice = price;
+  }
+}
+
+/**
+ * A photographed slip, tilted or curved, can put a line's code and name a
+ * little above or below its figures, as two rows. Each such row of code and
+ * name is joined with the row of figures (without a code of its own) nearest
+ * to it, if that is less than a line away.
+ */
+function joinSplitRows(lines: TextItem[][]): TextItem[][] {
+  const isCode = (l: TextItem[]) => /^\d{3,5}$/.test(l[0]?.str.trim() ?? '');
+  const figure = (i: TextItem) => DATE_RANGE.test(i.str.trim()) || NUMBER.test(tidyFigure(i.str.trim()));
+  const codeOnly = (l: TextItem[]) => isCode(l) && !l.slice(1).some(figure);
+  const figuresOnly = (l: TextItem[]) => !isCode(l) && l.some(figure) && l.every((i) => figure(i) || UNIT.test(i.str.trim()) || /^[\d\s.,]+$/.test(i.str.trim()) || i.str.trim().length <= 8);
+  // The usual distance between rows, to know what "less than a line" is.
+  const gaps = lines.slice(1).map((l, i) => lines[i][0].y - l[0].y).filter((g) => g > 0);
+  const pitch = median(gaps) ?? 12;
+  const used = new Set<number>();
+  const joined = new Map<number, TextItem[]>();
+  lines.forEach((line, i) => {
+    if (!codeOnly(line)) return;
+    const near = [i - 1, i + 1]
+      .filter((j) => lines[j] && !used.has(j) && figuresOnly(lines[j]) && lines[j][0].x > line[0].x)
+      .map((j) => ({ j, dy: Math.abs(lines[j][0].y - line[0].y) }))
+      .filter((c) => c.dy < pitch * 0.8)
+      .sort((a, b) => a.dy - b.dy)[0];
+    if (!near) return;
+    used.add(near.j);
+    joined.set(i, [...line, ...lines[near.j]].sort((a, b) => a.x - b.x));
+  });
+  return lines.flatMap((line, i) => (used.has(i) ? [] : [joined.get(i) ?? line]));
+}
+
 /** Value printed to the right of a label on the same line. */
 function valuesAfter(lines: TextItem[][], label: RegExp): { label: TextItem; value: string }[] {
   const found: { label: TextItem; value: string }[] = [];
@@ -296,13 +389,15 @@ const rightmost = <T extends { label: TextItem }>(list: T[]) =>
   list.length ? list.reduce((a, b) => (b.label.x > a.label.x ? b : a)) : undefined;
 
 export function parsePaySlip(items: TextItem[], hourlyRate?: number): PaySlip {
-  const lines = groupLines(items);
+  const lines = joinSplitRows(groupLines(items));
   const slip: PaySlip = { lines: [], balances: {} };
+  const columns = findColumns(lines);
   for (const line of lines) {
-    const parsed = parseItemLine(line, hourlyRate);
+    const parsed = parseItemLine(line, hourlyRate, columns);
     if (parsed) slip.lines.push(parsed);
   }
 
+  fixMisreadPrices(slip.lines);
   slip.employer = lines[0]?.[0]?.str.trim();
 
   // "Utbetalas 2026-10-23" with the amount paid out further right.
