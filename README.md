@@ -154,7 +154,12 @@ report you can go through with your employer.
   retroactive pay left out but noted): where it changed and the settings say
   otherwise, the slips page (and the settings) suggest adding it from that
   date with one tap. A wage below the agreement's minimum is pointed out as
-  something to take up, not offered as a setting (domain/raises.ts).
+  something to take up, not offered as a setting (domain/raises.ts). With a
+  wage of "the minimum plus a supplement" the slip's wage is taken apart the
+  same way: how much above the minimum it pays against the settings, per hour,
+  per normal month (174 h) and on the hours the slips paid – something to take
+  up if the deal is right, or the supplement to change (keeping the wage tied
+  to the minimum) if the deal is calculated differently.
 - **What's missing.** A page of its own (linked from the days page, with how
   many things are missing, and from the start date in settings) goes month
   by month from the start of the employment (or the first day logged) to

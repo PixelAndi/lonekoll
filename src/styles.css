@@ -2739,3 +2739,7 @@ input[type='checkbox'] {
   border-bottom: 1px solid var(--border);
   margin-bottom: 8px;
 }
+
+.wage-breakdown .table td:first-child {
+  white-space: nowrap;
+}
