@@ -102,6 +102,11 @@ export function IssuesView() {
           )}
         </Fold>
       )}
+      {owed && owed.archived.length > 0 && (
+        <Fold title={t('issues.archived', { n: owed.archived.length })} sub={t('issues.archivedSub')}>
+          <SettledList owed={owed} archived />
+        </Fold>
+      )}
     </Page>
   );
 }

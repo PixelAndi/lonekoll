@@ -101,3 +101,13 @@ describe('a later line that may have put it right', () => {
     expect(owed.settled[0].resolution?.kind).toBe('notError');
   });
 });
+
+describe('an archived item', () => {
+  it('is out of the totals and the lists, kept apart', () => {
+    const slips = [slip('2028-01', 20000, 5000, '2028-02-25')];
+    const f = finding({ '2028-01-01': 400 });
+    const owed = owedEstimate([f], [], slips, { resolutions: { [findingKey(f)]: { kind: 'archived', date: today } }, rejected: [] }, today);
+    expect([owed.likely, owed.settled, owed.likelyTotal, owed.old]).toEqual([[], [], 0, 0]);
+    expect(owed.archived.map((i) => i.key)).toEqual([findingKey(f)]);
+  });
+});

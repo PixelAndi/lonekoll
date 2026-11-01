@@ -31,7 +31,7 @@ const keyOf = (slip: SlipRecord['slip']) => `${slip.periodStart ?? ''}|${slip.pa
  * it has new, what to remove of what it lacks – and nothing changes until the user answers.
  * A pay day it lacks is the one in the settings.
  */
-export async function storeSlip(read: PaySlip, file: Blob, fileName: string, payDay: number | null): Promise<SlipOutcome & { id?: string }> {
+async function storeSlip(read: PaySlip, file: Blob, fileName: string, payDay: number | null): Promise<SlipOutcome & { id?: string }> {
   if (read.lines.length === 0) return { status: 'none' };
   const slip = withPayDay(read, payDay);
   const all = await db.slips.toArray();

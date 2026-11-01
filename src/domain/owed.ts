@@ -35,6 +35,8 @@ export interface Correction {
 export type Resolution =
   | { kind: 'settled'; date: LocalDate }
   | { kind: 'notError'; date: LocalDate }
+  /** Put away by the user (e.g. too old to claim): out of the way, not counted, can be brought back. */
+  | { kind: 'archived'; date: LocalDate }
   | { kind: 'linked'; date: LocalDate; line: Correction };
 
 export interface OwedAnswers {
@@ -72,6 +74,8 @@ export interface Owed {
   likely: OwedItem[];
   investigate: OwedItem[];
   settled: OwedItem[];
+  /** Put away by the user: not counted, kept apart. */
+  archived: OwedItem[];
   likelyTotal: number;
   likelyNet: number | null;
   investigateTotal: number;
@@ -168,7 +172,8 @@ export function owedEstimate(findings: AgreementFinding[], comparisons: MonthCom
   return {
     likely,
     investigate,
-    settled: all.filter((i) => !isOpen(i)),
+    settled: all.filter((i) => !isOpen(i) && i.resolution?.kind !== 'archived'),
+    archived: all.filter((i) => i.resolution?.kind === 'archived'),
     likelyTotal: sum(likely),
     likelyNet: sumNet(likely),
     investigateTotal: sum(investigate),

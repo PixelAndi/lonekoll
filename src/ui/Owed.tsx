@@ -124,6 +124,7 @@ export function OwedSection({ owed }: { owed: OwedWithIds }) {
         </section>
       )}
       {owed.old > 0 && <p className="small warn-text">{t('owed.old', { amount: fmt.money(owed.old) })}</p>}
+      <ArchiveOld owed={owed} />
       <p className="small">{t('owed.vacation')}</p>
       <p className="small muted">{t('owed.disclaimer')}</p>
     </>
@@ -165,7 +166,11 @@ function OwedItemView({ item: i, ids }: { item: OwedItem; ids: Map<string, strin
         <button type="button" className="button button-small" onClick={() => resolveItem(settings, i.key, { kind: 'notError', date: today })}>
           {t('owed.notError')}
         </button>
+        <button type="button" className="button button-small" onClick={() => resolveItem(settings, i.key, { kind: 'archived', date: today })}>
+          {t('owed.archive')}
+        </button>
       </div>
+      {allOld(i) && <p className="small muted">{t('owed.allOld')}</p>}
       {rejected.length > 0 && (
         <button type="button" className="owed-settle small" onClick={() => void saveSettings({ rejectedCorrections: (settings.rejectedCorrections ?? []).filter((k) => !rejected.includes(k)) })}>
           {t('owed.showRejected', { n: rejected.length })}
@@ -191,9 +196,10 @@ function OwedItemView({ item: i, ids }: { item: OwedItem; ids: Map<string, strin
 }
 
 /** What has been answered: how each item was put right (or that it was none), with the way to undo it. */
-export function SettledList({ owed }: { owed: Owed }) {
+export function SettledList({ owed, archived = false }: { owed: Owed; archived?: boolean }) {
   const { t, fmt, settings } = useApp();
-  if (!owed.settled.length) return null;
+  const list = archived ? owed.archived : owed.settled;
+  if (!list.length) return null;
   const title = (i: OwedItem) =>
     i.finding
       ? t(`agr.rule.${i.finding.rule === 'minimum' ? `minimum.${i.finding.cause}` : i.finding.rule}` as 'agr.rule.ob', { level: i.finding.level ?? '' })
@@ -201,20 +207,42 @@ export function SettledList({ owed }: { owed: Owed }) {
   const how = (i: OwedItem) => {
     const r = i.resolution!;
     if (r.kind === 'linked') return t('owed.how.linked', { text: r.line.text, amount: fmt.money(r.line.amount), month: fmt.month(r.line.month) });
-    return t(r.kind === 'notError' ? 'owed.how.notError' : 'owed.how.settled', { date: fmt.date(r.date, 'numeric') });
+    return t(r.kind === 'notError' ? 'owed.how.notError' : r.kind === 'archived' ? 'owed.how.archived' : 'owed.how.settled', { date: fmt.date(r.date, 'numeric') });
   };
   return (
     <ul className="owed-items">
-      {owed.settled.map((i) => (
+      {list.map((i) => (
         <li key={i.key}>
           <strong>{title(i)}</strong> <span className="muted">· {monthRanges(i.months, fmt)} · {fmt.money(i.whole)}</span>
           <br />
           <span className="small">{how(i)}</span>{' '}
           <button type="button" className="owed-settle small" onClick={() => resolveItem(settings, i.key, undefined)}>
-            {t('owed.unsettle')}
+            {archived ? t('owed.restore') : t('owed.unsettle')}
           </button>
         </li>
       ))}
     </ul>
+  );
+}
+
+/** Everything of an item was paid out more than two years ago. */
+const allOld = (i: OwedItem) => i.amount > 0 && i.old >= i.amount - 0.5;
+
+/** Items paid out more than two years ago, put away with one tap (each can be brought back). */
+function ArchiveOld({ owed }: { owed: Owed }) {
+  const { t, settings } = useApp();
+  const old = [...owed.likely, ...owed.investigate].filter(allOld);
+  if (!old.length) return null;
+  const archive = () => {
+    if (!window.confirm(t('owed.archiveOldConfirm', { n: old.length }))) return;
+    const date = todayLocal();
+    const resolutions = { ...settings.owedResolutions };
+    for (const i of old) resolutions[i.key] = { kind: 'archived', date };
+    void saveSettings({ owedResolutions: resolutions });
+  };
+  return (
+    <button type="button" className="button button-small" onClick={archive}>
+      {t('owed.archiveOld', { n: old.length })}
+    </button>
   );
 }

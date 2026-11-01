@@ -137,7 +137,9 @@ in Playwright by routing `https://accounts.google.com/gsi/client` and
   in Ärenden. Each item: a later line suggested as its correction ("Ja,
   koppla den hit" links it – a line covers items oldest first, never more
   than its amount; "Nej, inte den" rejects it), "Markera som rättat", or
-  "Inget fel" (the app was wrong); `settings.owedResolutions`,
+  "Inget fel" (the app was wrong), or "Arkivera" (out of the way and the
+  totals, in an "Arkiverat" fold, restorable; one button archives every item
+  paid out more than two years ago); `settings.owedResolutions`,
   `settings.rejectedCorrections` (old `settledOwed` still read). The report
   leaves out findings said to be no error and says how others were put right. "Troligen för lite betalt" = agreement findings only; "Att utreda"
   = gross comparison differences, only for slips read reliably, with a wage
