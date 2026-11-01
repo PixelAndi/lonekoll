@@ -94,6 +94,22 @@ in Playwright by routing `https://accounts.google.com/gsi/client` and
   couldn't be checked. Shown on the pay slip page and per slip in the report
   (`AgreementFindings.tsx`). On the owner's slips it found the missed step
   after a year's employment (the owner confirms it happened).
+- `src/domain/wageHistory.ts` – the wage on the slips step by step: each
+  rate split into the agreement's minimum + "personligt tillägg", each change
+  labelled (avtalshöjning 1 April, ettårshöjning, personlig höjning, up to the
+  minimum, sänkning, under minimilönen); `wagesFromHistory` gives the settings
+  that pay the same (minimum-basis rows with an hourly supplement; a period
+  below the minimum set as the minimum). Shown and applied with one tap in
+  `WageFromSlips.tsx` ("Ställ in lönen efter lönebeskeden").
+- `src/domain/owed.ts` + `src/ui/Owed.tsx` – the rough owed estimate: card at
+  the top of the pay slip page, one line on the Days tab, only when there is
+  something. "Troligen för lite betalt" = agreement findings only; "Att utreda"
+  = gross comparison differences, only for slips read reliably, with a wage
+  read that the settings pay, a full basis and no absences the log lacks. A
+  month counts from one source only; settled keys in `settings.settledOwed`;
+  later corrections named, not subtracted; rough net from each slip's tax
+  share (misread shares > 60 % ignored); amounts paid > 2 years ago flagged
+  (MBL §64, hedged).
 - `src/domain/basis.ts` – what a slip's comparison rests on (`periodBasis`):
   none (nothing logged: the report claims nothing, shows only what the slip
   pays), partial (days the slip pays without stamps; or, on summed slips,

@@ -10,6 +10,7 @@ import { href, navigate } from '../router.ts';
 import { Card, Icon, Notice, Page } from './common.tsx';
 import { missingCount, useMissing } from './MissingView.tsx';
 import { PhotoImportButton } from './PhotoImport.tsx';
+import { OwedLine } from './Owed.tsx';
 import { hasManual, stampText } from './stamps.ts';
 
 export function shiftMonth(month: string, delta: number): string {
@@ -174,6 +175,7 @@ export function DaysView({ month }: { month?: string }) {
       <MonthNav month={monthKey} route="days" />
       <GapNotice />
       <MissingLink />
+      <OwedLine />
       <p className="month-summary">
         {t('days.summary', {
           shifts: period.shifts.length,

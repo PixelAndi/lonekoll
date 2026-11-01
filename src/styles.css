@@ -2964,3 +2964,86 @@ input[type='checkbox'] {
     border-left-width: 4px;
   }
 }
+
+/* The owed estimate: two numbers kept apart, each with what it rests on. */
+.owed-card {
+  border-color: var(--warn);
+  background: var(--warn-soft);
+}
+.owed-part + .owed-part {
+  border-top: 1px solid var(--border);
+  margin-top: 0.75rem;
+  padding-top: 0.5rem;
+}
+.owed-part h3 {
+  margin: 0.25rem 0 0;
+  font-size: 1rem;
+}
+.owed-amount {
+  margin: 0.15rem 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+.owed-items {
+  padding-left: 1.1rem;
+}
+.owed-items li + li {
+  margin-top: 0.35rem;
+}
+.owed-line a {
+  color: var(--warn);
+  font-weight: 600;
+}
+
+/* The wage step by step, newest first. */
+.wage-history {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0;
+}
+.wage-history li {
+  padding: 0.5rem 0;
+  border-top: 1px solid var(--border);
+}
+.wage-history li.wage-below {
+  background: var(--warn-soft);
+}
+.wage-step-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.wage-history p {
+  margin: 0.15rem 0;
+}
+.wage-kinds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+.wage-kind-personal,
+.wage-kind-corrected {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+.wage-kind-revision,
+.wage-kind-oneYear,
+.wage-kind-revisionOneYear {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+.wage-kind-below,
+.wage-kind-cut,
+.wage-kind-lower {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+.owed-settle {
+  background: none;
+  border: none;
+  padding: 4px 0;
+  color: var(--primary);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}

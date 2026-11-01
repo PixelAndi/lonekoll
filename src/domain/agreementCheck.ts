@@ -23,6 +23,8 @@ export interface AgreementFinding {
   level?: number;
   /** The first and last slip period it was seen on (their start dates). */
   months: LocalDate[];
+  /** About how much of it each month (the months' first days). */
+  byMonth: Record<LocalDate, number>;
   /** When it applies from (the one-year date, the revision date, or the first slip's period). */
   from: LocalDate;
   paid: number;
@@ -57,7 +59,7 @@ export function slipHourlyRate(slip: PaySlip): number | undefined {
 }
 
 /** One finding for one slip, before slips in a row are joined. */
-type Seen = Omit<AgreementFinding, 'months' | 'corrections'> & { month: LocalDate };
+type Seen = Omit<AgreementFinding, 'months' | 'byMonth' | 'corrections'> & { month: LocalDate };
 
 /** A wage line's dates: its own (a line per day), else its slip's period. */
 function lineDates(l: SlipLine, slip: PaySlip): [LocalDate, LocalDate] {
@@ -200,10 +202,11 @@ export function checkAgainstAgreement(slips: PaySlip[], settings: Settings): Agr
       if (!last.months.includes(s.month)) last.months.push(s.month);
       last.hours = round2(last.hours + s.hours);
       last.amount = round2(last.amount + s.amount);
+      last.byMonth[s.month] = round2((last.byMonth[s.month] ?? 0) + s.amount);
       last.estimate ||= s.estimate;
     } else {
       const { month, ...rest } = s;
-      out.push({ ...rest, months: [month] });
+      out.push({ ...rest, months: [month], byMonth: { [month]: rest.amount } });
     }
   }
   for (const f of out) f.corrections = correctionsAfter(slips, f.months[f.months.length - 1], f.amount);
@@ -216,7 +219,7 @@ export function slipFindings(slip: PaySlip, all: PaySlip[], settings: Settings):
   const own = [...minimumOnSlip(slip, settings), ...pricesOnSlip(slip, settings)];
   const around = all.includes(slip) ? all : [...all, slip];
   const raises = lowestRaises(around.filter((s) => s.periodStart), settings).filter((s) => s.month === slip.periodStart);
-  return [...own, ...raises].map(({ month, ...rest }) => ({ ...rest, months: [month], corrections: correctionsAfter(all, month, rest.amount) }));
+  return [...own, ...raises].map(({ month, ...rest }) => ({ ...rest, months: [month], byMonth: { [month]: rest.amount }, corrections: correctionsAfter(all, month, rest.amount) }));
 }
 
 /**

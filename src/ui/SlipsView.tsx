@@ -16,6 +16,7 @@ import { applyOverrides, countFindings, slipPeriod, vacationBasisFor } from './s
 import { VacationProgress } from './VacationProgress.tsx';
 import { WageFromSlips } from './WageFromSlips.tsx';
 import { AgreementCheck } from './AgreementFindings.tsx';
+import { OwedCard } from './Owed.tsx';
 import { needsCheck, readCompletely } from './SlipCheck.tsx';
 import { completeness, SlipScanner, type SlipOutcome } from './SlipScanner.tsx';
 import type { PaySlip } from '../domain/payslip.ts';
@@ -165,6 +166,7 @@ export function SlipsView() {
       {slips && slips.length === 0 && <p className="muted">{t('slips.empty')}</p>}
       {slips && slips.length > 0 && (
         <>
+          <OwedCard />
           <ToCheck slips={slips} />
           <AgreementCheck />
           <YearList slips={slips} />

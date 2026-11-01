@@ -153,6 +153,8 @@ export interface Settings {
   tax: TaxSettings;
   /** Pay slip codes the user has re-classified. */
   codeOverrides: Record<string, string>;
+  /** Amounts in the owed estimate the user has marked as settled (their keys, see owed.ts). */
+  settledOwed: string[];
   /** Pay slips whose suggested settings the user put aside ("Not now"). */
   setupDismissed?: string[];
   /** How overtime is paid unless a day says otherwise. */
@@ -204,6 +206,7 @@ export const DEFAULT_SETTINGS: Settings = {
   ordinaryStart: '06:00',
   localDeals: '',
   codeOverrides: {},
+  settledOwed: [],
   scheduleMode: 'none',
   schedule: { startMonday: '2026-01-05', weeks: [[null, null, null, null, null, null, null]] },
   supplements: { ob: true, overtime: true, shiftedTime: true, holidayPay: true },

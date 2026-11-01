@@ -1,5 +1,5 @@
 import { useLiveQuery } from 'dexie-react-hooks';
-import { useMemo } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { useApp } from '../app-context.ts';
 import { db } from '../db.ts';
 import { agreementFor } from '../domain/agreement.ts';
@@ -40,7 +40,7 @@ function monthSpan(months: string[], fmt: Formatter): string {
 }
 
 /** One finding, said in full: the rule, what was paid, the months, about how much, and what may have corrected it. */
-export function FindingItem({ f, settings, t, fmt, report = false }: { f: AgreementFinding; settings: Settings; t: Translate; fmt: Formatter; report?: boolean }) {
+export function FindingItem({ f, settings, t, fmt, report = false, children }: { f: AgreementFinding; settings: Settings; t: Translate; fmt: Formatter; report?: boolean; children?: ReactNode }) {
   const key = (f.rule === 'minimum' ? `minimum.${f.cause}` : f.rule) as 'minimum.oneYear';
   // The report is read by the employer too: the employee is named in the third person there.
   const textKey = (report && key === 'minimum.oneYear' ? 'agr.text.minimum.oneYearReport' : `agr.text.${key}`) as TextKey;
@@ -71,6 +71,7 @@ export function FindingItem({ f, settings, t, fmt, report = false }: { f: Agreem
           {t('agr.corrections', { list: f.corrections.map((c) => `${c.text} ${fmt.money(c.amount)} (${fmt.month(c.month)})`).join(', ') })}
         </p>
       )}
+      {children}
     </li>
   );
 }
