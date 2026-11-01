@@ -1,6 +1,6 @@
 import { agreementFor, RULES } from './agreement.ts';
 import type { PayCategory, PeriodResult } from './calc.ts';
-import { hourlyRateOn, hourlySupplement, minimumWageOn, monthlyPayOn, wagePeriodOn, type DayRecord, type Settings } from './model.ts';
+import { hourlySupplement, minimumWageOn, monthlyPayOn, payRateOn, wagePeriodOn, type DayRecord, type Settings } from './model.ts';
 import type { PaySlip, SlipCategory, SlipLine } from './payslip.ts';
 import { taxFor, type TaxBasis, type TaxColumn, type TaxTables } from './tax.ts';
 import type { LocalDate } from './time.ts';
@@ -25,6 +25,7 @@ export type NoteCode =
   | 'wage-deductions'
   | 'wage-rate-differs'
   | 'wage-rate-differs-minimum'
+  | 'wage-below-minimum'
   | 'sick-base-only'
   | 'sick-estimate'
   | 'sick-includes-karens'
@@ -140,7 +141,7 @@ export function comparePeriod(period: PeriodResult, slip: PaySlip, days: DayReco
   const rows: ComparisonRow[] = [];
   const t = period.totals;
   const lines = slip.lines;
-  const hourly = hourlyRateOn(settings, period.end) ?? 0;
+  const hourly = payRateOn(settings, period.end) ?? 0;
   const monthly = monthlyPayOn(settings, period.end);
   const push = (row: ComparisonRow | null) => row && rows.push(row);
 
@@ -167,6 +168,26 @@ export function comparePeriod(period: PeriodResult, slip: PaySlip, days: DayReco
       wage.notes.push({
         code: m ? 'wage-rate-differs-minimum' : 'wage-rate-differs',
         values: { slip: wrong.join(' / '), expected: expectedRates.join(' / '), minimum: m?.minimum ?? 0, supplement: w ? hourlySupplement(w) : 0 },
+      });
+      if (wage.status === 'ok') wage.status = 'diff';
+    }
+    // The agreement's minimum (Bageri §1), whatever the settings say: each hourly price on the slip
+    // against the minimum on its dates; the hours paid below it and what they are short of it.
+    const below = new Map<number, { hours: number; minimum: number; from: LocalDate }>();
+    for (const l of lines) {
+      if (l.category !== 'wage' || !l.unitPrice || l.unitPrice < 50 || (l.quantity ?? 0) <= 0 || /retro/i.test(l.text)) continue;
+      const date = l.to ?? l.from ?? period.end;
+      const m = minimumWageOn(settings, date);
+      if (!m?.known || l.unitPrice >= m.minimum - 0.005) continue;
+      const b = below.get(l.unitPrice) ?? { hours: 0, minimum: m.minimum, from: m.period.from };
+      below.set(l.unitPrice, { ...b, hours: b.hours + (l.quantity ?? 0) });
+    }
+    // The rate note says the same as the minimum note when the slip's price is below the minimum.
+    if (below.size) wage.notes = wage.notes.filter((n) => !(n.code.startsWith('wage-rate-differs') && String(n.values?.slip ?? '').split(' / ').every((p) => below.has(Number(p)))));
+    for (const [price, b] of below) {
+      wage.notes.push({
+        code: 'wage-below-minimum',
+        values: { slip: price, minimum: b.minimum, from: b.from, hours: round2(b.hours), short: round2((b.minimum - price) * b.hours) },
       });
       if (wage.status === 'ok') wage.status = 'diff';
     }

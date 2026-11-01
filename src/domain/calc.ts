@@ -1,6 +1,6 @@
 import { agreementFor, payShare, RULES, type ObLevel } from './agreement.ts';
 import { isHoliday, specialDay } from './holidays.ts';
-import { ageOn, hourlyRateOn, minimumWageOn, monthlyPayOn, supplementOn, wagePeriodOn, type DayRecord, type ScheduledShift, type Settings } from './model.ts';
+import { ageOn, hourlyRateOn, minimumWageOn, monthlyPayOn, payRateOn, supplementOn, wagePeriodOn, type DayRecord, type ScheduledShift, type Settings } from './model.ts';
 import { rotationShifts, scheduledIntervals, scheduledMinutes, scheduledShift, scheduledWindow } from './schedule.ts';
 import { buildShifts, type Shift, type StampIssue } from './shifts.ts';
 import {
@@ -161,7 +161,7 @@ function classify(intervals: { start: number; end: number }[], settings: Setting
       byDate.set(date, list);
       workedByDate.set(date, (workedByDate.get(date) ?? 0) + 1);
       if (date !== rateDate) {
-        rate = hourlyRateOn(settings, date);
+        rate = payRateOn(settings, date);
         monthly = monthlyPayOn(settings, date) !== null;
         rateDate = date;
       }
@@ -790,7 +790,7 @@ export function calculatePeriod(days: DayRecord[], settings: Settings, start: Lo
   for (const d of days) {
     if (d.date < start || d.date > end || !d.absence) continue;
     const a = d.absence;
-    const rate = hourlyRateOn(settings, d.date) ?? 0;
+    const rate = payRateOn(settings, d.date) ?? 0;
     if (a.type === 'vacation') vacationDays++;
     if (a.type === 'timebank' && a.hours) {
       timebankHours += a.hours;

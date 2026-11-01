@@ -76,3 +76,49 @@ describe('the report’s points', () => {
     for (const q of QUOTES) expect(cite(q.source, q.section).href).toMatch(/#page=\d+$/);
   });
 });
+
+describe('the agreement’s minimum wage', () => {
+  // A made-up slip paying 170 kr/h for 100 h in September 2026, below the 176.83 kr/h minimum
+  // (adults with a year's employment, from 1 April 2026).
+  const settings: Settings = {
+    ...DEFAULT_SETTINGS,
+    birthDate: '1990-01-01',
+    employedSince: '2020-01-01',
+    // The settings copied the slip's wage: the agreement is a floor all the same.
+    wages: [{ from: '2020-01-01', basis: 'fixed', hourly: 170 }],
+  };
+  const days: DayRecord[] = Array.from({ length: 10 }, (_, i) => ({
+    date: `2026-09-${String(i + 1).padStart(2, '0')}`,
+    rows: [{ in: '06:00', out: '16:00' }],
+    photoIds: [],
+    updatedAt: 0,
+  })).filter((d) => ![6, 7].includes(new Date(`${d.date}T12:00:00Z`).getUTCDay() || 7));
+  const hours = days.length * 10;
+  const slip: PaySlip = {
+    periodStart: '2026-09-01',
+    periodEnd: '2026-09-30',
+    lines: [{ code: '010', text: 'Timlön', quantity: hours, unit: 'tim', unitPrice: 170, amount: hours * 170, category: 'wage' }],
+  } as PaySlip;
+  const plain: Settings = { ...settings, ordinaryShiftMinutes: 600, supplements: { ...settings.supplements, ob: false, overtime: false } };
+  const period = calculatePeriod(days, plain, '2026-09-01', '2026-09-30');
+  const comparison = comparePeriod(period, slip, days, plain);
+
+  it('flags a wage below the minimum, whatever the settings say', () => {
+    const wage = comparison.rows.find((r) => r.key === 'wage')!;
+    expect(wage.status).toBe('diff');
+    expect(wage.notes.find((n) => n.code === 'wage-below-minimum')?.values).toMatchObject({ slip: 170, minimum: 176.83, hours, short: Math.round(6.83 * hours * 100) / 100 });
+  });
+
+  it('makes it a point to take up: hours × what each is short, the minimum quoted', () => {
+    const point = reportPoints(comparison, period, days, plain).find((p) => p.keys.includes('wage'))!;
+    expect(point.kind).toBe('claim');
+    expect(point.lines[0]).toMatchObject({ hours, rate: 6.83 });
+    expect(point.quotes.map((q) => q.text)).toContain('Minimilön för vuxna arbetstagare som har ett års anställning efter fyllda 18 år 176,83 kronor per timme fr.o.m. 1 april 2026');
+  });
+
+  it('asks rather than claims without the birth date (the app then assumes an adult)', () => {
+    const noAge = { ...plain, birthDate: undefined };
+    const p = reportPoints(comparePeriod(calculatePeriod(days, noAge, '2026-09-01', '2026-09-30'), slip, days, noAge), period, days, noAge).find((x) => x.keys.includes('wage'))!;
+    expect([p.kind, p.reason]).toEqual(['question', 'minimum-age']);
+  });
+});

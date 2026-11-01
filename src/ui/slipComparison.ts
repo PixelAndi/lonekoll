@@ -150,6 +150,14 @@ export function noteText(note: Note, t: Translate, fmt: Formatter): string {
       const list = (k: string) => String(v[k] ?? '').split(' / ').map((x) => fmt.number(Number(x))).join(' / ');
       return t(`note.${note.code}`, { slip: list('slip'), expected: list('expected'), minimum: num('minimum'), supplement: num('supplement') });
     }
+    case 'wage-below-minimum':
+      return t('note.wage-below-minimum', {
+        slip: num('slip'),
+        minimum: num('minimum'),
+        from: fmt.date(String(v.from), 'numeric'),
+        hours: num('hours'),
+        short: fmt.money(v.short as number),
+      });
     case 'gross-includes-unchecked':
       return t('note.gross-includes-unchecked', { amount: fmt.money(v.amount as number) });
     case 'sick-estimate':

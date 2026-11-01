@@ -195,7 +195,7 @@ export type Explanation =
   | 'holidayShift'
   | 'localMonthly'
   | 'followsGross'
-  | 'taxTable';
+  | 'taxTable' | 'minimumRaise';
 
 export function explanations(row: ComparisonRow): Explanation[] {
   switch (row.key) {
@@ -204,6 +204,8 @@ export function explanations(row: ComparisonRow): Explanation[] {
     case 'otTotal':
       return ['localOvertime', 'komp', 'nextSlip'];
     case 'wage':
+      // Below the agreement's minimum: most often the wage wasn't raised with a new minimum (1 April).
+      if (row.notes.some((n) => n.code === 'wage-below-minimum')) return ['minimumRaise', 'nextSlip'];
       return ['stamps', 'wageChanged', 'nextSlip'];
     case 'sickPay':
     case 'karens':

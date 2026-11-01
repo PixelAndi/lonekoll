@@ -270,6 +270,20 @@ export function hourlyRateOn(settings: Settings, date: LocalDate): number | null
   return m ? round2(m.minimum + hourlySupplement(w)) : null;
 }
 
+/**
+ * The hourly wage to calculate with: the wage set, but never less than the
+ * agreement's minimum (Bageri §1) – the agreement is a floor, so a fixed wage
+ * set below it (e.g. copied from a slip that pays too little) is calculated
+ * at the minimum, and the slip's lower wage shows as a difference.
+ */
+export function payRateOn(settings: Settings, date: LocalDate): number | null {
+  const rate = hourlyRateOn(settings, date);
+  const w = wagePeriodOn(settings, date);
+  if (rate === null || (w?.basis ?? 'fixed') !== 'fixed') return rate;
+  const m = minimumWageOn(settings, date);
+  return m && m.known && m.minimum > rate ? m.minimum : rate;
+}
+
 /** The personal-supplement part of the hourly wage on a date. */
 export function supplementOn(settings: Settings, date: LocalDate): number {
   const w = wagePeriodOn(settings, date);

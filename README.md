@@ -149,6 +149,15 @@ report you can go through with your employer.
   the first with days to now: how many days each has, the months in between
   with none (a gap, also warned about on the days page with links to them),
   and which have a pay slip.
+- **The agreement's minimum wage.** It is a floor: a fixed hourly wage set
+  below the minimum on a date (e.g. copied from a slip) is calculated at the
+  minimum, so overtime and sick pay build on it too. Each slip's hourly price
+  is checked against the minimum on its dates whatever the settings say; a
+  wage below it is a report point to take up: hours × what each is short of
+  the minimum, with the minimum quoted word for word as Tilläggsavtal
+  Bagerier §1 prints it for the period and tier (and the youth share for 16-
+  and 17-year-olds). Without a birth date the app assumes an adult, so it is
+  then asked as a question rather than claimed.
 - **Several pay slips at once.** Pick many PDFs in one go: they are read one
   after another with how each went; a slip already in the app (same period,
   pay day and amounts) is skipped.

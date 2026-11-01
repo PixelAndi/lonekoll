@@ -1,7 +1,7 @@
 import { agreementFor, type ObLevel } from './agreement.ts';
 import type { PayCategory, PeriodResult } from './calc.ts';
 import type { Comparison, ComparisonRow, RowKey } from './compare.ts';
-import type { DayRecord, Settings, StampPair } from './model.ts';
+import { ageOn, minimumWageOn, type DayRecord, type Settings, type StampPair } from './model.ts';
 import { rowCertainty } from './reportCheck.ts';
 import type { Source } from './sources.ts';
 import { isHoliday } from './holidays.ts';
@@ -82,8 +82,34 @@ const Q = {
 
 export const QUOTES: Quote[] = Object.values(Q);
 
+const SV_MONTHS = ['januari', 'februari', 'mars', 'april', 'maj', 'juni', 'juli', 'augusti', 'september', 'oktober', 'november', 'december'];
+
+/**
+ * The minimum wage that applies on a date, quoted as the bakery supplement §1
+ * prints it (the same wording in the 2020, 2023 and 2025 editions, checked
+ * when added): the tier by age and a year's employment, from the period's
+ * start; for 16 and 17 year olds also their share of it.
+ */
+export function minimumQuotes(settings: Settings, date: LocalDate): Quote[] {
+  const m = minimumWageOn(settings, date);
+  if (!m) return [];
+  const p = m.period;
+  const d = new Date(`${p.from}T12:00:00Z`);
+  const when = `${d.getUTCDate()} ${SV_MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+  const kr = (n: number) => n.toFixed(2).replace('.', ',');
+  const quotes: Quote[] = [
+    m.afterOneYear
+      ? { source: 'bakery', section: '1', text: `Minimilön för vuxna arbetstagare som har ett års anställning efter fyllda 18 år ${kr(p.minimumWage.adultAfterOneYear)} kronor per timme fr.o.m. ${when}` }
+      : { source: 'bakery', section: '1', text: `Minimilönen för vuxna arbetstagare är: ${kr(p.minimumWage.adult)} kronor per timme fr.o.m ${when}` },
+  ];
+  const age = ageOn(settings, date);
+  if (age === 17) quotes.push({ source: 'bakery', section: '1', text: 'Vid fyllda 17 år 65% av vid varje tillfälle gällande minimilön.' });
+  if (age === 16) quotes.push({ source: 'bakery', section: '1', text: 'Vid fyllda 16 år 63% av vid varje tillfälle gällande minimilön.' });
+  return quotes;
+}
+
 /** Why a point is a question rather than a correction asked for. */
-export type QuestionReason = 'local-overtime' | 'estimate' | 'local-monthly' | 'slip-more' | 'only-on-slip';
+export type QuestionReason = 'local-overtime' | 'estimate' | 'local-monthly' | 'slip-more' | 'only-on-slip' | 'minimum-age';
 
 /** One part of a point's sum: hours × rate = amount (owed to the employee when positive). */
 export interface PointLine {
@@ -218,7 +244,7 @@ export function reportPoints(comparison: Comparison, period: PeriodResult, days:
     const members = group ? rows.filter((r) => group.includes(r.key)) : [row];
     members.forEach((r) => used.add(r.key));
 
-    const lines = members.map((r) => pointLine(r, period));
+    const lines = members.map((r) => belowMinimumLine(r) ?? pointLine(r, period));
     const amount = round2(lines.reduce((s, l) => s + l.amount, 0));
     const lead = group ? group[0] : row.key;
 
@@ -229,6 +255,10 @@ export function reportPoints(comparison: Comparison, period: PeriodResult, days:
     else if (amount < 0) reason = 'slip-more';
     else if (certainties.includes('local')) reason = monthly && lead !== 'ot50' ? 'local-monthly' : 'local-overtime';
     else if (certainties.includes('estimate')) reason = 'estimate';
+    // Below the agreement's minimum: certain, given the age and the time employed – without the
+    // birth date the app assumes an adult, so it is asked rather than claimed.
+    const belowMinimum = members.flatMap((r) => r.notes).filter((n) => n.code === 'wage-below-minimum');
+    if (belowMinimum.length && !reason && !settings.birthDate) reason = 'minimum-age';
 
     const columns = COLUMNS[lead] ?? [];
     const perColumn = columns.map((c) => minutesByDate(c, period, byDate));
@@ -249,11 +279,27 @@ export function reportPoints(comparison: Comparison, period: PeriodResult, days:
       lines,
       columns,
       days: pointDays,
-      quotes: quotesFor(lead === 'karens' || lead === 'sickDeduction' ? 'sickPay' : lead, monthly, period),
+      quotes: [
+        ...quotesFor(lead === 'karens' || lead === 'sickDeduction' ? 'sickPay' : lead, monthly, period),
+        ...(belowMinimum.length ? minimumQuotes(settings, period.end) : []),
+      ],
       obRates: level && agreement ? [{ level: Number(level) as ObLevel, rate: agreement.ob[Number(level) as ObLevel], from: agreement.from }] : undefined,
     });
   }
   return points;
+}
+
+/**
+ * The wage paid below the minimum, with the hours as calculated: hours × what each is short of the
+ * minimum, when that is the whole difference.
+ */
+function belowMinimumLine(row: ComparisonRow): PointLine | null {
+  const notes = row.notes.filter((n) => n.code === 'wage-below-minimum');
+  if (notes.length !== 1 || Math.abs(row.diff.hours ?? 0) > 0.005) return null;
+  const v = notes[0].values as { slip: number; minimum: number; hours: number; short: number };
+  const amount = round2(-(row.diff.amount ?? 0));
+  if (Math.abs(amount - v.short) > 0.05) return null;
+  return { key: row.key, hours: v.hours, rate: round2(v.minimum - v.slip), amount };
 }
 
 /** The part of the sum a row adds: hours × the calculated rate, when that is what it comes to. */
