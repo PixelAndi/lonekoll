@@ -112,6 +112,14 @@ in Playwright by routing `https://accounts.google.com/gsi/client` and
   estimate); unsure/unanswered → the report's wage point is a question
   (`wage-agreement`) and a "Lönen" section explains it. Answers in
   `settings.wageAnswers` (key: pattern's first day + wage).
+- `src/domain/sameData.ts` + `src/ui/SameData.tsx` – something scanned or
+  added again: the same data is a copy (nothing changes, the user is told);
+  otherwise the new reading's extra stamps/lines/figures are offered ticked
+  ("lägg till") and what it lacks of the saved data unticked ("ta bort?").
+  Clock photos (PhotoImport) and timecards (TimecardImport, per day) ask in
+  their review; a pay slip read again (same period and pay day) is kept as
+  `SlipRecord.candidate` and asked about in Ärenden and on its page
+  (`SlipMergeQuestion`) – nothing changes until "Spara valen".
 - `src/domain/night.ts` – permanent night work in the stamps (≥ 3 h between
   00 and 05 in three of four shifts, latest stretch, ≥ 8 shifts); asked once
   (`NightWork.tsx`, `settings.nightAsked`); yes sets `shiftForm` from the

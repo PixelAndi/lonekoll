@@ -19,27 +19,34 @@ import { IssuesLine } from './IssuesView.tsx';
 import { needsCheck, readCompletely } from './SlipCheck.tsx';
 import { completeness, SlipScanner, type SlipOutcome } from './SlipScanner.tsx';
 import type { PaySlip } from '../domain/payslip.ts';
+import { sameSlipData, slipDiff } from '../domain/sameData.ts';
 
 /** A slip's key for knowing it again: the same period, pay day and amounts. */
 const keyOf = (slip: SlipRecord['slip']) => `${slip.periodStart ?? ''}|${slip.payDate ?? ''}|${slip.lines.reduce((sum, l) => sum + (l.amount ?? 0), 0).toFixed(2)}`;
 
 /**
- * A slip read (from a PDF, a photo or the scanner) saved, unless nothing could
- * be read or it is in the app already. A slip read before (the same period and
- * pay day) keeps its better reading: a more complete new one takes its place.
+ * A slip read (from a PDF, a photo or the scanner) saved, unless nothing could be read. A slip read
+ * before (the same period and pay day) is compared with what is saved: the same data is a copy and
+ * nothing changes; otherwise the new reading is kept beside it as a question – what to add of what
+ * it has new, what to remove of what it lacks – and nothing changes until the user answers.
  * A pay day it lacks is the one in the settings.
  */
-async function storeSlip(read: PaySlip, file: Blob, fileName: string, payDay: number | null): Promise<SlipOutcome & { id?: string }> {
+export async function storeSlip(read: PaySlip, file: Blob, fileName: string, payDay: number | null): Promise<SlipOutcome & { id?: string }> {
   if (read.lines.length === 0) return { status: 'none' };
   const slip = withPayDay(read, payDay);
   const all = await db.slips.toArray();
-  if (all.some((r) => keyOf(r.slip) === keyOf(slip))) return { status: 'duplicate', period: slip.periodStart };
+  const exact = all.find((r) => keyOf(r.slip) === keyOf(slip) && sameSlipData(slipDiff(r.slip, slip)));
+  if (exact) return { status: 'duplicate', period: slip.periodStart, id: exact.id };
   const same = slip.periodStart && slip.payDate && slip.payDateFrom !== 'setting' ? all.filter((r) => sameSlip(r.slip, slip)) : [];
-  if (same.some((r) => r.slip.checked || completeness(r.slip) >= completeness(slip))) return { status: 'duplicate', period: slip.periodStart };
-  if (same.length) await db.slips.bulkDelete(same.map((r) => r.id));
+  if (same.length) {
+    const saved = same[0];
+    if (sameSlipData(slipDiff(saved.slip, slip))) return { status: 'duplicate', period: slip.periodStart, id: saved.id };
+    await db.slips.update(saved.id, { candidate: { slip, fileName, readAt: Date.now() } });
+    return { status: 'differs', period: slip.periodStart, id: saved.id };
+  }
   const id = newId();
   await db.slips.put({ id, fileName, importedAt: Date.now(), periodStart: slip.periodStart ?? '', slip, pdf: file });
-  return { status: same.length ? 'replaced' : 'saved', period: slip.periodStart, id, check: !readCompletely(slip) };
+  return { status: 'saved', period: slip.periodStart, id, check: !readCompletely(slip) };
 }
 
 /** Two readings of the same slip: the same period and the same pay day (an extra payout has its own). */
@@ -91,8 +98,10 @@ export function SlipsView() {
           update(k, { status: 'none' });
           continue;
         }
-        if (outcome.status === 'duplicate') {
-          update(k, { status: 'duplicate', period: outcome.period });
+        if (outcome.status === 'duplicate' || outcome.status === 'differs') {
+          update(k, { status: outcome.status, period: outcome.period, id: outcome.id });
+          // One file read again with something new or missing: straight to the question on its slip.
+          if (outcome.status === 'differs') lastId = outcome.id;
           continue;
         }
         update(k, { status: outcome.status === 'replaced' ? 'replaced' : 'done', period: outcome.period, id: outcome.id, check: outcome.check });
@@ -105,8 +114,7 @@ export function SlipsView() {
     }
     setBusy(false);
     // One slip: straight to its comparison, as before. Several: the list, with how each went.
-    if (files.length === 1 && imported === 1 && lastId) navigate({ name: 'slip', id: lastId });
-    if (files.length === 1 && imported === 0) setResults([]);
+    if (files.length === 1 && lastId) navigate({ name: 'slip', id: lastId });
   };
 
   /** A slip read by the scanner: saved at once (the scanner says how it went). */
@@ -124,8 +132,8 @@ export function SlipsView() {
     const read = scanned.current;
     scanned.current = [];
     // One slip scanned: straight to it; several: what was read, at the top of the page.
-    const saved = read.filter((r) => r.id);
-    if (read.length === 1 && saved.length === 1) navigate({ name: 'slip', id: saved[0].id! });
+    const saved = read.filter((r) => r.id && r.status !== 'duplicate');
+    if (read.length === 1 && saved.length === 1 && read[0] === saved[0]) navigate({ name: 'slip', id: saved[0].id! });
     else setResults(read);
   };
 
@@ -181,7 +189,7 @@ export function SlipsView() {
 /** A file read, or a slip the scanner read: how it went. */
 interface Result {
   name: string;
-  status: 'reading' | 'done' | 'replaced' | 'duplicate' | 'none' | 'failed';
+  status: 'reading' | 'done' | 'replaced' | 'duplicate' | 'differs' | 'none' | 'failed';
   period?: string;
   id?: string;
   check?: boolean;
@@ -200,8 +208,16 @@ function Results({ results, onClose }: { results: Result[]; onClose: () => void 
             {r.id ? (
               <a className="slip-row" href={href({ name: 'slip', id: r.id })}>
                 <span className="slip-row-month">{month(r)}</span>
-                <span className={`chip-status ${r.check ? 'warn' : 'ok'}`}>
-                  {r.check ? t('slips.result.check') : r.status === 'replaced' ? t('slips.result.replaced') : t('slips.result.done')}
+                <span className={`chip-status ${r.check || r.status === 'differs' ? 'warn' : r.status === 'duplicate' ? 'muted' : 'ok'}`}>
+                  {r.status === 'differs'
+                    ? t('slips.result.differs')
+                    : r.status === 'duplicate'
+                      ? t('slips.result.duplicateShort')
+                      : r.check
+                        ? t('slips.result.check')
+                        : r.status === 'replaced'
+                          ? t('slips.result.replaced')
+                          : t('slips.result.done')}
                 </span>
               </a>
             ) : (

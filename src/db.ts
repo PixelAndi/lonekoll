@@ -52,6 +52,11 @@ export interface SlipRecord {
   pdf: Blob;
   /** The original is in Google Drive (everything the app needs from it was read into `slip`). */
   archived?: boolean;
+  /**
+   * The slip read again and found to differ from what is saved: kept beside it until the user says
+   * which of its new things to add and which of the missing ones to remove (see domain/sameData.ts).
+   */
+  candidate?: { slip: PaySlip; fileName: string; readAt: number };
 }
 
 /** What the scanner has learned of the clock's digits (see ocr/glyphs.ts). */

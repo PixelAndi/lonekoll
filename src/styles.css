@@ -3156,3 +3156,19 @@ input[type='checkbox'] {
   height: 44px;
   color: inherit;
 }
+
+/* Something read again beside what is saved (SameData.tsx). */
+.same-merge {
+  border-left: 3px solid var(--primary);
+  padding-left: 0.6rem;
+  margin: 0.5rem 0;
+}
+.same-merge fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0.4rem 0;
+}
+.same-merge legend {
+  font-weight: 600;
+  margin-bottom: 0.2rem;
+}

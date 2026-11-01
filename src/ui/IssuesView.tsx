@@ -8,6 +8,7 @@ import { monthRanges } from './AgreementFindings.tsx';
 import { Card, Fold, Icon, Page } from './common.tsx';
 import { missingCount, useMissing } from './MissingView.tsx';
 import { useIssues } from './issues-context.tsx';
+import { SlipMergeQuestion } from './SameData.tsx';
 import { NightWorkQuestion } from './NightWork.tsx';
 import { OwedSection, SettledList } from './Owed.tsx';
 import { applyOverrides } from './slipComparison.ts';
@@ -21,14 +22,14 @@ import { AnsweredWages, WageQuestions } from './WageFromSlips.tsx';
 
 export function IssuesView() {
   const { t, fmt, settings } = useApp();
-  const { owed, wages, night, toCheck } = useIssues();
+  const { owed, wages, night, toCheck, readAgain } = useIssues();
   const open = wages.open;
   const records = useLiveQuery(() => db.slips.toArray(), []);
   const { months } = useMissing();
   const missingDays = missingCount(months);
   const unchecked = useMemo(() => uncheckedMonths((records ?? []).map((r) => applyOverrides(r.slip, settings.codeOverrides)), settings), [records, settings]);
   const noSlip = unchecked.missing;
-  const questions = open.length + (night ? 1 : 0) + toCheck;
+  const questions = open.length + (night ? 1 : 0) + toCheck + readAgain;
   const errors = owed ? owed.likely.length + owed.investigate.length : 0;
   const nightAnswered = settings.nightAsked && settings.shiftForm === 'none';
   const answered = (owed?.settled.length ?? 0) + Object.values(settings.wageAnswers ?? {}).filter((a) => a !== 'agreed').length + (nightAnswered ? 1 : 0);
@@ -39,6 +40,11 @@ export function IssuesView() {
       {questions + errors === 0 && <p className="ok">✓ {t('issues.none')}</p>}
 
       {questions > 0 && <h2 className="issues-heading">{t('issues.questions', { n: questions })}</h2>}
+      {(records ?? [])
+        .filter((r) => r.candidate)
+        .map((r) => (
+          <SlipMergeQuestion key={r.id} record={r} />
+        ))}
       <WageQuestions />
       <NightWorkQuestion />
       {toCheck > 0 && (

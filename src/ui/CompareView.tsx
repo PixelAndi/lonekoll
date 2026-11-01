@@ -11,6 +11,7 @@ import { SlipSetupCard } from './SlipSetup.tsx';
 import { SlipCheck } from './SlipCheck.tsx';
 import { BasisNotice } from './BasisNote.tsx';
 import { periodBasis } from '../domain/basis.ts';
+import { SlipMergeQuestion } from './SameData.tsx';
 import { todayLocal } from '../domain/time.ts';
 import { PeriodWarnings } from './MonthView.tsx';
 import { SlipNotFound } from './SlipsView.tsx';
@@ -81,6 +82,7 @@ export function CompareView({ id }: { id: string }) {
         {t('compare.period', { start, end })}
         {slip.payDate && `, ${t('compare.paid', { date: slip.payDate })}`}
       </p>
+      {data.record.candidate && <SlipMergeQuestion record={data.record} />}
       <SlipCheck id={id} />
       <SlipSetupCard id={id} slip={slip} start={start} end={end} />
       {/* Which days the comparison rests on, and which are missing (the same as the report says). */}

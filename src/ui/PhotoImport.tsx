@@ -10,6 +10,8 @@ import type { ClockReading } from '../ocr/pipeline.ts';
 import { Icon, Modal, Notice, Spinner } from './common.tsx';
 import { Scanner, type Scan } from './Scanner.tsx';
 import { flushFocusedField, StampRowsEditor } from './StampRowsEditor.tsx';
+import { mergeStamps, sameStamps, stampDiff, type StampDiff } from '../domain/sameData.ts';
+import { StampMerge } from './SameData.tsx';
 
 interface Pending {
   previewUrl: string;
@@ -110,6 +112,10 @@ function PhotoReview({
   const [state, setState] = useState<Pending>(() => ({ previewUrl: URL.createObjectURL(file) }));
   const [date, setDate] = useState('');
   const [rows, setRows] = useState<StampPair[]>([]);
+  /** For a day already saved: new stamps not to add, and saved ones the photo lacks to remove. */
+  const [skipAdd, setSkipAdd] = useState<Set<string>>(new Set());
+  const [doRemove, setDoRemove] = useState<Set<string>>(new Set());
+  const addSet = (d: StampDiff) => new Set(d.added.map((s) => s.key).filter((k) => !skipAdd.has(k)));
   const [slowHint, setSlowHint] = useState(false);
   const latestRows = useRef(rows);
   latestRows.current = rows;
@@ -162,15 +168,19 @@ function PhotoReview({
       }))
       .filter((r) => r.in || r.out);
     const existing = days.find((d) => d.date === date);
-    const key = (list: StampPair[]) => JSON.stringify(list.map((r) => [r.in, r.out]));
-    if (existing && existing.rows.length > 0 && key(existing.rows) !== key(rowsToSave) && !confirm(t('photo.replace', { date }))) return;
+    // A day already saved: the same stamps change nothing (a copy); otherwise what the user chose is added and removed.
+    const before = existing && existing.rows.length > 0 ? existing.rows : null;
+    const diff = before ? stampDiff(before, rowsToSave) : null;
+    if (diff && sameStamps(diff)) {
+      onDone();
+      return;
+    }
     const photoId = newId();
     await db.photos.put({ id: photoId, date, blob: state.jpeg ?? file, createdAt: Date.now() });
     const day: DayRecord = {
       date,
-      // The clock shows the whole day, so the photo replaces earlier stamps.
       // Rows keep the "typed by hand" marks the editor sets on changed times.
-      rows: rowsToSave,
+      rows: before && diff ? mergeStamps(before, diff, addSet(diff), doRemove) : rowsToSave,
       absence: existing?.absence,
       note: existing?.note,
       photoIds: [...(existing?.photoIds ?? []), photoId],
@@ -184,6 +194,10 @@ function PhotoReview({
     onDone();
   };
 
+  const savedDay = days.find((d) => d.date === date);
+  const savedRows = savedDay && savedDay.rows.length > 0 ? savedDay.rows : null;
+  const liveDiff = savedRows ? stampDiff(savedRows, rows.filter((r) => r.in || r.out)) : null;
+  const copy = !!liveDiff && sameStamps(liveDiff);
   const title = total > 1 ? `${t('photo.title')} (${position}/${total})` : t('photo.title');
   const reading = state.reading;
   // Stamps that look forgotten (not a shift over midnight) are pointed out too.
@@ -203,7 +217,7 @@ function PhotoReview({
             {total > 1 ? t('photo.skip') : t('common.cancel')}
           </button>
           <button type="button" className="button button-primary" disabled={(!reading && !state.error) || !date} onClick={save}>
-            {t('common.save')}
+            {copy ? t('same.done') : t('common.save')}
           </button>
         </>
       }
@@ -243,6 +257,18 @@ function PhotoReview({
           </label>
           {rows.length === 0 && reading?.issues.includes('no-rows') && <p className="muted">{t('photo.no-rows')}</p>}
           <StampRowsEditor rows={rows} onChange={setRows} uncertain={uncertain} />
+          {savedRows && liveDiff && (
+            <StampMerge
+              saved={savedRows}
+              diff={liveDiff}
+              add={addSet(liveDiff)}
+              remove={doRemove}
+              onChange={(add, remove) => {
+                setSkipAdd(new Set(liveDiff.added.map((s) => s.key).filter((k) => !add.has(k))));
+                setDoRemove(remove);
+              }}
+            />
+          )}
           {state.cropUrl && (
             <details className="review-full">
               <summary>{t('photo.showWhole')}</summary>

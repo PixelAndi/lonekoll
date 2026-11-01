@@ -26,7 +26,7 @@ const ARROWS: Partial<Record<Aim, string>> = { left: '←', right: '→', up: '�
 
 /** What became of a slip read in the scanner (said in its list). */
 export interface SlipOutcome {
-  status: 'saved' | 'replaced' | 'duplicate' | 'none';
+  status: 'saved' | 'replaced' | 'duplicate' | 'differs' | 'none';
   period?: string;
   /** Saved but to be checked (its lines don't add up, or its period is uncertain). */
   check?: boolean;
@@ -210,7 +210,9 @@ export function SlipScanner({ onSlip, onClose, onCameraFailed }: { onSlip: (slip
       const month = outcome.period ? fmt.month(outcome.period) : '';
       const item =
         outcome.status === 'duplicate'
-          ? { text: t('slipscan.duplicate', { month }), kind: 'warn' as const }
+          ? { text: t('slipscan.duplicate', { month }), kind: 'ok' as const }
+          : outcome.status === 'differs'
+            ? { text: t('slipscan.differs', { month }), kind: 'warn' as const }
           : outcome.status === 'none'
             ? { text: t('slipscan.failed'), kind: 'warn' as const }
             : outcome.check

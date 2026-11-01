@@ -1,6 +1,8 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useApp } from '../app-context.ts';
 import { db, newId, requestPersistence, saveDay, saveSettings } from '../db.ts';
+import { mergeStamps, sameStamps, stampDiff } from '../domain/sameData.ts';
+import { StampMerge } from './SameData.tsx';
 import type { AbsenceType, DayRecord, StampPair } from '../domain/model.ts';
 import { loadPhoto, type TimecardDayReading, type TimecardReading } from '../ocr/browser.ts';
 import { combineReadings } from '../ocr/timecard.ts';
@@ -27,8 +29,9 @@ interface FileState {
 /** What the user decided for a day. */
 interface Decision {
   pairs: StampPair[];
-  /** For a day the app already has with other stamps: take the timecard's. */
-  useCard: boolean;
+  /** For a day the app already has: the card's new stamps not to add, and saved ones it lacks to remove. */
+  skipAdd: string[];
+  doRemove: string[];
   absence?: AbsenceType | 'none';
 }
 
@@ -200,19 +203,33 @@ function MonthReview({ month, days, pages }: { month: string; days: TimecardDayR
   // A day not yet decided on (also one from a page scanned after the review opened) starts from what was read.
   const initial = (d: TimecardDayReading): Decision => ({
     pairs: d.pairs.map((p) => ({ in: p.in, out: p.out })),
-    useCard: true,
+    skipAdd: [],
+    doRemove: [],
     absence: d.noteImage || d.note ? guessAbsence(d.note) : undefined,
   });
   const decisions = { get: (date: string) => chosen.get(date) ?? initial(shown.find((d) => d.date === date)!) };
   const [saved, setSaved] = useState<number | null>(null);
+  const [copies, setCopies] = useState(0);
   const decide = (date: string, patch: Partial<Decision>) => setDecisions((m) => new Map(m).set(date, { ...decisions.get(date), ...patch }));
 
   const ok = shown.filter((d) => d.status === 'ok' || d.status === 'fixed').length;
   const toCheck = shown.filter((d) => d.status === 'check').length;
   const notes = shown.filter((d) => d.noteImage || d.note).length;
 
+  /** A day's stamps as they will be saved: merged with what is saved as chosen, or as read. */
+  const merged = (date: string) => {
+    const choice = decisions.get(date);
+    const before = existing.get(date);
+    const rows = choice.pairs.filter((p) => p.in || p.out);
+    if (!before || before.rows.length === 0) return { rows, diff: null };
+    const diff = stampDiff(before.rows, rows);
+    const add = new Set(diff.added.map((x) => x.key).filter((k) => !choice.skipAdd.includes(k)));
+    return { rows: mergeStamps(before.rows, diff, add, new Set(choice.doRemove)), diff, add };
+  };
+
   const save = async () => {
     let n = 0;
+    let copies = 0;
     // The timecard kept as the source: its pictures, and each day's rows cut from it beside the day.
     const keep = settings.keepTimecards !== false;
     let cardId: string | undefined;
@@ -227,11 +244,15 @@ function MonthReview({ month, days, pages }: { month: string; days: TimecardDayR
     for (const d of shown) {
       const choice = decisions.get(d.date);
       const before = existing.get(d.date);
-      const rows = choice.pairs.filter((p) => p.in || p.out);
-      const differs = before && before.rows.length > 0 && stampText(before.rows) !== stampText(rows);
-      const keepRows = differs && !choice.useCard;
+      const { rows, diff } = merged(d.date);
       const absence = choice.absence && choice.absence !== 'none' ? { type: choice.absence } : before?.absence;
+      // The same stamps as saved (and nothing else new): a copy, nothing changes.
+      if (diff && sameStamps(diff) && absence?.type === before?.absence?.type) {
+        copies++;
+        continue;
+      }
       if (!rows.length && !absence) continue;
+      const keepRows = !!diff && stampText(rows) === stampText(before!.rows);
       let photoIds = before?.photoIds ?? [];
       if (keep && d.rowImage && !keepRows) {
         // An earlier timecard's rows for the day are replaced; photos of the clock stay.
@@ -243,7 +264,7 @@ function MonthReview({ month, days, pages }: { month: string; days: TimecardDayR
       }
       const day: DayRecord = {
         ...(before ?? { date: d.date, rows: [], photoIds: [] }),
-        rows: keepRows ? before!.rows : rows.length ? rows : (before?.rows ?? []),
+        rows,
         absence,
         photoIds,
         updatedAt: Date.now(),
@@ -252,6 +273,7 @@ function MonthReview({ month, days, pages }: { month: string; days: TimecardDayR
       n++;
     }
     setSaved(n);
+    setCopies(copies);
   };
 
   const monthName = fmt.month(`${month}-01`);
@@ -267,8 +289,6 @@ function MonthReview({ month, days, pages }: { month: string; days: TimecardDayR
           const choice = decisions.get(d.date);
           const before = existing.get(d.date);
           const rows = choice.pairs.filter((p) => p.in || p.out);
-          const differs = !!before && before.rows.length > 0 && rows.length > 0 && stampText(before.rows) !== stampText(rows);
-          const same = !!before && before.rows.length > 0 && stampText(before.rows) === stampText(rows);
           return (
             <li key={d.date} className={`timecard-day timecard-${d.status}`}>
               <div className="timecard-day-head">
@@ -290,20 +310,21 @@ function MonthReview({ month, days, pages }: { month: string; days: TimecardDayR
                   <StampRowsEditor rows={choice.pairs} onChange={(next) => decide(d.date, { pairs: typeof next === 'function' ? next(choice.pairs) : next })} />
                 </>
               )}
-              {same && <div className="muted small">{t('timecard.same')}</div>}
-              {differs && (
-                <div className="small">
-                  {t('timecard.conflict', { app: stampText(before!.rows), card: stampText(rows) })}
-                  <div className="chips">
-                    <button type="button" className={`chip ${choice.useCard ? 'on' : ''}`} onClick={() => decide(d.date, { useCard: true })}>
-                      {t('timecard.useCard')}
-                    </button>
-                    <button type="button" className={`chip ${!choice.useCard ? 'on' : ''}`} onClick={() => decide(d.date, { useCard: false })}>
-                      {t('timecard.keepApp')}
-                    </button>
-                  </div>
-                </div>
-              )}
+              {(() => {
+                const m = merged(d.date);
+                if (!m.diff || !before) return null;
+                return (
+                  <StampMerge
+                    saved={before.rows}
+                    diff={m.diff}
+                    add={m.add!}
+                    remove={new Set(choice.doRemove)}
+                    onChange={(add, remove) =>
+                      decide(d.date, { skipAdd: m.diff!.added.map((x) => x.key).filter((k) => !add.has(k)), doRemove: [...remove] })
+                    }
+                  />
+                );
+              })()}
               {(d.noteImage || d.note) && (
                 <div className="small">
                   {t('timecard.note')}
@@ -326,7 +347,10 @@ function MonthReview({ month, days, pages }: { month: string; days: TimecardDayR
           {t('timecard.save', { month: monthName })}
         </button>
       ) : (
-        <Notice kind="ok">{t('timecard.saved', { n: saved })}</Notice>
+        <Notice kind="ok">
+          {t('timecard.saved', { n: saved })}
+          {copies > 0 && ` ${t('same.daysCopies', { n: copies })}`}
+        </Notice>
       )}
     </Card>
   );

@@ -17,6 +17,8 @@ export interface Issues {
   night: NightWork | null;
   /** Slips whose reading should be checked. */
   toCheck: number;
+  /** Slips read again with something new or missing, waiting for the user's choice. */
+  readAgain: number;
   /** Everything open. */
   count: number;
 }
@@ -28,8 +30,9 @@ export function IssuesProvider({ children }: { children: ReactNode }) {
   const wages = useWagePatternsComputed();
   const night = useNightComputed();
   const toCheck = useLiveQuery(() => db.slips.filter(needsCheck).count(), []) ?? 0;
-  const count = (owed ? owed.likely.length + owed.investigate.length : 0) + wages.open.length + (night ? 1 : 0) + toCheck;
-  return <IssuesContext.Provider value={{ owed, wages, night, toCheck, count }}>{children}</IssuesContext.Provider>;
+  const readAgain = useLiveQuery(() => db.slips.filter((r) => !!r.candidate).count(), []) ?? 0;
+  const count = (owed ? owed.likely.length + owed.investigate.length : 0) + wages.open.length + (night ? 1 : 0) + toCheck + readAgain;
+  return <IssuesContext.Provider value={{ owed, wages, night, toCheck, readAgain, count }}>{children}</IssuesContext.Provider>;
 }
 
 export function useIssues(): Issues {
