@@ -27,7 +27,8 @@ function nextMonth(month: string): string {
 export function monthCoverage(days: DayRecord[], slipMonths: string[], today: string): MonthCoverage[] {
   const counts = new Map<string, number>();
   for (const d of days) if (d.rows.length || d.absence) counts.set(d.date.slice(0, 7), (counts.get(d.date.slice(0, 7)) ?? 0) + 1);
-  const slips = new Set(slipMonths);
+  // A slip saved without a period ("") has no month: counting it broke the Days tab.
+  const slips = new Set(slipMonths.filter((m) => /^\d{4}-\d{2}$/.test(m)));
   const known = [...counts.keys(), ...slips].sort();
   if (!known.length) return [];
   const withDays = [...counts.keys()].sort();

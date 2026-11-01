@@ -92,8 +92,15 @@ Benämning, Datum, Kvantitet, Enhet, À-pris, Belopp):
 
 The parser handles both; photos of the older layout were verified to read
 completely (rows split by tilt are joined, amounts without a comma recovered,
-a lone figure placed by column, a misread price fixed). **The newer layout
-has not been verified from a sharp real photo yet.** The payout on the dark
+a lone figure placed by column, a misread price fixed). **PDFs of both were
+verified on the owner's real slips (40 PDFs): every one gets its
+period, pay day, gross, tax and net, and its lines add up to the gross.** The
+newer layout has not been verified from a photo yet. Older slips print
+"Löneperiod:" with a colon (versions before 0512ea8 missed it; such slips are
+re-read at start, `rereadUndatedSlips`). Hourly overtime is printed as the
+supplement ("Övertid 1/2/3, timavlönad, 50%/75%/100%") plus "Timlön vid
+övertid" (the hour itself, read as wage). The 75 % level, seen only on
+Saturdays, isn't in the app's rules, so it is compared as overtime in total. The payout on the dark
 bar is often unreadable; it is then gross − tax − other deductions, rounded
 up to whole kronor (as these slips do).
 
@@ -103,12 +110,14 @@ line dates or the pay day and flagged (`periodDoubt`) for the user to check.
 
 ## Open items
 
-1. Verify reading of the newer (summed) slip layout from real photos/PDFs.
+1. Verify reading of the newer (summed) slip layout from a real photo (PDFs
+   are verified). Ask the owner where the 75 % overtime level comes from
+   (Tilläggsavtal Bagerier or a local agreement) before adding it to the rules.
 2. Idea: for older per-day slips, compare each day's paid hours against the
    stamped days and name the exact dates that differ in the report.
-3. A crash ("Något gick fel") was reported on the Days tab with real data and
-   couldn't be reproduced with made-up data. The error screen now shows the
-   error and component path – ask the owner for a screenshot of it.
+3. A crash ("Något gick fel") on the Days tab with real data: reproduced with
+   a slip saved without a period (its "" month broke the month list); fixed.
+   If it comes back, ask the owner for a screenshot of the error screen.
 4. Google sign-in has not been tried on an iPhone home-screen app (pop-up
    behaviour); if it fails, switch to a redirect-based sign-in.
 5. Google OAuth app is in Testing: users must be added as test users; public

@@ -16,9 +16,11 @@ export function useMissing(): { start?: string; fromSettings: boolean; months: M
   const { days, settings } = useApp();
   const slips = useLiveQuery(() => db.slips.toArray(), []);
   return useMemo(() => {
-    const first = [...days.map((d) => d.date), ...(slips ?? []).map((s) => s.periodStart)].sort()[0];
+    // A slip whose period isn't known yet (to be set on its check card) has no month to count in.
+    const dated = (slips ?? []).filter((s) => s.periodStart);
+    const first = [...days.map((d) => d.date), ...dated.map((s) => s.periodStart)].sort()[0];
     const start = settings.employedSince ?? first;
-    const periods = (slips ?? []).map((s) => ({ from: s.periodStart, to: s.slip.periodEnd ?? monthEnd(s.periodStart) }));
+    const periods = dated.map((s) => ({ from: s.periodStart, to: s.slip.periodEnd ?? monthEnd(s.periodStart) }));
     return { start, fromSettings: !!settings.employedSince, months: start ? checkMonths(start, todayLocal(), days, periods, settings) : [] };
   }, [days, slips, settings]);
 }

@@ -44,7 +44,7 @@ export function MonthNav({ month, route }: { month: string; route: 'days' | 'mon
 export function useCoverage(): MonthCoverage[] {
   const { days } = useApp();
   const slips = useLiveQuery(() => db.slips.toArray(), []);
-  return useMemo(() => monthCoverage(days, (slips ?? []).map((s) => s.periodStart.slice(0, 7)), todayLocal()), [days, slips]);
+  return useMemo(() => monthCoverage(days, (slips ?? []).filter((s) => s.periodStart).map((s) => s.periodStart.slice(0, 7)), todayLocal()), [days, slips]);
 }
 
 /**

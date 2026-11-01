@@ -22,4 +22,8 @@ describe('which months have days', () => {
   it('goes over the turn of the year', () => {
     expect(monthCoverage([day('2021-12-30'), day('2022-01-02')], [], '2022-01-05').map((m) => m.month)).toEqual(['2021-12', '2022-01']);
   });
+
+  it('leaves out a slip saved without a period', () => {
+    expect(monthCoverage([day('2022-01-03')], ['', '2022-02'], '2022-02-10').map((m) => m.month)).toEqual(['2022-01', '2022-02']);
+  });
 });

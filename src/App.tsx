@@ -88,6 +88,10 @@ export function App() {
     document.documentElement.dir = isRightToLeft(data.lang) ? 'rtl' : 'ltr';
   }, [data]);
   useAutoSync(data?.settings.cloud);
+  // Once per start: slips an earlier version saved without a period are read again.
+  useEffect(() => {
+    void import('./pdf/browser.ts').then((m) => m.rereadUndatedSlips()).catch(() => undefined);
+  }, []);
   const theme = data?.settings.theme;
   useEffect(() => {
     if (theme) applyTheme(theme);

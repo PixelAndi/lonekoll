@@ -198,6 +198,9 @@ export function classifyLine(text: string, amount: number | undefined, unitPrice
   if (t.includes('sjuk')) return amount === undefined ? 'sickHours' : 'sickPay';
   // Komptid taken (paid time off); komp lines about overtime are its supplement, read as overtime below.
   if (/komp/.test(t) && !/övertid|ötid/.test(t)) return amount === undefined ? 'kompHours' : 'kompPay';
+  // "Timlön vid övertid": the hourly wage for the overtime hours, printed apart from
+  // the supplement ("Övertid …, 50%"). The calculation counts those hours as wage too.
+  if (/timlön\s+(vid|för|på)\s+(övertid|ötid)/.test(t)) return 'wage';
   if (/övertid|ötid/.test(t)) {
     if (/100|kval/.test(t)) return 'ot100';
     if (/50|enkel/.test(t)) return 'ot50';
@@ -416,8 +419,10 @@ export function parsePaySlip(items: TextItem[], hourlyRate?: number): PaySlip {
   // Bruttolön/Skatt appear in several summary blocks; the payout block is rightmost.
   const gross = rightmost(valuesAfter(lines, /^Bruttolön$/i));
   if (gross) slip.gross = parseSwedishNumber(gross.value);
+  // A dash in the summary means nothing (e.g. no tax on a small extra payout).
+  const figure = (v: string) => (/^[-–—]$/.test(v) ? 0 : parseSwedishNumber(v));
   const tax = rightmost(valuesAfter(lines, /^Skatt$/i));
-  if (tax) slip.tax = parseSwedishNumber(tax.value);
+  if (tax) slip.tax = figure(tax.value);
 
   // The "Skatt beräknad på" block: its Bruttolön is the taxed pay.
   const taxBlock = lines.flat().find((i) => /^Skatt beräknad på$/i.test(i.str.trim()));
@@ -430,7 +435,7 @@ export function parsePaySlip(items: TextItem[], hourlyRate?: number): PaySlip {
   const oneTime = valuesAfter(lines, /^Engångsskatt\s*%?$/i)[0];
   if (oneTime) slip.oneTimeTaxPercent = parseSwedishNumber(oneTime.value);
   const deductions = valuesAfter(lines, /^Övriga avdrag$/i)[0];
-  if (deductions) slip.otherDeductions = parseSwedishNumber(deductions.value);
+  if (deductions) slip.otherDeductions = figure(deductions.value);
 
   const balance = (label: RegExp) => {
     const v = valuesAfter(lines, label)[0]?.value;

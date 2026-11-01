@@ -54,7 +54,7 @@ describe('parsePaySlip', () => {
       taxTable: 32,
       taxBase: 31275.8,
       oneTimeTaxPercent: 26,
-      otherDeductions: undefined,
+      otherDeductions: 0,
       balances: { vacationDaysPaid: 4, vacationDaysSaved: 8, compHours: undefined, timeBankHours: 48 },
     });
   });
@@ -104,6 +104,23 @@ describe('classifyLine', () => {
     expect(classifyLine('Övertidstillägg', 100, 190, 190)).toBe('ot100');
     expect(classifyLine('Helglön', 1000, 190)).toBe('holidayPay');
     expect(classifyLine('Friskvård', 500, undefined)).toBe('other');
+  });
+
+  it('reads the wage for overtime hours as wage, apart from the supplement', () => {
+    // An hourly slip prints both for each overtime day: the supplement and the hour itself.
+    expect(classifyLine('Övertid 1, timavlönad, 50%', 90, 90, 180)).toBe('ot50');
+    expect(classifyLine('Övertid 3, timavlönad, 100%', 360, 180, 180)).toBe('ot100');
+    expect(classifyLine('Timlön vid övertid', 360, 180, 180)).toBe('wage');
+    // A level the agreement as the app knows it doesn't have: compared as overtime in total.
+    expect(classifyLine('Övertid 2, timavlönad, 75%', 270, 135, 180)).toBe('otUnknown');
+  });
+});
+
+describe('the payout block', () => {
+  it('reads a dash as nothing (an extra payout with no tax)', () => {
+    const noTax = items.filter((i) => !(i.y === 174.6 && i.x > 500)).concat(row(174.6, [['-', 555, 2.3]]));
+    const slip = parsePaySlip(noTax);
+    expect([slip.tax, slip.otherDeductions]).toEqual([0, 0]);
   });
 });
 
