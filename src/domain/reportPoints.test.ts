@@ -143,3 +143,18 @@ describe('the report’s points with days missing from the log', () => {
     expect(point.reason).not.toBe('missing-data');
   });
 });
+
+describe('the report’s points when the wage isn’t confirmed', () => {
+  it('asks which wage is the deal instead of claiming the difference', () => {
+    const period = calculatePeriod(days, settings, '2026-10-01', '2026-10-31');
+    // The slip pays a little less per hour than the settings, on the hours logged.
+    const hours = period.totals.wage?.hours ?? 0;
+    const lines = [line('Timlön', hours, HOURLY - 1, 'wage')];
+    const slip: PaySlip = { periodStart: '2026-10-01', periodEnd: '2026-10-31', lines, gross: lines[0].amount, balances: {} };
+    const comparison = comparePeriod(period, slip, days, settings);
+    const claimed = reportPoints(comparison, period, days, settings).find((p) => p.keys.includes('wage'))!;
+    const asked = reportPoints(comparison, period, days, settings, false, true).find((p) => p.keys.includes('wage'))!;
+    expect(claimed.kind).toBe('claim');
+    expect(asked).toMatchObject({ kind: 'question', reason: 'wage-agreement', amount: claimed.amount });
+  });
+});

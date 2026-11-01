@@ -2,8 +2,10 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { useMemo } from 'react';
 import { useApp } from '../app-context.ts';
 import { db, saveSettings } from '../db.ts';
-import type { WagePeriod } from '../domain/model.ts';
-import { stepsNotInSettings, wageHistory, wagesFromHistory, type WageStep } from '../domain/wageHistory.ts';
+import { applyPattern, stepsNotInSettings, wageHistory, wagePatterns, type WageAnswer, type WagePattern, type WageStep } from '../domain/wageHistory.ts';
+import { wagePeriodOn, type Settings } from '../domain/model.ts';
+import { Card } from './common.tsx';
+import { wageRowText } from './wageText.ts';
 import type { TextKey } from '../i18n.ts';
 import { href } from '../router.ts';
 import { Fold, Notice } from './common.tsx';
@@ -39,25 +41,8 @@ export function WageFromSlips({ onlyChanges = false }: { onlyChanges?: boolean }
       </Notice>
     );
   }
-  const proposal = wagesFromHistory(steps, settings);
-  const per = (s: { basis: WageStep['basis'] }, amount: number) =>
-    t(s.basis === 'hourly' ? 'wageSlips.perHour' : 'wageSlips.perMonth', {
-      amount: fmt.money(amount),
-    });
-  const rowText = (w: WagePeriod) =>
-    w.basis === 'monthly'
-      ? t('wageHist.row.monthly', { amount: fmt.money(w.monthly ?? 0) })
-      : w.basis === 'fixed'
-        ? t('wageHist.row.fixed', { amount: fmt.money(w.hourly) })
-        : w.supplement
-          ? t('wageHist.row.minimumPlus', {
-              supplement: fmt.money(w.supplement),
-            })
-          : t('wageHist.row.minimum');
-  const apply = () => {
-    if (window.confirm(t('wageHist.confirm'))) void saveSettings({ wages: proposal });
-  };
-  const below = steps.some((s) => s.belowMinimum);
+  const per = (s: { basis: WageStep['basis'] }, amount: number) => t(s.basis === 'hourly' ? 'wageSlips.perHour' : 'wageSlips.perMonth', { amount: fmt.money(amount) });
+  const patterns = wagePatterns(steps, settings);
   return (
     <Fold
       title={t('wageSlips.title')}
@@ -106,20 +91,27 @@ export function WageFromSlips({ onlyChanges = false }: { onlyChanges?: boolean }
       {off.length === 0 ? (
         <p className="ok small">✓ {t('wageSlips.allFit')}</p>
       ) : (
-        <div className="wage-apply">
-          <Notice kind="info">{t('wageHist.differs', { n: off.length })}</Notice>
-          <ul className="small">
-            {proposal.map((w) => (
-              <li key={w.from}>
-                {t('wageHist.row.from', { date: fmt.date(w.from, 'numeric') })} {rowText(w)}
-              </li>
-            ))}
-          </ul>
-          <button type="button" className="button button-primary" onClick={apply}>
-            {t('wageHist.apply')}
-          </button>
-          <p className="small muted">{t(below ? 'wageHist.applyBelow' : 'wageHist.applyNote')}</p>
-        </div>
+        <ul className="wage-patterns small">
+          {patterns
+            .filter((p) => p.differs)
+            .map((p) => {
+              const answer = settings.wageAnswers?.[p.key];
+              return (
+                <li key={p.key}>
+                  {fmt.date(p.from, 'numeric')}–{fmt.date(p.to, 'numeric')}: {wageRowText(p.row, t, fmt)} ·{' '}
+                  <span className="muted">{t(answer === 'disputed' || answer === 'unsure' ? (`wageQ.answered.${answer}` as TextKey) : 'wageQ.answered.none')}</span>
+                  {(answer === 'disputed' || answer === 'unsure') && (
+                    <>
+                      {' '}
+                      <button type="button" className="owed-settle" onClick={() => answerPattern(settings, p, undefined)}>
+                        {t('wageQ.change')}
+                      </button>
+                    </>
+                  )}
+                </li>
+              );
+            })}
+        </ul>
       )}
     </Fold>
   );
@@ -139,4 +131,65 @@ function changeKinds(s: WageStep): [TextKey, number][] {
   }
   if (s.belowMinimum) out.push(['wageHist.kind.below', s.minimum - s.amount]);
   return out;
+}
+
+/** Save the answer about a pattern; "agreed" puts its wage in the settings. No answer: asked again. */
+function answerPattern(settings: Settings, p: WagePattern, answer: WageAnswer | undefined) {
+  const answers = { ...settings.wageAnswers };
+  if (answer) answers[p.key] = answer;
+  else delete answers[p.key];
+  void saveSettings(answer === 'agreed' ? { wages: applyPattern(settings, p), wageAnswers: answers } : { wageAnswers: answers });
+}
+
+/**
+ * The wages the slips keep paying that the settings don't have, each asked about: is it the deal
+ * between you and the employer (then into the settings), or is the slip wrong (then into the report)?
+ */
+export function WageQuestions() {
+  const { t, fmt, settings } = useApp();
+  const records = useLiveQuery(() => db.slips.toArray(), []);
+  const patterns = useMemo(
+    () => wagePatterns(wageHistory((records ?? []).map((r) => applyOverrides(r.slip, settings.codeOverrides)), settings), settings),
+    [records, settings],
+  );
+  const open = patterns.filter((p) => p.differs && settings.wageAnswers?.[p.key] !== 'disputed' && settings.wageAnswers?.[p.key] !== 'unsure');
+  if (!open.length) return null;
+  return (
+    <Card title={t('wageQ.title')} className="card-highlight wage-questions">
+      {open.map((p) => {
+        const values = {
+          from: fmt.date(p.from, 'inText'),
+          to: fmt.date(p.to, 'inText'),
+          slip: wageRowText(p.row, t, fmt),
+          n: p.revisions,
+          slips: p.steps.reduce((n, s) => n + s.slips.length, 0),
+        };
+        const supplement = p.row.basis === 'minimum' ? (p.row.supplement ?? 0) : null;
+        const lead = supplement === null ? 'wageQ.other' : supplement === 0 ? 'wageQ.minimum' : p.revisions > 0 ? 'wageQ.kept' : 'wageQ.new';
+        const firstOff = stepsNotInSettings(p.steps, settings)[0] ?? p.steps[0];
+        return (
+          <div key={p.key} className="wage-question">
+            <p>{t(lead, values)}</p>
+            <p>{t('wageQ.settings', { set: wageRowText(wagePeriodOn(settings, firstOff.from), t, fmt) })}</p>
+            {p.steps.some((s) => s.belowMinimum) && <p className="small muted">{t('wageQ.below')}</p>}
+            <p>
+              <strong>{t('wageQ.ask')}</strong>
+            </p>
+            <div className="button-column">
+              <button type="button" className="button button-primary" onClick={() => answerPattern(settings, p, 'agreed')}>
+                {t('wageQ.agree')}
+              </button>
+              <button type="button" className="button" onClick={() => answerPattern(settings, p, 'disputed')}>
+                {t('wageQ.dispute')}
+              </button>
+              <button type="button" className="button" onClick={() => answerPattern(settings, p, 'unsure')}>
+                {t('wageQ.unsure')}
+              </button>
+            </div>
+          </div>
+        );
+      })}
+      <p className="small muted">{t('wageQ.hint')}</p>
+    </Card>
+  );
 }

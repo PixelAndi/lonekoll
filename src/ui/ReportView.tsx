@@ -24,6 +24,8 @@ import { db } from '../db.ts';
 import { applyOverrides } from './slipComparison.ts';
 import { LogStamps } from './LogStamps.tsx';
 import { PointCard, PointsOverview } from './ReportPoints.tsx';
+import { wageHistory, wagePatterns } from '../domain/wageHistory.ts';
+import { wageRowText } from './wageText.ts';
 
 /** The report for the employer, in Swedish, and in the user's own language too when that is another. */
 export function ReportView({ id }: { id: string }) {
@@ -139,9 +141,15 @@ function ReportPage({
   const basis = periodBasis(slip, app.days, settings, start, end, todayLocal(), period.totals.wage?.hours);
   // The slip against the agreement on its own (needs no clock data): its own section.
   const allSlips = useLiveQuery(() => db.slips.toArray(), []);
-  const findings = slipFindings(slip, (allSlips ?? []).map((r) => applyOverrides(r.slip, settings.codeOverrides)), settings);
+  const slipsAll = (allSlips ?? []).map((r) => applyOverrides(r.slip, settings.codeOverrides));
+  const findings = slipFindings(slip, slipsAll, settings);
+  // The slips paying another wage than the settings in the period, and what the user said about it.
+  const wageQuestions = wagePatterns(wageHistory(slipsAll, settings), settings)
+    .filter((p) => p.differs && p.from <= end && p.to >= start)
+    .map((p) => ({ pattern: p, answer: settings.wageAnswers?.[p.key], set: wagePeriodOn(settings, p.from > start ? p.from : start) }));
+  const wageUnconfirmed = wageQuestions.some((q) => q.answer !== 'disputed');
   // Differences as numbered points to go through together.
-  const points = basis.state === 'none' ? [] : reportPoints(comparison, period, app.days, settings, basis.state === 'partial');
+  const points = basis.state === 'none' ? [] : reportPoints(comparison, period, app.days, settings, basis.state === 'partial', wageUnconfirmed);
   const reviewSummary =
     basis.state === 'none'
       ? t('basis.summaryNone')
@@ -224,6 +232,20 @@ function ReportPage({
         </header>
 
         <BasisSection basis={basis} t={t} fmt={fmt} />
+
+        {wageQuestions.length > 0 && basis.state !== 'none' && (
+          <section className="report-wage">
+            <h2>{t('report.wage.title')}</h2>
+            {wageQuestions.map((q) => (
+              <p key={q.pattern.key}>
+                {t(q.answer === 'disputed' ? 'report.wage.disputed' : 'report.wage.unsure', {
+                  slip: wageRowText(q.pattern.row, t, fmt),
+                  set: wageRowText(q.set, t, fmt),
+                })}
+              </p>
+            ))}
+          </section>
+        )}
 
         <section className="report-agreement">
           <h2>{t('report.agr.title')}</h2>

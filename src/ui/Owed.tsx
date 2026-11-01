@@ -8,7 +8,7 @@ import { calculatePeriod } from '../domain/calc.ts';
 import { comparePeriod } from '../domain/compare.ts';
 import { owedEstimate, type MonthComparison, type Owed, type OwedItem } from '../domain/owed.ts';
 import { todayLocal } from '../domain/time.ts';
-import { stepsNotInSettings, wageHistory } from '../domain/wageHistory.ts';
+import { stepsNotInSettings, wageHistory, wagePatterns } from '../domain/wageHistory.ts';
 import { href } from '../router.ts';
 import { FindingItem, monthRanges } from './AgreementFindings.tsx';
 import { Card, Fold } from './common.tsx';
@@ -30,7 +30,9 @@ export function useOwed(): (Owed & { ids: Map<string, string> }) | null {
     const findings = checkAgainstAgreement(slips, settings);
     // Months where the settings' wage isn't the one the slips pay: the comparison would measure the settings.
     const steps = wageHistory(slips, settings);
-    const offSteps = stepsNotInSettings(steps, settings);
+    // A wage the user says the slips have wrong (the settings hold the deal) is compared all the same.
+    const disputed = wagePatterns(steps, settings).filter((p) => settings.wageAnswers?.[p.key] === 'disputed');
+    const offSteps = stepsNotInSettings(steps, settings).filter((s) => !disputed.some((p) => p.steps.includes(s)));
     const comparisons: MonthComparison[] = [];
     const ids = new Map<string, string>();
     records.forEach((r, i) => {

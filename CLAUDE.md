@@ -100,7 +100,15 @@ in Playwright by routing `https://accounts.google.com/gsi/client` and
   minimum, sänkning, under minimilönen); `wagesFromHistory` gives the settings
   that pay the same (minimum-basis rows with an hourly supplement; a period
   below the minimum set as the minimum). Shown and applied with one tap in
-  `WageFromSlips.tsx` ("Ställ in lönen efter lönebeskeden").
+  `WageFromSlips.tsx`. `wagePatterns` groups the steps into wages the slips
+  keep paying (same supplement through 1 April raises reads as a deal); one
+  that differs from the settings is asked about at the top of the pay slip
+  page (`WageQuestions`): agreed → `applyPattern` puts it in the settings
+  (minimum + hourly supplement, the old row restored after it); disputed →
+  the settings stand, the difference is a claim (and counts in the owed
+  estimate); unsure/unanswered → the report's wage point is a question
+  (`wage-agreement`) and a "Lönen" section explains it. Answers in
+  `settings.wageAnswers` (key: pattern's first day + wage).
 - `src/domain/owed.ts` + `src/ui/Owed.tsx` – the rough owed estimate: card at
   the top of the pay slip page, one line on the Days tab, only when there is
   something. "Troligen för lite betalt" = agreement findings only; "Att utreda"

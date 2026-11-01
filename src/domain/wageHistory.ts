@@ -1,8 +1,8 @@
 import { RULES } from './agreement.ts';
-import { hourlyRateOn, minimumWageOn, monthlyPayOn, type Settings, type WagePeriod } from './model.ts';
+import { hourlyRateOn, minimumWageOn, monthlyPayOn, wagePeriodOn, type Settings, type WagePeriod } from './model.ts';
 import type { PaySlip } from './payslip.ts';
 import { paidWages, type PaidWage } from './raises.ts';
-import type { LocalDate } from './time.ts';
+import { addDays, type LocalDate } from './time.ts';
 
 // The wage as the pay slips show it, step by step: each wage taken apart
 // into the agreement's minimum on its dates and the part above it – the
@@ -89,35 +89,84 @@ export function wageHistory(slips: PaySlip[], settings: Settings): WageStep[] {
 }
 
 /**
- * The settings that pay what the slips pay: from each step, the minimum plus its supplement per
- * hour (a step below the minimum counts as the minimum: that is what was due), or the monthly
- * salary; steps with the same supplement one after another are one row.
+ * A wage the slips keep paying: steps one after another with the same personal supplement above
+ * the minimum (or the same monthly salary) – kept through the agreement's raises, it reads as a
+ * deal between employer and employee. A step below the minimum counts as the minimum with no
+ * supplement: that is what was due.
  */
-export function wagesFromHistory(steps: WageStep[], settings: Settings): WagePeriod[] {
-  const rows: WagePeriod[] = [];
+export interface WagePattern {
+  /** Stays the same as more slips come: its first day and its wage. */
+  key: string;
+  from: LocalDate;
+  to: LocalDate;
+  /** The settings row that pays the same. */
+  row: WagePeriod;
+  steps: WageStep[];
+  /** Raises of the minimum the supplement was kept through. */
+  revisions: number;
+  /** The settings pay something else for some of it. */
+  differs: boolean;
+  /** The last pattern on the slips (still paid). */
+  last: boolean;
+}
+
+export type WageAnswer = 'agreed' | 'disputed' | 'unsure';
+
+function rowFor(s: WageStep): WagePeriod {
+  if (s.basis === 'monthly') return { from: s.from, basis: 'monthly', monthly: s.amount, hourly: 0 };
+  if (!s.known) return { from: s.from, basis: 'fixed', hourly: s.amount };
+  return { from: s.from, basis: 'minimum', hourly: 0, supplement: round2(Math.max(0, s.above)), supplementPer: 'hour' };
+}
+
+const sameRow = (a: WagePeriod, b: WagePeriod) =>
+  a.basis === b.basis && (a.basis === 'monthly' ? a.monthly === b.monthly : a.basis === 'fixed' ? a.hourly === b.hourly : a.supplement === b.supplement);
+
+export function wagePatterns(steps: WageStep[], settings: Settings): WagePattern[] {
+  const off = new Set(stepsNotInSettings(steps, settings));
+  const out: WagePattern[] = [];
   for (const s of steps) {
-    const row: WagePeriod =
-      s.basis === 'monthly'
-        ? { from: s.from, basis: 'monthly', monthly: s.amount, hourly: 0 }
-        : !s.known
-          ? { from: s.from, basis: 'fixed', hourly: s.amount }
-          : {
-              from: s.from,
-              basis: 'minimum',
-              hourly: 0,
-              supplement: round2(Math.max(0, s.above)),
-              supplementPer: 'hour',
-            };
-    const last = rows[rows.length - 1];
-    const sameAsLast =
-      last &&
-      last.basis === row.basis &&
-      (row.basis === 'monthly' ? last.monthly === row.monthly : row.basis === 'fixed' ? last.hourly === row.hourly : last.supplement === row.supplement);
-    if (!sameAsLast) rows.push(row);
+    const row = rowFor(s);
+    const last = out[out.length - 1];
+    if (last && sameRow(last.row, row)) {
+      last.steps.push(s);
+      last.to = s.to;
+      if (s.change?.revision) last.revisions++;
+      last.differs ||= off.has(s);
+    } else {
+      out.push({ key: '', from: s.from, to: s.to, row, steps: [s], revisions: 0, differs: off.has(s), last: false });
+    }
   }
   // From the start of the employment when the first slip is later.
-  if (rows.length && settings.employedSince && settings.employedSince < rows[0].from) rows[0] = { ...rows[0], from: settings.employedSince };
-  return rows;
+  if (out.length && settings.employedSince && settings.employedSince < out[0].from) {
+    out[0].from = settings.employedSince;
+    out[0].row = { ...out[0].row, from: settings.employedSince };
+  }
+  for (const p of out) p.key = `${p.from}|${p.row.basis}|${p.row.basis === 'monthly' ? p.row.monthly : p.row.basis === 'fixed' ? p.row.hourly : p.row.supplement}`;
+  if (out.length) out[out.length - 1].last = true;
+  return out;
+}
+
+/** The settings that pay what the slips pay, all through. */
+export function wagesFromHistory(steps: WageStep[], settings: Settings): WagePeriod[] {
+  return wagePatterns(steps, settings).map((p) => p.row);
+}
+
+/**
+ * The settings' wages with one pattern put in: its row from its first day; after it, the wage the
+ * settings had (unless it is the last pattern, still paid).
+ */
+export function applyPattern(settings: Settings, p: WagePattern): WagePeriod[] {
+  const after = addDays(p.to, 1);
+  const before = wagePeriodOn(settings, after);
+  const kept = settings.wages.filter((w) => w.from < p.from || w.from > p.to);
+  const rows = [...kept, p.row];
+  if (!p.last && before && !kept.some((w) => w.from === after)) rows.push({ ...before, from: after });
+  return rows.sort((a, b) => a.from.localeCompare(b.from));
+}
+
+/** The pattern a date falls in, with the user's answer about it. */
+export function patternOn(patterns: WagePattern[], date: LocalDate): WagePattern | undefined {
+  return patterns.find((p) => p.from <= date && date <= p.to);
 }
 
 /** The steps whose wage the settings don't give (what is due: below the minimum counts as the minimum). */

@@ -155,6 +155,12 @@ export interface Settings {
   codeOverrides: Record<string, string>;
   /** Amounts in the owed estimate the user has marked as settled (their keys, see owed.ts). */
   settledOwed: string[];
+  /**
+   * The user's answers about wages the slips keep paying (key: the pattern's, see wageHistory.ts):
+   * agreed – it is the deal, set in the settings; disputed – the settings hold the deal, the slips
+   * pay otherwise (a claim in the report); unsure – asked in the report.
+   */
+  wageAnswers: Record<string, 'agreed' | 'disputed' | 'unsure'>;
   /** Pay slips whose suggested settings the user put aside ("Not now"). */
   setupDismissed?: string[];
   /** How overtime is paid unless a day says otherwise. */
@@ -207,6 +213,7 @@ export const DEFAULT_SETTINGS: Settings = {
   localDeals: '',
   codeOverrides: {},
   settledOwed: [],
+  wageAnswers: {},
   scheduleMode: 'none',
   schedule: { startMonday: '2026-01-05', weeks: [[null, null, null, null, null, null, null]] },
   supplements: { ob: true, overtime: true, shiftedTime: true, holidayPay: true },

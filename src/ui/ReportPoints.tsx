@@ -204,6 +204,11 @@ export function PointCard({ point: p, comparison, settings, end, taxYear, t, fmt
         <span className="point-answer-label">{t('point.answer')}</span>
         {p.reason === 'slip-more' || p.reason === 'only-on-slip' ? (
           <span>{t('point.answer.what')}</span>
+        ) : p.reason === 'wage-agreement' ? (
+          <>
+            <span>☐ {t('point.answer.wageSlip')}</span>
+            <span>☐ {t('point.answer.wageCalc')}</span>
+          </>
         ) : (
           <>
             <span>☐ {t('point.answer.ok')}</span>

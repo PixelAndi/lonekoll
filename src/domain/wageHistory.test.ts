@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { agreementFor } from './agreement.ts';
 import { DEFAULT_SETTINGS, type Settings } from './model.ts';
 import type { PaySlip } from './payslip.ts';
-import { stepsNotInSettings, wageHistory, wagesFromHistory } from './wageHistory.ts';
+import { applyPattern, stepsNotInSettings, wageHistory, wagePatterns, wagesFromHistory } from './wageHistory.ts';
 
 // Made-up employments and wages; the agreement's minimums are its own (public).
 const min = (date: string) => agreementFor(date)!.minimumWage;
@@ -110,6 +110,40 @@ describe('a wage below the minimum', () => {
         supplement: 0,
         supplementPer: 'hour',
       },
+    ]);
+  });
+});
+
+describe('a wage the slips keep paying', () => {
+  // Made up: the minimum until a personal supplement of 7.50 kr/h, kept through a 1 April raise;
+  // the settings say 1 500 kr a month on top all along.
+  const s: Settings = { ...settings('2023-01-01'), wages: [{ from: '2023-01-01', basis: 'minimum', hourly: 0, supplement: 1500, supplementPer: 'month' }] };
+  const slips = [
+    slip('2024-02', min('2024-02-01').adultAfterOneYear),
+    slip('2024-03', min('2024-03-01').adultAfterOneYear + 7.5),
+    slip('2024-05', min('2024-05-01').adultAfterOneYear + 7.5),
+  ];
+  const patterns = wagePatterns(wageHistory(slips, s), s);
+
+  it('is found as a pattern: the same supplement through the agreement’s raises', () => {
+    expect(patterns.map((p) => [p.from, p.row.supplement, p.revisions, p.differs, p.last])).toEqual([
+      ['2023-01-01', 0, 0, true, false],
+      ['2024-03-01', 7.5, 1, true, true],
+    ]);
+  });
+
+  it('agreed, goes into the settings as the minimum plus an hourly supplement', () => {
+    const wages = applyPattern(s, patterns[1]);
+    expect(wages).toEqual([s.wages[0], { from: '2024-03-01', basis: 'minimum', hourly: 0, supplement: 7.5, supplementPer: 'hour' }]);
+    const after = { ...s, wages };
+    expect(wagePatterns(wageHistory(slips, after), after)[1].differs).toBe(false);
+  });
+
+  it('agreed for a time in between, the settings’ wage comes back after it', () => {
+    const wages = applyPattern(s, patterns[0]);
+    expect(wages.map((w) => [w.from, w.supplement, w.supplementPer])).toEqual([
+      ['2023-01-01', 0, 'hour'],
+      ['2024-03-01', 1500, 'month'],
     ]);
   });
 });
