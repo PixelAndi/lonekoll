@@ -79,7 +79,11 @@ export function SlipsView() {
           <button type="button" className="button button-primary button-large" disabled={busy} onClick={() => input.current?.click()}>
             <Icon name="slips" /> {t('slips.import')}
           </button>
-          <button type="button" className="button timecard-button" disabled={busy} onClick={() => photo.current?.click()}>
+          <button type="button" className="button timecard-button" disabled={busy} onClick={() => {
+              // The text recognition gets ready while the photo is taken.
+              void import('../ocr/browser.ts').then((m) => m.warmUpSlipReading());
+              photo.current?.click();
+            }}>
             <Icon name="camera" />
             <span>{t('slips.photo')}</span>
           </button>

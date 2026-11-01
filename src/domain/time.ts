@@ -25,8 +25,16 @@ export function fromMinutes(minutes: number): LocalTime {
   return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 }
 
+// Pay is worked out minute by minute, so these are asked for the same days and years over and
+// over: each answer is kept (a few thousand days at most).
+const dayNames = new Map<number, LocalDate>();
 function dateFromUtcDay(ms: number): LocalDate {
-  return new Date(ms).toISOString().slice(0, 10);
+  let s = dayNames.get(ms);
+  if (s === undefined) {
+    s = new Date(ms).toISOString().slice(0, 10);
+    dayNames.set(ms, s);
+  }
+  return s;
 }
 
 export function addDays(date: LocalDate, days: number): LocalDate {
@@ -45,11 +53,17 @@ export function daysBetween(from: LocalDate, to: LocalDate): number {
   return Math.round((Date.UTC(b.y, b.m - 1, b.d) - Date.UTC(a.y, a.m - 1, a.d)) / DAY);
 }
 
+const weekdays = new Map<LocalDate, number>();
 /** ISO weekday: Monday = 1 … Sunday = 7. */
 export function isoWeekday(date: LocalDate): number {
-  const { y, m, d } = parseDate(date);
-  const wd = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
-  return wd === 0 ? 7 : wd;
+  let wd = weekdays.get(date);
+  if (wd === undefined) {
+    const { y, m, d } = parseDate(date);
+    const day = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+    wd = day === 0 ? 7 : day;
+    weekdays.set(date, wd);
+  }
+  return wd;
 }
 
 /** Monday of the ISO week the date falls in. */
@@ -79,11 +93,15 @@ function lastSundayUtc(year: number, month: number): number {
 }
 
 /** UTC offset of Swedish time (minutes) at a given instant. EU rules: summer time 01:00 UTC last Sunday of March to 01:00 UTC last Sunday of October. */
+const summerTime = new Map<number, { start: number; end: number }>();
 export function stockholmOffset(utcMs: number): number {
   const year = new Date(utcMs).getUTCFullYear();
-  const start = lastSundayUtc(year, 3) + 60 * MINUTE;
-  const end = lastSundayUtc(year, 10) + 60 * MINUTE;
-  return utcMs >= start && utcMs < end ? 120 : 60;
+  let s = summerTime.get(year);
+  if (!s) {
+    s = { start: lastSundayUtc(year, 3) + 60 * MINUTE, end: lastSundayUtc(year, 10) + 60 * MINUTE };
+    summerTime.set(year, s);
+  }
+  return utcMs >= s.start && utcMs < s.end ? 120 : 60;
 }
 
 /**

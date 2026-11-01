@@ -240,7 +240,27 @@ function matchSchedule(shift: Shift, settings: Settings, byDate: Map<LocalDate, 
 
 const hhmm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 
+/**
+ * Every shift worked out (see shiftsOf). The same days and settings give the same shifts, and a
+ * screen asks for them once per month or pay slip: they are worked out once and kept for as long
+ * as those days and settings are (the results are never changed by those using them).
+ */
+const shiftCache = new WeakMap<DayRecord[], WeakMap<Settings, { results: ShiftResult[]; issues: StampIssue[] }>>();
 export function calculateShifts(days: DayRecord[], settings: Settings): { results: ShiftResult[]; issues: StampIssue[] } {
+  let bySettings = shiftCache.get(days);
+  if (!bySettings) {
+    bySettings = new WeakMap();
+    shiftCache.set(days, bySettings);
+  }
+  let out = bySettings.get(settings);
+  if (!out) {
+    out = shiftsOf(days, settings);
+    bySettings.set(settings, out);
+  }
+  return out;
+}
+
+function shiftsOf(days: DayRecord[], settings: Settings): { results: ShiftResult[]; issues: StampIssue[] } {
   const sorted = [...days].sort((a, b) => a.date.localeCompare(b.date));
   const byDate = new Map(sorted.map((d) => [d.date, d]));
   const { shifts, issues } = buildShifts(sorted);

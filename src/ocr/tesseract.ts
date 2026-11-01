@@ -95,6 +95,13 @@ export class TesseractEngine implements OcrEngine {
     );
   }
 
+  /** Starts the workers for reading in strips now (loading the model takes a while the first time). */
+  async warm(strips: number): Promise<void> {
+    const paths = Object.fromEntries(Object.entries(this.paths).filter(([, v]) => v !== undefined));
+    while (this.helpers.length < strips - 1) this.helpers.push(createWorker(this.lang, 1, { ...paths, cacheMethod: 'none', gzip: true }));
+    await Promise.all([this.getWorker(), ...this.helpers]);
+  }
+
   /** Strips already packed as PNGs (by the preparing worker), read at the same time. */
   async recognizeStrips(strips: { y0: number; own: { from: number; to: number }; png: Uint8Array }[], mode: OcrMode): Promise<OcrWord[]> {
     const paths = Object.fromEntries(Object.entries(this.paths).filter(([, v]) => v !== undefined));

@@ -236,6 +236,14 @@ async function cropOf(canvas: HTMLCanvasElement, x0: number, y0: number, x1: num
   return URL.createObjectURL(await toBlob(crop, 0.85));
 }
 
+const slipStrips = () => Math.max(1, Math.min(3, (navigator.hardwareConcurrency || 2) - 1));
+
+/** Gets the Swedish text recognition ready (while the camera is open), so reading starts at once. */
+export function warmUpSlipReading(): void {
+  void getEngine('swe').then((e) => e.warm(slipStrips()));
+  getPreparer();
+}
+
 /**
  * A photographed pay slip, read like a PDF one: the page prepared as a
  * timecard is (lines removed, read in strips at once), its words put back
@@ -243,13 +251,14 @@ async function cropOf(canvas: HTMLCanvasElement, x0: number, y0: number, x1: num
  */
 export async function readPaySlipImage(file: Blob, hourlyRate?: number): Promise<import('../domain/payslip.ts').PaySlip> {
   const [{ slipItemsFromWords }, { parsePaySlip }, ocr] = await Promise.all([import('./slipPhoto.ts'), import('../domain/payslip.ts'), getEngine('swe')]);
-  const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+  // Scaled to reading size as it is decoded: a phone photo is 12 megapixels, far more than needed.
+  const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image', resizeWidth: TIMECARD_WIDTH, resizeQuality: 'high' });
   const canvas = document.createElement('canvas');
   canvas.width = bitmap.width;
   canvas.height = bitmap.height;
   canvas.getContext('2d')!.drawImage(bitmap, 0, 0);
   bitmap.close();
-  const strips = Math.max(1, Math.min(3, (navigator.hardwareConcurrency || 2) - 1));
+  const strips = slipStrips();
   const prepared = await prepare(canvas, strips, Math.round(TIMECARD_WIDTH * 0.03));
   const words = await ocr.recognizeStrips(prepared.strips, 'find');
   const items = slipItemsFromWords(words, prepared.width);
