@@ -1,8 +1,8 @@
 import type { LocalDate } from './time.ts';
 
 // Livsmedelsavtalet with Tilläggsavtal för Bageriföretag (Livsmedelsföretagen /
-// Livsmedelsarbetareförbundet): 1 November 2020 – 31 March 2023 and
-// 1 April 2025 – 31 March 2027.
+// Livsmedelsarbetareförbundet): 1 November 2020 – 31 March 2023,
+// 1 April 2023 – 31 March 2025 and 1 April 2025 – 31 March 2027.
 // Amounts change every 1 April, so each period has its own numbers.
 // When a new agreement is signed, add a period here.
 
@@ -48,7 +48,25 @@ export const AGREEMENT_PERIODS: AgreementPeriod[] = [
     vacationPayPerDayMin: 1568,
     minimumRaise: 1.13,
   },
-  // 1 april 2023 – 31 mars 2025 is not in the app yet: dates then are warned about.
+  // Livsmedelsavtalet 1 april 2023 – 31 mars 2025.
+  {
+    from: '2023-04-01',
+    to: '2024-03-31',
+    minimumWage: { adult: 152.57, adultAfterOneYear: 159.48 },
+    ob: { 1: 46.44, 2: 90.21, 3: 141.51, 4: 208.18 },
+    shiftedTime: 33.82,
+    vacationPayPerDayMin: 1632,
+    minimumRaise: 3.11,
+  },
+  {
+    from: '2024-04-01',
+    to: '2025-03-31',
+    minimumWage: { adult: 158.21, adultAfterOneYear: 165.12 },
+    ob: { 1: 47.88, 2: 93.01, 3: 145.9, 4: 214.63 },
+    shiftedTime: 34.87,
+    vacationPayPerDayMin: 1683,
+    minimumRaise: 2.54,
+  },
   // Livsmedelsavtalet 1 april 2025 – 31 mars 2027.
   {
     from: '2025-04-01',

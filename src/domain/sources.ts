@@ -4,17 +4,20 @@
 // the Sick Pay Act at the Riksdag. Opened only when the user taps a link.
 //
 // A day is linked to the edition of the agreement in force then: the 2020
-// edition (1 November 2020 – 31 March 2023) has its own pages, and its
-// shift-form supplement is §4.5 where the 2025 edition has §4.4.
+// edition (1 November 2020 – 31 March 2023) and the 2023 edition (1 April
+// 2023 – 31 March 2025) have their own pages, and their shift-form supplement
+// is §4.5 where the 2025 edition has §4.4. The 2023 edition is no longer on
+// livs.se: it links to an archived copy of the printed agreement.
 
 export const AGREEMENT_URL = 'https://www.livs.se/globalassets/livs.se/arbetsplats--och-avtalsfragor/kollektivavtal/livsmedelsavtalet-2025.pdf';
 export const AGREEMENT_2020_URL = 'https://www.livs.se/globalassets/livs.se/arbetsplats--och-avtalsfragor/kollektivavtal/livsmedelsavtalet-2020-2023.pdf';
+export const AGREEMENT_2023_URL = 'https://kollektivavtal.github.io/2023/livsmedelsavtalet.pdf';
 export const SICK_PAY_ACT_URL = 'https://www.riksdagen.se/sv/dokument-och-lagar/dokument/svensk-forfattningssamling/lag-19911047-om-sjuklon_sfs-1991-1047/';
 
 export type Source = 'agreement' | 'bakery' | 'appendixC' | 'appendixF' | 'sickPayAct';
 type AgreementSource = Exclude<Source, 'sickPayAct'>;
 
-export type Edition = '2020' | '2025';
+export type Edition = '2020' | '2023' | '2025';
 
 interface EditionInfo {
   url: string;
@@ -85,10 +88,39 @@ const EDITIONS: Record<Edition, EditionInfo> = {
     },
     renumbered: { agreement: { '4.4': '4.5' } },
   },
+  '2023': {
+    url: AGREEMENT_2023_URL,
+    pages: {
+      agreement: {
+        '': 1,
+        '2': 8,
+        '3': 9,
+        '3.1': 9,
+        '3.1.1': 9,
+        '3.1.2': 9,
+        '3.2': 10,
+        '3.3': 12,
+        '4': 13,
+        '4.3': 13,
+        '4.5': 14,
+        '5': 15,
+        '5.1': 15,
+        '5.1.3': 15,
+        '5.2': 16,
+        '5.5': 16,
+        '5.7': 17,
+        '7.2': 19,
+      },
+      bakery: { '': 58, '1': 58, '2': 59, '3': 61, '4': 62, '5': 62 },
+      appendixC: { '': 28, '5': 29, '5.3': 29 },
+      appendixF: { '': 39, '1': 39, '2': 39, '3': 40, '4': 40, '5': 40, '5.1': 40, '5.2': 41, '6': 41, '7': 41, '8': 41, '9': 42, '10': 42, '11': 42, '12': 43 },
+    },
+    renumbered: { agreement: { '4.4': '4.5' } },
+  },
 };
 
 /** The edition of the agreement in force on a date (the current one for a date after the last known). */
-export const editionOn = (date?: string): Edition => (date && date < '2023-04-01' ? '2020' : '2025');
+export const editionOn = (date?: string): Edition => (!date || date >= '2025-04-01' ? '2025' : date >= '2023-04-01' ? '2023' : '2020');
 
 export interface Citation {
   source: Source;
