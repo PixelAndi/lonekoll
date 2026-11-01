@@ -13,6 +13,7 @@ import { href, navigate } from '../router.ts';
 import { Card, Icon, Notice, Page, Spinner } from './common.tsx';
 import { applyOverrides, countFindings, slipPeriod, vacationBasisFor } from './slipComparison.ts';
 import { VacationProgress } from './VacationProgress.tsx';
+import { WageFromSlips } from './WageFromSlips.tsx';
 
 export function SlipsView() {
   const { t, settings } = useApp();
@@ -56,6 +57,7 @@ export function SlipsView() {
         {error && <Notice kind="error">{error}</Notice>}
       </div>
       {slips && slips.length === 0 && <p className="muted">{t('slips.empty')}</p>}
+      <WageFromSlips />
       <ul className="slip-list">
         {slips?.map((s) => (
           <SlipItem key={s.id} record={s} all={slips} />

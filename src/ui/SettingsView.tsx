@@ -15,6 +15,7 @@ import { SupplementSettings } from './settings/SupplementSettings.tsx';
 import { TaxSettings } from './settings/TaxSettings.tsx';
 import { WorkPattern } from './settings/WorkPattern.tsx';
 import { WageSettings } from './settings/WageSettings.tsx';
+import { WageFromSlips } from './WageFromSlips.tsx';
 
 export function SettingsView() {
   const { t, settings } = useApp();
@@ -46,6 +47,7 @@ export function SettingsView() {
 
   return (
     <Page title={t('nav.settings')}>
+      <WageFromSlips onlyChanges />
       <WageSettings />
       <WorkPattern />
       <ScheduleSettings />

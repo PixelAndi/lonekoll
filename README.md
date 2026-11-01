@@ -149,6 +149,12 @@ report you can go through with your employer.
   the first with days to now: how many days each has, the months in between
   with none (a gap, also warned about on the days page with links to them),
   and which have a pay slip.
+- **Raises from the pay slips.** The wage paid on every imported slip, in
+  order (a raise in the middle of a period by the wage lines' own dates;
+  retroactive pay left out but noted): where it changed and the settings say
+  otherwise, the slips page (and the settings) suggest adding it from that
+  date with one tap. A wage below the agreement's minimum is pointed out as
+  something to take up, not offered as a setting (domain/raises.ts).
 - **What's missing.** A page of its own (linked from the days page, with how
   many things are missing, and from the start date in settings) goes month
   by month from the start of the employment (or the first day logged) to
