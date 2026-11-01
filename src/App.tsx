@@ -16,6 +16,7 @@ import { SettingsView } from './ui/SettingsView.tsx';
 import { HelpView } from './ui/HelpView.tsx';
 import { ErrorBoundary } from './ui/ErrorBoundary.tsx';
 import { TimecardImport } from './ui/TimecardImport.tsx';
+import { MissingView } from './ui/MissingView.tsx';
 import { SlipsView } from './ui/SlipsView.tsx';
 
 const TABS = [
@@ -44,6 +45,8 @@ function Screen({ route }: { route: Route }) {
       return <HelpView section={route.section} />;
     case 'timecard':
       return <TimecardImport />;
+    case 'missing':
+      return <MissingView />;
     default:
       return <DaysView month={route.month} />;
   }

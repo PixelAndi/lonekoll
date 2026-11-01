@@ -8,6 +8,7 @@ import { specialDay } from '../domain/holidays.ts';
 import { datesInRange, monthEnd, todayLocal } from '../domain/time.ts';
 import { href, navigate } from '../router.ts';
 import { Card, Icon, Notice, Page } from './common.tsx';
+import { missingCount, useMissing } from './MissingView.tsx';
 import { PhotoImportButton } from './PhotoImport.tsx';
 import { hasManual, stampText } from './stamps.ts';
 
@@ -91,6 +92,18 @@ function MonthPicker({ coverage, current, route, onPick }: { coverage: MonthCove
   );
 }
 
+/** The way to the page of what is missing since the employment started, with how much is. */
+function MissingLink() {
+  const { t } = useApp();
+  const { months } = useMissing();
+  const n = missingCount(months);
+  return (
+    <p className="small missing-link">
+      <a href={href({ name: 'missing' })}>{n ? t('missing.link', { n }) : t('missing.linkNone')}</a>
+    </p>
+  );
+}
+
 /** Months with no days between months that have: easy to miss when catching up on old timecards. */
 export function GapNotice({ route = 'days' }: { route?: 'days' | 'month' }) {
   const { t, fmt, lang } = useApp();
@@ -160,6 +173,7 @@ export function DaysView({ month }: { month?: string }) {
 
       <MonthNav month={monthKey} route="days" />
       <GapNotice />
+      <MissingLink />
       <p className="month-summary">
         {t('days.summary', {
           shifts: period.shifts.length,

@@ -2705,3 +2705,30 @@ input[type='checkbox'] {
   object-fit: cover;
   object-position: top;
 }
+
+/* What is missing since the employment started. */
+.missing-link {
+  margin: 0 0 8px;
+}
+
+.missing-summary,
+.missing-list {
+  margin: 4px 0;
+  padding-left: 1.2em;
+}
+
+.missing-list li {
+  margin: 4px 0;
+}
+
+.missing-month {
+  border-left: 4px solid #f59e0b;
+}
+
+.missing-month-ok {
+  border-left-color: #16a34a;
+}
+
+.missing-dates {
+  display: inline;
+}

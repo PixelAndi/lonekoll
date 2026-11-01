@@ -81,6 +81,9 @@ export function SettingsView() {
         <div className="field-row">
           <Field label={t('settings.employedSince')}>
             <input type="date" value={settings.employedSince ?? ''} onChange={(e) => save({ employedSince: e.target.value || undefined })} />
+            <a className="small" href="#/missing">
+              {t('missing.settingsLink')}
+            </a>
           </Field>
           <Field label={t('settings.birthDate')}>
             <input type="date" value={settings.birthDate ?? ''} onChange={(e) => save({ birthDate: e.target.value || undefined })} />

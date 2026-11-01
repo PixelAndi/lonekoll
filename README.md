@@ -149,6 +149,13 @@ report you can go through with your employer.
   the first with days to now: how many days each has, the months in between
   with none (a gap, also warned about on the days page with links to them),
   and which have a pay slip.
+- **What's missing.** A page of its own (linked from the days page, with how
+  many things are missing, and from the start date in settings) goes month
+  by month from the start of the employment (or the first day logged) to
+  today: months with no days, days the schedule planned that have neither
+  stamps nor an absence (holidays left out), months without a pay slip once
+  it is surely out (40 days after the month), and dates without a wage set –
+  each with a link to put it right.
 - **Set up from a pay slip.** For a new user's first pay slip (or while no
   wage is set), the slip's page suggests settings, each with the line it
   comes from: the hourly wage or monthly salary, the overtime limit per shift
