@@ -15,10 +15,13 @@ README.md describes the features and rules in detail – read it first.
   tests, comments, fixtures, screenshots or commit messages. Tests use
   made-up values only. Before every commit, scan the staged diff for values
   you have seen in real documents this session, and replace any you find.
-- **Real data may be used to tune the readers, not stored in the repo.** The
-  owner allows reading their real documents (from their Google Drive folder
-  `Lönekoll` via the Google Drive connector, or files attached in chat) to
-  test and improve the photo/PDF readers. Keep copies only in the session's
+- **Real data may be used to develop the app, not stored in the repo.** The
+  owner allows using their real documents and data – names and numbers
+  included (their Google Drive folder `Lönekoll` via the Google Drive
+  connector, the app's `Appdata/lonekoll-data.json` there, or files attached
+  in chat) – to test and develop any of the app's functionality, on the
+  condition that none of it ever becomes visible to the app's users (the app
+  will be shared with colleagues, and this repo is public). Keep copies only in the session's
   scratchpad, never in the repo, and delete them when done. Debug harnesses
   (e.g. a temporary HTML page importing `src/ocr/browser.ts`) must be removed
   before committing.
