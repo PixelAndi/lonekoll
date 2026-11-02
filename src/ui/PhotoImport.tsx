@@ -4,14 +4,15 @@ import { db, learnDigits, newId, saveDay } from '../db.ts';
 import type { DayRecord, StampPair } from '../domain/model.ts';
 import { forgottenStamps } from '../domain/shifts.ts';
 import { todayLocal } from '../domain/time.ts';
-import { href, navigate } from '../router.ts';
+import { navigate } from '../router.ts';
 import { loadPhoto, readPhoto, tableCrop } from '../ocr/browser.ts';
 import type { ClockReading } from '../ocr/pipeline.ts';
-import { Icon, Modal, Notice, Spinner } from './common.tsx';
+import { Modal, Notice, Spinner } from './common.tsx';
 import { Scanner, type Scan } from './Scanner.tsx';
 import { flushFocusedField, StampRowsEditor } from './StampRowsEditor.tsx';
 import { mergeStamps, sameStamps, stampDiff, type StampDiff } from '../domain/sameData.ts';
 import { StampMerge } from './SameData.tsx';
+import { onClock } from './actions.ts';
 
 interface Pending {
   previewUrl: string;
@@ -27,13 +28,16 @@ interface QueuedPhoto {
   reading?: ClockReading;
 }
 
-/** Scan the clock with the camera, or pick saved photos, and walk through them. */
-export function PhotoImportButton() {
-  const { t } = useApp();
+/**
+ * The clock scanner and the saved-photos picker, once for the whole app: opened from the + button,
+ * Idag or anywhere else (actions.ts), each photo then walked through in its review.
+ */
+export function ClockImportHost() {
   const input = useRef<HTMLInputElement>(null);
   const [queue, setQueue] = useState<QueuedPhoto[]>([]);
   const [total, setTotal] = useState(0);
   const [scanning, setScanning] = useState(false);
+  useEffect(() => onClock((action) => (action === 'scan' ? setScanning(true) : input.current?.click())), []);
 
   const onFiles = (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -43,26 +47,12 @@ export function PhotoImportButton() {
   };
   const onScanned = useCallback((scans: Scan[]) => {
     setScanning(false);
-    // Earliest day first, so a shift over midnight is checked in order.
     setQueue([...scans].sort((a, b) => (a.reading.date ?? '').localeCompare(b.reading.date ?? '')));
     setTotal(scans.length);
   }, []);
 
   return (
     <>
-      {/* The daily scan first; printed timecards, needed now and then, beside it. */}
-      <div className="scan-row">
-        <button type="button" className="button button-primary button-large" onClick={() => setScanning(true)}>
-          <Icon name="camera" /> {t('scan.open')}
-        </button>
-        <a className="button timecard-button" href={href({ name: 'timecard' })}>
-          <Icon name="slips" />
-          <span>{t('timecard.button')}</span>
-        </a>
-      </div>
-      <button type="button" className="button" onClick={() => input.current?.click()}>
-        {t('scan.pickPhotos')}
-      </button>
       <input ref={input} type="file" accept="image/*" multiple hidden onChange={(e) => onFiles(e.target.files)} />
       {scanning && (
         <Scanner

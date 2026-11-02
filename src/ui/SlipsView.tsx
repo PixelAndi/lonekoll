@@ -1,6 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { withPayDay } from '../domain/payday.ts';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useApp } from '../app-context.ts';
 import { db, newId, type SlipRecord } from '../db.ts';
 import { calculatePeriod } from '../domain/calc.ts';
@@ -15,6 +15,7 @@ import { Card, Fold, Icon, Notice, Page, Spinner } from './common.tsx';
 import { applyOverrides, countFindings, slipPeriod, vacationBasisFor } from './slipComparison.ts';
 import { VacationProgress } from './VacationProgress.tsx';
 import { WageFromSlips } from './WageFromSlips.tsx';
+import { onSlipScan, takeSlipScan } from './actions.ts';
 import { IssuesLine } from './IssuesView.tsx';
 import { needsCheck, readCompletely } from './SlipCheck.tsx';
 import { completeness, SlipScanner, type SlipOutcome } from './SlipScanner.tsx';
@@ -72,6 +73,11 @@ export function SlipsView() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const slips = useLiveQuery(() => db.slips.orderBy('periodStart').reverse().toArray(), []);
+  // The + button's "Lönebesked": the scanner opens here.
+  useEffect(() => {
+    if (takeSlipScan()) setScanning(true);
+    return onSlipScan(() => setScanning(true));
+  }, []);
 
   /** Each file picked, and how its import went (several can be picked at once). */
   const [results, setResults] = useState<Result[]>([]);
@@ -138,7 +144,7 @@ export function SlipsView() {
   };
 
   return (
-    <Page title={t('nav.slips')}>
+    <Page title={t('nav.pay')}>
       {scanning && (
         <SlipScanner
           onSlip={onScanned}

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 // server rewrites.
 
 export type Route =
+  | { name: 'today' }
   | { name: 'days'; month?: string }
   | { name: 'day'; date: string }
   | { name: 'month'; month?: string }
@@ -48,8 +49,10 @@ export function parseHash(hash: string): Route {
       return { name: 'help', section: (HELP_SECTIONS as readonly string[]).includes(arg) ? (arg as HelpSection) : undefined };
     case 'days':
       return { name: 'days', month: arg };
+    case 'today':
+      return { name: 'today' };
   }
-  return { name: 'days' };
+  return { name: 'today' };
 }
 
 export function href(route: Route): string {

@@ -3219,3 +3219,138 @@ input[type='checkbox'] {
 .app-cloud-busy .icon {
   animation: slip-hud-busy 0.9s ease-in-out infinite alternate;
 }
+
+/* Idag (TodayView). */
+.today-date {
+  margin: -6px 0 8px;
+  text-transform: capitalize;
+}
+.today-shift .card-title {
+  margin-bottom: 4px;
+}
+.today-stamps {
+  display: block;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: inherit;
+  text-decoration: none;
+  margin: 2px 0 12px;
+}
+.today-shift .button-large {
+  width: 100%;
+}
+.today-more {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 8px 0;
+}
+.today-more .button {
+  padding-inline: 4px;
+  font-size: 0.85rem;
+  text-align: center;
+}
+.today-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.today-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  color: inherit;
+  text-decoration: none;
+}
+.today-stat strong {
+  font-size: 1.25rem;
+}
+.today-recent-head {
+  display: flex;
+  justify-content: space-between;
+  margin: 8px 0 6px;
+}
+
+/* The + button and its menu (AddButton). */
+.add-button {
+  position: fixed;
+  right: max(16px, calc(50vw - 360px));
+  bottom: calc(var(--tabbar-height) + 16px + env(safe-area-inset-bottom, 0px));
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  border: 0;
+  background: var(--primary);
+  color: var(--primary-text);
+  box-shadow: 0 6px 16px rgb(0 0 0 / 0.25);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 30;
+  cursor: pointer;
+}
+.add-button .icon {
+  width: 30px;
+  height: 30px;
+  fill: currentColor;
+  transition: transform 0.15s;
+}
+.add-button-open .icon {
+  transform: rotate(45deg);
+}
+.add-backdrop {
+  position: fixed;
+  inset: 0;
+  border: 0;
+  background: rgb(0 0 0 / 0.35);
+  z-index: 29;
+}
+.add-menu {
+  position: fixed;
+  right: max(16px, calc(50vw - 360px));
+  bottom: calc(var(--tabbar-height) + 86px + env(safe-area-inset-bottom, 0px));
+  z-index: 30;
+  background: var(--surface);
+  border-radius: 16px;
+  padding: 6px;
+  min-width: 250px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.25);
+  display: flex;
+  flex-direction: column;
+}
+.add-menu button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 0 12px;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  border-radius: 10px;
+  cursor: pointer;
+}
+.add-menu button:hover {
+  background: var(--surface-2);
+}
+.add-menu .icon {
+  width: 22px;
+  height: 22px;
+  fill: var(--primary);
+}
+@media print {
+  .add-button,
+  .add-menu,
+  .add-backdrop {
+    display: none;
+  }
+}
+/* Room under the last item for the + button. */
+.app-with-add {
+  padding-bottom: calc(var(--tabbar-height) + 96px + env(safe-area-inset-bottom));
+}

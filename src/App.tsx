@@ -21,14 +21,17 @@ import { TimecardImport } from './ui/TimecardImport.tsx';
 import { MissingView } from './ui/MissingView.tsx';
 import { SlipsView } from './ui/SlipsView.tsx';
 import { IssuesView } from './ui/IssuesView.tsx';
+import { TodayView } from './ui/TodayView.tsx';
+import { AddButton } from './ui/AddButton.tsx';
+import { ClockImportHost } from './ui/PhotoImport.tsx';
 import { IssuesProvider, useIssues } from './ui/issues-context.tsx';
 
 const TABS = [
-  { route: { name: 'days' }, icon: 'days', label: 'nav.days', match: ['days', 'day', 'timecard'] },
-  { route: { name: 'month' }, icon: 'month', label: 'nav.month', match: ['month'] },
-  { route: { name: 'slips' }, icon: 'slips', label: 'nav.slips', match: ['slips', 'slip'] },
+  { route: { name: 'today' }, icon: 'today', label: 'nav.today', match: ['today', 'day', 'timecard'] },
+  { route: { name: 'days' }, icon: 'days', label: 'nav.calendar', match: ['days', 'month'] },
+  { route: { name: 'slips' }, icon: 'slips', label: 'nav.pay', match: ['slips', 'slip'] },
   { route: { name: 'issues' }, icon: 'issues', label: 'nav.issues', match: ['issues', 'missing'] },
-  { route: { name: 'settings' }, icon: 'settings', label: 'nav.settings', match: ['settings', 'help'] },
+  { route: { name: 'settings' }, icon: 'more', label: 'nav.more', match: ['settings', 'help'] },
 ] as const;
 
 /** How many things are open in Ärenden, on its tab. */
@@ -36,6 +39,9 @@ function IssuesBadge() {
   const { count } = useIssues();
   return count ? <span className="tab-badge">{count > 99 ? '99+' : count}</span> : null;
 }
+
+/** The pages with the + button (the main tabs; not settings, a day being edited or a report). */
+const ADD_ON: Route['name'][] = ['today', 'days', 'month', 'slips', 'issues'];
 
 function Screen({ route }: { route: Route }) {
   switch (route.name) {
@@ -59,6 +65,8 @@ function Screen({ route }: { route: Route }) {
       return <MissingView />;
     case 'issues':
       return <IssuesView />;
+    case 'today':
+      return <TodayView />;
     default:
       return <DaysView month={route.month} />;
   }
@@ -112,10 +120,10 @@ export function App() {
   const isReport = route.name === 'report';
   return (
     <AppContext.Provider value={data}>
-      <div className={isReport ? 'app app-report' : 'app'}>
+      <div className={isReport ? 'app app-report' : ADD_ON.includes(route.name) ? 'app app-with-add' : 'app'}>
         {!isReport && (
           <header className="app-header no-print">
-            <a href={href({ name: 'days' })} className="app-title">
+            <a href={href({ name: 'today' })} className="app-title">
               {t('app.title')}
             </a>
             <span className="app-tagline">{t('app.tagline')}</span>
@@ -142,6 +150,8 @@ export function App() {
           </nav>
         )}
         </IssuesProvider>
+        {!isReport && ADD_ON.includes(route.name) && <AddButton />}
+        <ClockImportHost />
         {/* Last, so it is above any other window it is asked from (e.g. a photo's "Visa original"). */}
         <SignInAsk />
       </div>

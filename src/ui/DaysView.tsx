@@ -6,11 +6,9 @@ import { monthCoverage, type MonthCoverage } from '../domain/coverage.ts';
 import { db } from '../db.ts';
 import { specialDay } from '../domain/holidays.ts';
 import { datesInRange, monthEnd, todayLocal } from '../domain/time.ts';
-import { href, navigate } from '../router.ts';
-import { Card, Icon, Notice, Page } from './common.tsx';
+import { href } from '../router.ts';
+import { Icon, Notice, Page } from './common.tsx';
 import { missingCount, useMissing } from './MissingView.tsx';
-import { PhotoImportButton } from './PhotoImport.tsx';
-import { IssuesLine } from './IssuesView.tsx';
 import { hasManual, stampText } from './stamps.ts';
 
 export function shiftMonth(month: string, delta: number): string {
@@ -149,32 +147,7 @@ export function DaysView({ month }: { month?: string }) {
   const missing = dates.filter((d) => !byDate.has(d)).length;
 
   return (
-    <Page title={t('nav.days')}>
-      {settings.wages.length === 0 && (
-        <Card title={t('setup.title')} className="card-highlight">
-          <p>{t('setup.text')}</p>
-          <div className="button-row">
-            <a className="button button-primary" href={href({ name: 'settings' })}>
-              {t('setup.button')}
-            </a>
-            <a className="button" href={href({ name: 'slips' })}>
-              {t('setup.slipButton')}
-            </a>
-          </div>
-        </Card>
-      )}
-      <IssuesLine />
-      <div className="actions-stack">
-        <PhotoImportButton />
-        <p className="muted small">{t('days.photoHint')}</p>
-        <p className="small forgot-tip">
-          {t('days.forgotTip')} <a href={href({ name: 'help', section: 'forgot' })}>{t('days.forgotHow')}</a>
-        </p>
-        <button type="button" className="button" onClick={() => navigate({ name: 'day', date: today })}>
-          <Icon name="plus" /> {t('days.manual')}
-        </button>
-      </div>
-
+    <Page title={t('nav.calendar')}>
       <MonthNav month={monthKey} route="days" />
       <GapNotice />
       <MissingLink />
@@ -187,6 +160,9 @@ export function DaysView({ month }: { month?: string }) {
         })}
       </p>
       {missing > 0 && <p className="muted small">{t('days.missingDays', { count: missing })}</p>}
+      <p className="small">
+        <a href={href({ name: 'month', month: monthKey })}>{t('days.monthPay')}</a>
+      </p>
 
       <ul className="day-list">
         {dates.map((date) => {
