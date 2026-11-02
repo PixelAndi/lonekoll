@@ -8,6 +8,7 @@ import { monthlyPayOn } from '../domain/model.ts';
 import { payDateFor } from '../domain/payday.ts';
 import { usualWeekdays } from '../domain/reportCheck.ts';
 import { currentSickPeriod } from '../domain/sick.ts';
+import { workedPastMidnight } from '../domain/night.ts';
 import { taxBasis, taxColumn, taxFor } from '../domain/tax.ts';
 import { addDays, isoWeekday, monthEnd, monthStart, todayLocal } from '../domain/time.ts';
 import { vacationLedger } from '../domain/vacationDays.ts';
@@ -32,6 +33,8 @@ export function TodayView() {
   const [sheet, setSheet] = useState<'sick' | 'leave' | null>(null);
   const today = todayLocal();
   const sick = useMemo(() => currentSickPeriod(days, today), [days, today]);
+  // Only for someone whose shifts have ended after midnight: the day before is to be scanned too.
+  const pastMidnight = useMemo(() => workedPastMidnight(days), [days]);
 
   return (
     <Page title={t('nav.today')}>
@@ -53,7 +56,13 @@ export function TodayView() {
         <button type="button" className="button button-primary button-large" onClick={() => openClock('scan')}>
           <Icon name="camera" /> {t('scan.open')}
         </button>
-        <p className="small muted">{t('today.scanWhen')}</p>
+        <ol className="today-steps small">
+          <li>{t('today.step1')}</li>
+          <li>{t('today.step2')}</li>
+          <li>{t('today.step3')}</li>
+          <li>{t('today.step4')}</li>
+        </ol>
+        {pastMidnight && <p className="small today-midnight">{t('today.midnight')}</p>}
         <div className="today-more">
           <button type="button" className="button" onClick={() => setSheet('sick')}>
             {t('today.sick')}

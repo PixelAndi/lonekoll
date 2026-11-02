@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../app-context.ts';
 import type { DayRecord } from '../domain/model.ts';
 import { forgottenStamps, otherDayNeeded, type ForgottenStamp } from '../domain/shifts.ts';
@@ -9,6 +9,7 @@ import { checkRows, EMPTY_MEMORY, withShared, type DigitMemory } from '../ocr/gl
 import { agreement, aim, HISTORY, progress, searchArea, type Aim, type FrameReading, type Hint } from '../ocr/live.ts';
 import type { ClockReading, FoundTable } from '../ocr/pipeline.ts';
 import { ClockHowTo } from './ClockHowTo.tsx';
+import { workedPastMidnight } from '../domain/night.ts';
 import { ltr } from '../format.ts';
 import { ScannerHud, type HudState } from './ScannerHud.tsx';
 
@@ -103,6 +104,7 @@ export function Scanner({
   onManual: () => void;
 }) {
   const { t, fmt, days } = useApp();
+  const pastMidnight = useMemo(() => workedPastMidnight(days), [days]);
   const daysRef = useRef(days);
   daysRef.current = days;
   const video = useRef<HTMLVideoElement>(null);
@@ -346,6 +348,12 @@ export function Scanner({
             <button type="button" className="link-button scanner-howto-hide" onClick={() => setShowHow(false)}>
               {t('scan.hideHow')}
             </button>
+          </div>
+        ) : !target && phase.kind === 'aiming' ? (
+          // Nothing asked for yet: the clock shows the clock-out only after logging in again.
+          <div className="scanner-target">
+            <span>{t('scan.reloginTip')}</span>
+            {pastMidnight && <span>{t('scan.midnightTip')}</span>}
           </div>
         ) : (
           target &&

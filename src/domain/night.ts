@@ -57,3 +57,8 @@ export function nightWork(days: DayRecord[]): NightWork | null {
   if (best && recent.filter(Boolean).length / recent.length < NIGHT_SHARE) return null;
   return best;
 }
+
+/** Some shift has ended after midnight (then its start is on the clock's page for the day before). */
+export function workedPastMidnight(days: DayRecord[]): boolean {
+  return buildShifts(days).shifts.some((s) => s.end > s.start && utcToLocal(s.end - 60_000).date !== s.date);
+}

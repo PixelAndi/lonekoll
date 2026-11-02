@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { calculatePeriod } from './calc.ts';
 import { DEFAULT_SETTINGS, type DayRecord, type Settings } from './model.ts';
-import { nightWork } from './night.ts';
+import { nightWork, workedPastMidnight } from './night.ts';
 import { addDays } from './time.ts';
 
 // Made-up shifts in 2027.
@@ -34,5 +34,12 @@ describe('skiftformstillägg from a date', () => {
     const days = [day('2027-03-10', '08:00', '12:00'), day('2027-03-16', '08:00', '12:00')];
     const period = calculatePeriod(days, settings, '2027-03-01', '2027-03-31');
     expect(period.totals.shiftForm?.hours).toBe(4);
+  });
+});
+
+describe('shifts past midnight', () => {
+  it('are found when a shift ended on the next day', () => {
+    expect(workedPastMidnight(run('2027-03-01', 3, '06:00', '14:00'))).toBe(false);
+    expect(workedPastMidnight([...run('2027-03-01', 3, '06:00', '14:00'), day('2027-03-05', '18:00', '00:30')])).toBe(true);
   });
 });

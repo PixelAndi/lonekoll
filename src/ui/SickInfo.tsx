@@ -25,6 +25,9 @@ export function SickInfo({ start }: { start: string }) {
           </strong>
         </li>
         <li>
+          <Cited text={t('sick.earlyCertificate')} />
+        </li>
+        <li>
           <Cited text={t('sick.insurance', { date: day(15) })} />
         </li>
         <li>{t('sick.relapse')}</li>

@@ -132,12 +132,16 @@ in Playwright by routing `https://accounts.google.com/gsi/client` and
   with undo. Idag and the pay slip page show one line linking here.
 - **Navigation (on trial since cc6c333 – the owner may ask to go back):**
   tabs Idag (`TodayView.tsx`, the everyday page, for the end of the day:
-  register the day – scan the clock after clocking out, Sjuk, Ledig
+  register the day – the clock shows the clock-out only after logging in
+  again, so Idag and the scanner say: clock out, wait to be logged out, log
+  in, scan; "scan the day before too" only for someone with a shift past
+  midnight (`workedPastMidnight` in night.ts) – Sjuk, Ledig
   (`AbsenceSheet.tsx`, a from–to range on usual working days), Skriv in,
   Tidkort; working days of the last two weeks with nothing registered; an
   ongoing sick period with its dates (`domain/sick.ts`, `SickInfo.tsx`:
-  karens day 1, läkarintyg from day 8, Försäkringskassan from day 15, five-day
-  relapse rule); "Lönen framåt" – next pay's gross and net from the log for
+  karens day 1, läkarintyg from day 8 – earlier only if the employer names
+  the doctor and pays (Livsmedelsavtalet §5.4; "ask for it in writing" is
+  advice, not a rule), Försäkringskassan from day 15, five-day relapse rule); "Lönen framåt" – next pay's gross and net from the log for
   hourly pay, the monthly salary otherwise, komptid saved/used this month;
   vacation days left from the latest slip) · Kalender (DaysView: the month's
   days, link to Månad's calculated pay) · Lön (SlipsView) · Kontroll (the

@@ -3286,3 +3286,20 @@ input[type='checkbox'] {
 .sick-info li + li {
   margin-top: 4px;
 }
+.today-steps {
+  margin: 8px 0 4px;
+  padding-left: 1.2rem;
+}
+.today-steps li + li {
+  margin-top: 2px;
+}
+.today-midnight {
+  margin: 4px 0;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--primary-soft);
+}
+.scanner-target span + span {
+  display: block;
+  margin-top: 4px;
+}
