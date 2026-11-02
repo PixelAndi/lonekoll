@@ -161,7 +161,7 @@ const NAMES: [Source, string, { alone: boolean }][] = [
   ['appendixC', '(?:Bilaga|Appendix|Załącznik(?:a|u)?|ضمیمهٔ) C', { alone: true }],
   ['sickPayAct', 'Sjuklönelagen|[Ss]ick [Pp]ay [Aa]ct|قانون معاش مریضی', { alone: false }],
   ['agreement', 'Livsmedelsavtalet', { alone: true }],
-  ['agreement', '[Aa]greement|[Uu]kład(?:u|zie)?|قرارداد', { alone: false }],
+  ['agreement', '[Aa]greement|[Uu]kład(?:u|zie)?|قرارداد|ስምምነት', { alone: false }],
 ];
 const SECTION = String.raw`§\s?(\d+(?:\.\d+)*)(?:\s?[–-]\s?\d+(?:\.\d+)*)?|(\d+)\s?§`;
 const PATTERN = new RegExp(

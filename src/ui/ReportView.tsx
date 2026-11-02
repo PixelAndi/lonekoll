@@ -117,7 +117,7 @@ export function ReportView({ id }: { id: string }) {
 }
 
 /** Language names for file names (plain letters). */
-const LANGUAGE_FILE_NAMES: Record<Language, string> = { sv: 'svenska', en: 'English', pl: 'polski', prs: 'Dari' };
+const LANGUAGE_FILE_NAMES: Record<Language, string> = { sv: 'svenska', en: 'English', pl: 'polski', prs: 'Dari', am: 'Amharic' };
 
 /** The report itself in one language. */
 function ReportPage({

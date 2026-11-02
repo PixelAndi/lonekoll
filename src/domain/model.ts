@@ -119,7 +119,7 @@ export interface TaxSettings {
 }
 
 export interface Settings {
-  language: 'sv' | 'en' | 'pl' | 'prs';
+  language: 'sv' | 'en' | 'pl' | 'prs' | 'am';
   /** Light or dark look; auto follows the phone. */
   theme: Theme;
   name: string;

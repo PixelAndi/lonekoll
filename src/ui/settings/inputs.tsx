@@ -33,4 +33,4 @@ export const numberOrUndefined = (v: string) => {
 
 /** 187.5 → "187,5" in Swedish. */
 export const decimalText = (n: number | undefined, lang: Language) =>
-  n === undefined ? '' : String(n).replace('.', lang === 'en' ? '.' : ',');
+  n === undefined ? '' : String(n).replace('.', lang === 'en' || lang === 'am' ? '.' : ',');

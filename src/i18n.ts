@@ -3,6 +3,7 @@
 
 import { pl } from './i18n-pl.ts';
 import { prs } from './i18n-prs.ts';
+import { am } from './i18n-am.ts';
 
 const sv = {
   'app.title': 'Lönekoll',
@@ -2524,17 +2525,17 @@ const en: Record<TextKey, string> = {
   'holiday.newYearsEve': 'New Year’s Eve',
 };
 
-export type Language = 'sv' | 'en' | 'pl' | 'prs';
-export const DICTIONARIES: Record<Language, Record<TextKey, string>> = { sv, en, pl, prs };
+export type Language = 'sv' | 'en' | 'pl' | 'prs' | 'am';
+export const DICTIONARIES: Record<Language, Record<TextKey, string>> = { sv, en, pl, prs, am };
 
 /** Languages written right to left (Dari). */
 export const isRightToLeft = (lang: Language) => lang === 'prs';
 
 /** The language tag for the page: Dari is Persian as written in Afghanistan. */
-export const LANGUAGE_TAGS: Record<Language, string> = { sv: 'sv', en: 'en', pl: 'pl', prs: 'fa-AF' };
+export const LANGUAGE_TAGS: Record<Language, string> = { sv: 'sv', en: 'en', pl: 'pl', prs: 'fa-AF', am: 'am' };
 
 /** Language names, each in its own language. */
-export const LANGUAGE_NAMES: Record<Language, string> = { sv: 'Svenska', en: 'English', pl: 'Polski', prs: 'دری (Dari)' };
+export const LANGUAGE_NAMES: Record<Language, string> = { sv: 'Svenska', en: 'English', pl: 'Polski', prs: 'دری (Dari)', am: 'አማርኛ (Amharic)' };
 
 export type Translate = (key: TextKey, values?: Record<string, string | number>) => string;
 

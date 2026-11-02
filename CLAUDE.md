@@ -41,9 +41,12 @@ README.md describes the features and rules in detail – read it first.
 
 - The owner tests on their phone (Android, Chrome, app added to the home
   screen) and replies in English; the app's UI is Swedish first.
-- Every user-facing string exists in four languages: `src/i18n.ts` (Swedish
-  `sv` and English `en`), `src/i18n-pl.ts` (Polish), `src/i18n-prs.ts` (Dari).
-  Swedish is the source; all dictionaries must have the same keys.
+- Every user-facing string exists in five languages: `src/i18n.ts` (Swedish
+  `sv` and English `en`), `src/i18n-pl.ts` (Polish), `src/i18n-prs.ts` (Dari),
+  `src/i18n-am.ts` (Amharic, Ethiopic script, left to right; translated from
+  the English, Swedish names such as Sjuklönelagen and Tilläggsavtal Bagerier
+  kept so citations link). Swedish is the source; all dictionaries must have
+  the same keys.
 - Prefer measuring on real data over guessing; say plainly what was and
   wasn't tested.
 

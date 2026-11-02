@@ -106,7 +106,7 @@ export async function loadSettings(): Promise<Settings> {
     // First start: follow the phone's language.
     const phone = (navigator.language ?? '').toLowerCase();
     // Dari is close enough to Persian that a phone set to either gets Dari.
-    const language = phone.startsWith('sv') ? 'sv' : phone.startsWith('pl') ? 'pl' : phone.startsWith('prs') || phone.startsWith('fa') ? 'prs' : 'en';
+    const language = phone.startsWith('sv') ? 'sv' : phone.startsWith('pl') ? 'pl' : phone.startsWith('prs') || phone.startsWith('fa') ? 'prs' : phone.startsWith('am') ? 'am' : 'en';
     return { ...DEFAULT_SETTINGS, language };
   }
   // Nested settings are merged too, so fields added in later versions get defaults.
