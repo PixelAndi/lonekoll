@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import { db, loadSettings, saveSettings, type CardRecord, type CloudFileRecord, type PhotoRecord, type SlipRecord } from '../db.ts';
 import { DEFAULT_CLOUD, type CloudSettings } from '../domain/model.ts';
+import { askToSignIn, type SignInReason } from './signInAsk.ts';
 import * as drive from './google.ts';
 import { mergeFromCloud, type CloudData } from './merge.ts';
 import { APPDATA, cardPlace, DATA_FILE, dueForReduce, photoPlace, ROOT, slipPlace, type DrivePlace } from './paths.ts';
@@ -234,12 +235,28 @@ async function preview(blob: Blob, width: number, pdf = false): Promise<Blob> {
   return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('preview failed'))), 'image/jpeg', 0.7));
 }
 
-/** The original of a file kept in Drive (signing in again if needed; call from a tap). */
+/** Signed in to Drive, asking the user first (saying why) when not. */
+async function signedInFor(reason: SignInReason): Promise<void> {
+  if (!drive.isSignedIn()) await askToSignIn(reason, drive.signIn);
+}
+
+/** Something from Drive: asks to sign in first when needed, and once more if Google says the sign-in has run out. */
+async function fromDrive<T>(reason: SignInReason, get: () => Promise<T>): Promise<T> {
+  await signedInFor(reason);
+  try {
+    return await get();
+  } catch (e) {
+    if (!(e instanceof drive.NeedsSignIn)) throw e;
+    await askToSignIn(reason, drive.signIn);
+    return get();
+  }
+}
+
+/** The original of a file kept in Drive (the user is asked to sign in when needed). */
 export async function openOriginal(key: string): Promise<Blob> {
   const copy = await db.cloud.get(key);
   if (!copy) throw new Error('not in Drive');
-  if (!drive.isSignedIn()) await drive.signIn();
-  return drive.download(copy.driveId);
+  return fromDrive('original', () => drive.download(copy.driveId));
 }
 
 export async function signOutOfDrive(): Promise<void> {
@@ -262,7 +279,7 @@ export async function archivedCount(): Promise<number> {
 
 /** Brings every original back from Drive to the phone (e.g. before turning Drive off). */
 export async function fetchAllOriginals(): Promise<void> {
-  if (!drive.isSignedIn()) await drive.signIn();
+  await signedInFor('fetchAll');
   const items = (await allItems()).filter((i) => i.record.archived);
   let count = 0;
   try {

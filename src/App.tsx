@@ -4,7 +4,7 @@ import { applyTheme } from './theme.ts';
 import { AppContext, type AppData } from './app-context.ts';
 import { db, loadSettings } from './db.ts';
 import { useAutoSync } from './cloud/useCloud.ts';
-import { CloudBanner } from './ui/settings/CloudSettings.tsx';
+import { CloudStatus, SignInAsk } from './ui/settings/CloudSettings.tsx';
 import { formatter } from './format.ts';
 import { isRightToLeft, LANGUAGE_TAGS, translator } from './i18n.ts';
 import { href, useRoute, type Route } from './router.ts';
@@ -119,13 +119,13 @@ export function App() {
               {t('app.title')}
             </a>
             <span className="app-tagline">{t('app.tagline')}</span>
+            <CloudStatus />
             <a href={href({ name: 'help' })} className="app-help" aria-label={t('nav.help')}>
               <Icon name="help" />
             </a>
           </header>
         )}
         <UpdateBanner text={t('update.available')} action={t('update.reload')} />
-        <CloudBanner />
         <IssuesProvider>
         <ErrorBoundary title={t('error.title')} text={t('error.text')} back={t('error.back')} details={t('error.details')} reload={t('error.reload')} resetKey={JSON.stringify(route)}>
           <Screen route={route} />
@@ -142,6 +142,8 @@ export function App() {
           </nav>
         )}
         </IssuesProvider>
+        {/* Last, so it is above any other window it is asked from (e.g. a photo's "Visa original"). */}
+        <SignInAsk />
       </div>
     </AppContext.Provider>
   );

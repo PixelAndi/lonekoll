@@ -27,7 +27,9 @@ export function useOriginal(key: string) {
     try {
       setState({ blob: await openOriginal(key) });
     } catch (e) {
-      setState({ error: e instanceof Error ? e.message : String(e) });
+      // Declining to sign in is no error: the preview stays, the button too.
+      if (e instanceof Error && e.message === 'cancelled') setState({});
+      else setState({ error: e instanceof Error ? e.message : String(e) });
     }
   };
   return { ...state, load };

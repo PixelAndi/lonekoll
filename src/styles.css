@@ -3172,3 +3172,50 @@ input[type='checkbox'] {
   font-weight: 600;
   margin-bottom: 0.2rem;
 }
+
+/* The Drive copy's state in the header (CloudStatus). */
+.app-cloud {
+  flex: none;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.app-cloud .icon {
+  width: 26px;
+  height: 26px;
+  fill: currentColor;
+}
+.app-cloud-mark {
+  position: absolute;
+  bottom: 6px;
+  right: 2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 10px;
+  line-height: 14px;
+  font-weight: 700;
+}
+.app-cloud-attention {
+  color: var(--primary);
+}
+.app-cloud-attention .app-cloud-mark {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-text);
+}
+.app-cloud-busy .icon {
+  animation: slip-hud-busy 0.9s ease-in-out infinite alternate;
+}

@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { useApp } from '../../app-context.ts';
 import { archivedCount, fetchAllOriginals, pendingCount, saveCloud, signedIn, signOutOfDrive, syncNow, useSyncStatus } from '../../cloud/sync.ts';
 import { DEFAULT_CLOUD, type CloudSettings as Cloud } from '../../domain/model.ts';
-import { Card, Field, Notice } from '../common.tsx';
+import { Card, Field, Icon, Modal, Notice } from '../common.tsx';
+import { useSignInAsk } from '../../cloud/signInAsk.ts';
 
 const REDUCE_CHOICES = [7, 30, 90, 365] as const;
 
@@ -122,17 +123,76 @@ export function CloudSettings() {
   );
 }
 
-/** A reminder at the top when Drive needs the user to sign in again (Google's window must follow a tap). */
-export function CloudBanner() {
+/**
+ * The Drive copy's state, small in the header: a cloud with how many files wait (to be signed in
+ * for, on wifi, or being sent), ! when something went wrong, ✓ when all is in Drive. A tap syncs
+ * now (signing in first when needed – it is a tap, so Google's window may open).
+ */
+export function CloudStatus() {
   const { t, settings } = useApp();
   const status = useSyncStatus();
-  if (settings.cloud?.mode !== 'drive' || status.phase !== 'needs-sign-in') return null;
+  if (settings.cloud?.mode !== 'drive') return null;
+  const n = status.pending ?? 0;
+  const label =
+    status.phase === 'syncing'
+      ? t('cloud.statusSyncing')
+      : status.phase === 'error'
+        ? t('cloud.statusError')
+        : status.phase === 'needs-sign-in'
+          ? t('cloud.statusSignIn', { n })
+          : status.phase === 'waiting-for-wifi'
+            ? t('cloud.statusWifi', { n })
+            : n
+              ? t('cloud.statusPending', { n })
+              : t('cloud.statusSynced');
+  const mark = status.phase === 'syncing' ? '…' : status.phase === 'error' ? '!' : n ? (n > 99 ? '99+' : String(n)) : '✓';
+  const attention = status.phase === 'error' || status.phase === 'needs-sign-in';
   return (
-    <div className="update-banner no-print">
-      <span>{t('cloud.bannerText', { n: status.pending ?? 0 })}</span>
-      <button type="button" className="button button-small button-primary" onClick={() => void syncNow(true)}>
-        {t('cloud.signIn')}
-      </button>
-    </div>
+    <button
+      type="button"
+      className={`app-cloud ${attention ? 'app-cloud-attention' : ''} ${status.phase === 'syncing' ? 'app-cloud-busy' : ''}`}
+      aria-label={label}
+      title={label}
+      disabled={status.phase === 'syncing'}
+      onClick={() => void syncNow(true)}
+    >
+      <Icon name="cloud" />
+      <span className="app-cloud-mark">{mark}</span>
+    </button>
+  );
+}
+
+/** The question when the app needs something from Drive and isn't signed in: why, and the button that signs in. */
+export function SignInAsk() {
+  const { t } = useApp();
+  const ask = useSignInAsk();
+  const [busy, setBusy] = useState(false);
+  if (!ask) return null;
+  return (
+    <Modal
+      title={t('signInAsk.title')}
+      onClose={ask.cancel}
+      footer={
+        <>
+          <button type="button" className="button" onClick={ask.cancel}>
+            {t('common.cancel')}
+          </button>
+          <button
+            type="button"
+            className="button button-primary"
+            disabled={busy}
+            onClick={() => {
+              setBusy(true);
+              void ask.signIn().finally(() => setBusy(false));
+            }}
+          >
+            {t('cloud.signIn')}
+          </button>
+        </>
+      }
+    >
+      <p>{t(ask.reason === 'fetchAll' ? 'signInAsk.fetchAll' : 'signInAsk.original')}</p>
+      <p className="small muted">{t('signInAsk.why')}</p>
+    </Modal>
   );
 }

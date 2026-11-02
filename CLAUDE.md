@@ -165,7 +165,12 @@ in Playwright by routing `https://accounts.google.com/gsi/client` and
   linking to the pay slip page.
 - `src/pdf/` – pay slip PDFs via pdf.js (bundled).
 - `src/cloud/` – optional Google Drive copy: `google.ts` (only network file;
-  OAuth client ID is here), `sync.ts` (upload, data.json for restore/merge,
+  OAuth client ID is here; Google's token lasts an hour and can't be renewed
+  without a tap – no server, so no refresh tokens). Sync waits quietly when
+  signed out: the header's cloud (`CloudStatus` in CloudSettings.tsx) shows
+  what waits and syncs on a tap. Fetching from Drive ("Visa original", fetch
+  all originals) asks first (`signInAsk.ts` + `SignInAsk`, whose button opens
+  Google's window), `sync.ts` (upload, data.json for restore/merge,
   reduce old originals to previews, move files when a slip's period is
   corrected), `paths.ts` (Drive folder layout), `merge.ts`, `useCloud.ts`.
 - `src/ui/` – React screens. `SlipCheck.tsx` is the check card shown after a
