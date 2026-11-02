@@ -3303,3 +3303,10 @@ input[type='checkbox'] {
   display: block;
   margin-top: 4px;
 }
+.agreement-part h3 {
+  margin: 16px 0 4px;
+  font-size: 1rem;
+}
+.agreement-part p {
+  margin: 4px 0;
+}

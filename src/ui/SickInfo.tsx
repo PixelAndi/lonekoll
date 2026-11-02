@@ -1,36 +1,34 @@
 import { useApp } from '../app-context.ts';
-import { addDays, daysBetween, todayLocal } from '../domain/time.ts';
+import type { SickPeriod } from '../domain/sick.ts';
 import { Cited } from './Cited.tsx';
 
-// What the law asks of someone off sick, with the dates for their sick
-// period: tell the employer the first day; the karensavdrag; sick pay from
-// the employer up to day 14; a doctor's certificate from day 8; Försäkringskassan
-// from day 15.
+// What the law and the agreement ask of someone off sick, with the dates of
+// their sick period: tell the employer the first day; the karensavdrag (none
+// after a relapse within five days); a doctor's certificate from day 8, or
+// earlier at the employer's cost; Försäkringskassan after 14 days of sick pay.
 
-export function SickInfo({ start }: { start: string }) {
+export function SickInfo({ period }: { period: SickPeriod }) {
   const { t, fmt } = useApp();
-  const today = todayLocal();
-  const day = (n: number) => fmt.date(addDays(start, n - 1), 'inText');
-  const dayNo = daysBetween(start, today) + 1;
+  const date = (d: string) => fmt.date(d, 'inText');
   return (
     <div className="sick-info">
       <ul className="small">
         <li>{t('sick.tell')}</li>
         <li>
-          <Cited text={t('sick.karens', { date: day(1) })} />
+          <Cited text={period.relapse ? t('sick.relapseNow') : t('sick.karens', { date: date(period.start) })} />
         </li>
-        <li className={dayNo >= 6 ? 'warn-text' : undefined}>
+        <li className={period.dayNo >= 6 ? 'warn-text' : undefined}>
           <strong>
-            <Cited text={t('sick.certificate', { date: day(8) })} />
+            <Cited text={t('sick.certificate', { date: date(period.certificateFrom) })} />
           </strong>
         </li>
         <li>
           <Cited text={t('sick.earlyCertificate')} />
         </li>
         <li>
-          <Cited text={t('sick.insurance', { date: day(15) })} />
+          <Cited text={t('sick.insurance', { date: date(period.insuranceFrom) })} />
         </li>
-        <li>{t('sick.relapse')}</li>
+        {!period.relapse && <li>{t('sick.relapse')}</li>}
       </ul>
     </div>
   );

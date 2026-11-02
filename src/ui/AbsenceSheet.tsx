@@ -4,7 +4,8 @@ import { saveDay } from '../db.ts';
 import { isHoliday } from '../domain/holidays.ts';
 import type { AbsenceType, DayRecord } from '../domain/model.ts';
 import { usualWeekdays } from '../domain/reportCheck.ts';
-import { addDays, datesInRange, isoWeekday, todayLocal } from '../domain/time.ts';
+import { datesInRange, isoWeekday, todayLocal } from '../domain/time.ts';
+import { sickPeriodOn } from '../domain/sick.ts';
 import { Field, Modal } from './common.tsx';
 import { SickInfo } from './SickInfo.tsx';
 import { TimeField } from './StampRowsEditor.tsx';
@@ -31,6 +32,8 @@ export function AbsenceSheet({ kind, onClose }: { kind: 'sick' | 'leave'; onClos
   // One day: that day. Several: the usual working days in them, not public holidays.
   const chosen = range.length === 1 ? range : range.filter((d) => usual.has(isoWeekday(d)) && !isHoliday(d));
   const free = chosen.filter((d) => !(byDate.get(d)?.rows.length ?? 0));
+  // The sick period these days make (with any before them), seen from the first of them.
+  const sickPeriod = kind === 'sick' && free.length ? sickPeriodOn(days, free[0], free) : null;
 
   const save = async () => {
     for (const date of free) {
@@ -98,22 +101,9 @@ export function AbsenceSheet({ kind, onClose }: { kind: 'sick' | 'leave'; onClos
             </div>
             <span className="field-hint">{t('day.bookedHint.sick')}</span>
           </div>
-          <SickInfo start={startOfPeriod(days, from)} />
+          {sickPeriod && <SickInfo period={sickPeriod} />}
         </>
       )}
     </Modal>
   );
-}
-
-/** The first day of the sick period a new sick day joins (an earlier one within five days continues it). */
-function startOfPeriod(days: DayRecord[], from: string): string {
-  let start = from;
-  for (;;) {
-    const earlier = days
-      .filter((d) => d.absence?.type === 'sick' && d.date < start && d.date >= addDays(start, -6))
-      .map((d) => d.date)
-      .sort()[0];
-    if (!earlier) return start;
-    start = earlier;
-  }
 }

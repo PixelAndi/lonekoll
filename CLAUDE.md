@@ -125,6 +125,11 @@ in Playwright by routing `https://accounts.google.com/gsi/client` and
   (`NightWork.tsx`, `settings.nightAsked`); yes sets `shiftForm` from the
   stretch's first night (`settings.shiftFormFrom`, used by calc and by the
   agreement check's `shiftForm` rule). Help section `night` (38/36 h weeks).
+  Help section `agreement` ("Kollektivavtalet i korthet"): minimum wage, OB,
+  overtime, förskjuten tid, shifts, holidays, sick, vacation, permission,
+  claims – amounts read from `AGREEMENT_PERIODS` for today, so the guide
+  says what the app calculates with. A bare "N §" is linked as an agreement
+  section by `splitCitations`, so other laws (MBL) are written without §.
 - **Ärenden** (`src/ui/IssuesView.tsx`, tab with a badge; `issues-context.tsx`
   works out everything once for the app): questions only the user can answer
   (wage patterns, night work, slips to check), what may have been underpaid,
@@ -139,9 +144,14 @@ in Playwright by routing `https://accounts.google.com/gsi/client` and
   (`AbsenceSheet.tsx`, a from–to range on usual working days), Skriv in,
   Tidkort; working days of the last two weeks with nothing registered; an
   ongoing sick period with its dates (`domain/sick.ts`, `SickInfo.tsx`:
-  karens day 1, läkarintyg from day 8 – earlier only if the employer names
-  the doctor and pays (Livsmedelsavtalet §5.4; "ask for it in writing" is
-  advice, not a rule), Försäkringskassan from day 15, five-day relapse rule); "Lönen framåt" – next pay's gross and net from the log for
+  karens day 1, läkarintyg from day 8 of the period (8 §: the seventh day
+  after the sick report) – earlier only if the employer names the doctor and
+  pays (Livsmedelsavtalet §5.4; "ask for it in writing" is advice, not a
+  rule); a period beginning within five days of the last one's end continues
+  it (7 §, checked against the law text: 14 days of sick pay across both, no
+  new karens, the certificate counted afresh); Försäkringskassan after the
+  14 days; registered sick days a weekend apart are one period, a day
+  worked between splits them); "Lönen framåt" – next pay's gross and net from the log for
   hourly pay, the monthly salary otherwise, komptid saved/used this month;
   vacation days left from the latest slip) · Kalender (DaysView: the month's
   days, link to Månad's calculated pay) · Lön (SlipsView) · Kontroll (the

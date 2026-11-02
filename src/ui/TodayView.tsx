@@ -89,7 +89,7 @@ export function TodayView() {
 
       {sick && (
         <Card title={t('today.sickNow', { day: sick.dayNo })} className="card-highlight">
-          <SickInfo start={sick.start} />
+          <SickInfo period={sick} />
           <button type="button" className="button" onClick={() => setSheet('sick')}>
             {t('today.stillSick')}
           </button>

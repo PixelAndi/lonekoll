@@ -6,6 +6,9 @@ import type { TextKey } from '../i18n.ts';
 import { href, type HelpSection } from '../router.ts';
 import { Card, Icon, Notice, Page } from './common.tsx';
 import { Cited } from './Cited.tsx';
+import { AGREEMENT_PERIODS, agreementFor, OB_LEVELS } from '../domain/agreement.ts';
+import { editionYears } from '../domain/sources.ts';
+import { todayLocal } from '../domain/time.ts';
 import { GuideArt } from './guideArt.tsx';
 
 // Help and guides: a menu by topic, and each guide on a page of its own, so
@@ -15,7 +18,7 @@ type GuideCategory = { title: TextKey; guides: HelpSection[] };
 
 const CATEGORIES: GuideCategory[] = [
   { title: 'help.cat.clock', guides: ['forgot', 'scan'] },
-  { title: 'help.cat.pay', guides: ['slips', 'komp', 'vacation', 'night'] },
+  { title: 'help.cat.pay', guides: ['agreement', 'slips', 'komp', 'vacation', 'night'] },
   { title: 'help.cat.app', guides: ['install', 'offline', 'privacy'] },
 ];
 
@@ -26,6 +29,7 @@ const TITLES: Record<HelpSection, TextKey> = {
   komp: 'guide.komp.title',
   vacation: 'guide.vacation.title',
   night: 'guide.night.title',
+  agreement: 'guide.agreement.title',
   offline: 'offline.title',
   install: 'install.title',
   privacy: 'guide.privacy.title',
@@ -84,6 +88,8 @@ function Guide({ section }: { section: HelpSection }) {
       return <StepsGuide section="slips" tip="slips.privacy" />;
     case 'night':
       return <NightGuide />;
+    case 'agreement':
+      return <AgreementGuide />;
     default:
       return <StepsGuide section={section} />;
   }
@@ -106,6 +112,63 @@ function StepsGuide({ section, tip }: { section: 'scan' | 'slips' | 'komp' | 'va
         ))}
       </ol>
       {tip && <p className="small">{t(tip)}</p>}
+    </Card>
+  );
+}
+
+/**
+ * What the collective agreement says, in short: the amounts are the app's own (domain/agreement.ts)
+ * for today's agreement period, so the guide always says what the app calculates with.
+ */
+function AgreementGuide() {
+  const { t, fmt } = useApp();
+  const today = todayLocal();
+  const period = agreementFor(today) ?? AGREEMENT_PERIODS[AGREEMENT_PERIODS.length - 1];
+  const money = (n: number) => fmt.money(n);
+  const section = (key: string, values: Record<string, string> = {}) => (
+    <section className="agreement-part" key={key}>
+      <h3>{t(`guide.agreement.${key}.h` as TextKey)}</h3>
+      <p>
+        <Cited date={today} text={t(`guide.agreement.${key}.text` as TextKey, values)} />
+      </p>
+    </section>
+  );
+  return (
+    <Card title={t('guide.agreement.title')}>
+      <p>
+        <Cited date={today} text={t('guide.agreement.intro', { edition: editionYears(today), from: fmt.date(period.from, 'inText') })} />
+      </p>
+      {section('wage', { adult: money(period.minimumWage.adult), after: money(period.minimumWage.adultAfterOneYear), raise: money(period.minimumRaise) })}
+      <section className="agreement-part">
+        <h3>{t('guide.agreement.ob.h')}</h3>
+        <p>
+          <Cited date={today} text={t('guide.agreement.ob.text')} />
+        </p>
+        <table className="table small">
+          <tbody>
+            {OB_LEVELS.map((level) => (
+              <tr key={level}>
+                <td>{t(`guide.agreement.ob.l${level}` as TextKey)}</td>
+                <td className="num">{t('wageSlips.perHour', { amount: money(period.ob[level]) })}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+      {section('overtime')}
+      {section('shifted', { amount: money(period.shiftedTime) })}
+      <section className="agreement-part">
+        <h3>{t('guide.agreement.shift.h')}</h3>
+        <p>
+          <Cited date={today} text={t('guide.agreement.shift.text')} /> <a href={href({ name: 'help', section: 'night' })}>{t('night.more')}</a>
+        </p>
+      </section>
+      {section('holiday')}
+      {section('sick')}
+      {section('vacation', { perDay: money(period.vacationPayPerDayMin) })}
+      {section('permission')}
+      {section('claims')}
+      <p className="small muted">{t('guide.agreement.note')}</p>
     </Card>
   );
 }

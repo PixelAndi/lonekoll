@@ -119,7 +119,7 @@ export const RULES = {
   waitingDayPercent: 0.2,
   /** Sick pay from the employer covers day 1–14. */
   sickPayDays: 14,
-  /** A new sick spell within 5 days continues the previous one (Sick Pay Act §7). */
+  /** A new sick spell within 5 days continues the previous one (Sick Pay Act 7 §, checked against the law). */
   sickRelapseDays: 5,
   /** Look-back for "an average week" when there is no schedule. */
   averageWeeks: 13,
