@@ -1,4 +1,4 @@
-// Ways to add something, opened from anywhere (the + button, Idag, Kalender):
+// Ways to add something, opened from anywhere (Idag and the other pages):
 // the clock scanner and the saved-photos picker live once in the app
 // (ClockImportHost); the pay slip scanner lives on the Lön page, which is
 // asked to open it when it next shows.

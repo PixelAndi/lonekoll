@@ -135,11 +135,10 @@ in Playwright by routing `https://accounts.google.com/gsi/client` and
   log, this week, next pay day, Ärenden, recent days) · Kalender (DaysView:
   the month's days, link to Månad's calculated pay) · Lön (SlipsView) ·
   Ärenden · Mer (Settings; help is the ? in the header and a link at the top
-  of Settings, whose sections are folds, `FoldCards`). A + button
-  (`AddButton.tsx`) on the main tabs opens clock scan, timecard, pay slip,
-  a typed day or saved photos; the clock scanner lives once in the app
-  (`ClockImportHost` in PhotoImport.tsx) and is opened through `actions.ts`,
-  which also asks the Lön page to open its slip scanner.
+  of Settings, whose sections are folds, `FoldCards`). The clock scanner
+  lives once in the app (`ClockImportHost` in PhotoImport.tsx), opened
+  through `actions.ts` (which can also ask the Lön page to open its slip
+  scanner). A floating + button was tried and removed at the owner's wish.
 - `src/domain/owed.ts` + `src/ui/Owed.tsx` – the rough owed estimate, shown
   in Ärenden. Each item: a later line suggested as its correction ("Ja,
   koppla den hit" links it – a line covers items oldest first, never more

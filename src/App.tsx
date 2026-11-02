@@ -22,7 +22,6 @@ import { MissingView } from './ui/MissingView.tsx';
 import { SlipsView } from './ui/SlipsView.tsx';
 import { IssuesView } from './ui/IssuesView.tsx';
 import { TodayView } from './ui/TodayView.tsx';
-import { AddButton } from './ui/AddButton.tsx';
 import { ClockImportHost } from './ui/PhotoImport.tsx';
 import { IssuesProvider, useIssues } from './ui/issues-context.tsx';
 
@@ -39,9 +38,6 @@ function IssuesBadge() {
   const { count } = useIssues();
   return count ? <span className="tab-badge">{count > 99 ? '99+' : count}</span> : null;
 }
-
-/** The pages with the + button (the main tabs; not settings, a day being edited or a report). */
-const ADD_ON: Route['name'][] = ['today', 'days', 'month', 'slips', 'issues'];
 
 function Screen({ route }: { route: Route }) {
   switch (route.name) {
@@ -120,7 +116,7 @@ export function App() {
   const isReport = route.name === 'report';
   return (
     <AppContext.Provider value={data}>
-      <div className={isReport ? 'app app-report' : ADD_ON.includes(route.name) ? 'app app-with-add' : 'app'}>
+      <div className={isReport ? 'app app-report' : 'app'}>
         {!isReport && (
           <header className="app-header no-print">
             <a href={href({ name: 'today' })} className="app-title">
@@ -150,7 +146,6 @@ export function App() {
           </nav>
         )}
         </IssuesProvider>
-        {!isReport && ADD_ON.includes(route.name) && <AddButton />}
         <ClockImportHost />
         {/* Last, so it is above any other window it is asked from (e.g. a photo's "Visa original"). */}
         <SignInAsk />
