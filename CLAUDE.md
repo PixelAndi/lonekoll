@@ -131,10 +131,21 @@ in Playwright by routing `https://accounts.google.com/gsi/client` and
   what is missing, and a fold of what has been answered or put right, each
   with undo. Idag and the pay slip page show one line linking here.
 - **Navigation (on trial since cc6c333 – the owner may ask to go back):**
-  tabs Idag (`TodayView.tsx`, the start page: today's stamps and ways to
-  log, this week, next pay day, Ärenden, recent days) · Kalender (DaysView:
-  the month's days, link to Månad's calculated pay) · Lön (SlipsView) ·
-  Ärenden · Mer (Settings; help is the ? in the header and a link at the top
+  tabs Idag (`TodayView.tsx`, the everyday page, for the end of the day:
+  register the day – scan the clock after clocking out, Sjuk, Ledig
+  (`AbsenceSheet.tsx`, a from–to range on usual working days), Skriv in,
+  Tidkort; working days of the last two weeks with nothing registered; an
+  ongoing sick period with its dates (`domain/sick.ts`, `SickInfo.tsx`:
+  karens day 1, läkarintyg from day 8, Försäkringskassan from day 15, five-day
+  relapse rule); "Lönen framåt" – next pay's gross and net from the log for
+  hourly pay, the monthly salary otherwise, komptid saved/used this month;
+  vacation days left from the latest slip) · Kalender (DaysView: the month's
+  days, link to Månad's calculated pay) · Lön (SlipsView) · Kontroll (the
+  former Ärenden: everything the app double-checks, kept out of the everyday
+  pages; includes the vacation ledger, `domain/vacationDays.ts` – each slip's
+  "Betalda/Sparade" balance against the one before less the days taken, the
+  paid days reset from what was earned each vacation year; on the owner's
+  slips all but one month follow; "Det stämmer" → `settings.checksOk`) · Mer (Settings; help is the ? in the header and a link at the top
   of Settings, whose sections are folds, `FoldCards`). The clock scanner
   lives once in the app (`ClockImportHost` in PhotoImport.tsx), opened
   through `actions.ts` (which can also ask the Lön page to open its slip

@@ -163,6 +163,8 @@ export interface Settings {
   owedResolutions: Record<string, import('./owed.ts').Resolution>;
   /** Suggested corrections the user said were not it. */
   rejectedCorrections: string[];
+  /** Checks the user has looked at and said are right (e.g. "vacation:2027-05-01"). */
+  checksOk: string[];
   /**
    * The user's answers about wages the slips keep paying (key: the pattern's, see wageHistory.ts):
    * agreed – it is the deal, set in the settings; disputed – the settings hold the deal, the slips
@@ -223,6 +225,7 @@ export const DEFAULT_SETTINGS: Settings = {
   settledOwed: [],
   owedResolutions: {},
   rejectedCorrections: [],
+  checksOk: [],
   wageAnswers: {},
   scheduleMode: 'none',
   schedule: { startMonday: '2026-01-05', weeks: [[null, null, null, null, null, null, null]] },

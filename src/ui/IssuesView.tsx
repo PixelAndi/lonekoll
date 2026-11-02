@@ -7,7 +7,7 @@ import { href } from '../router.ts';
 import { monthRanges } from './AgreementFindings.tsx';
 import { Card, Fold, Icon, Page } from './common.tsx';
 import { missingCount, useMissing } from './MissingView.tsx';
-import { useIssues } from './issues-context.tsx';
+import { useIssues, vacationCheckKey } from './issues-context.tsx';
 import { SlipMergeQuestion } from './SameData.tsx';
 import { NightWorkQuestion } from './NightWork.tsx';
 import { OwedSection, SettledList } from './Owed.tsx';
@@ -22,7 +22,7 @@ import { AnsweredWages, WageQuestions } from './WageFromSlips.tsx';
 
 export function IssuesView() {
   const { t, fmt, settings } = useApp();
-  const { owed, wages, night, toCheck, readAgain } = useIssues();
+  const { owed, wages, night, toCheck, readAgain, vacation } = useIssues();
   const open = wages.open;
   const records = useLiveQuery(() => db.slips.toArray(), []);
   const { months } = useMissing();
@@ -31,13 +31,17 @@ export function IssuesView() {
   const noSlip = unchecked.missing;
   const questions = open.length + (night ? 1 : 0) + toCheck + readAgain;
   const errors = owed ? owed.likely.length + owed.investigate.length : 0;
+  const checks = errors + vacation.length;
   const nightAnswered = settings.nightAsked && settings.shiftForm === 'none';
-  const answered = (owed?.settled.length ?? 0) + Object.values(settings.wageAnswers ?? {}).filter((a) => a !== 'agreed').length + (nightAnswered ? 1 : 0);
+  const okChecks = settings.checksOk ?? [];
+  const dayCount = (n: number) => fmt.number(n, Number.isInteger(n) ? 0 : 1);
+  const answered =
+    (owed?.settled.length ?? 0) + Object.values(settings.wageAnswers ?? {}).filter((a) => a !== 'agreed').length + (nightAnswered ? 1 : 0) + okChecks.length;
 
   return (
     <Page title={t('nav.issues')}>
       <p className="muted small">{t('issues.intro')}</p>
-      {questions + errors === 0 && <p className="ok">✓ {t('issues.none')}</p>}
+      {questions + checks === 0 && <p className="ok">✓ {t('issues.none')}</p>}
 
       {questions > 0 && <h2 className="issues-heading">{t('issues.questions', { n: questions })}</h2>}
       {(records ?? [])
@@ -65,6 +69,35 @@ export function IssuesView() {
         </>
       )}
 
+      {vacation.length > 0 && (
+        <>
+          <h2 className="issues-heading">{t('check.vacation', { n: vacation.length })}</h2>
+          <Card>
+            <p className="small muted">{t('check.vacationIntro')}</p>
+            <ul className="owed-items">
+              {vacation.map((v) => (
+                <li key={vacationCheckKey(v)}>
+                  <strong>{fmt.month(v.month)}</strong>
+                  <br />
+                  <span className="small">
+                    {t('check.vacationRow', {
+                      printed: dayCount(v.printedPaid ?? 0),
+                      expected: dayCount(v.expectedPaid ?? 0),
+                      taken: dayCount(v.paidTaken),
+                      saved: dayCount(v.printedSaved ?? 0),
+                      savedExpected: dayCount(v.expectedSaved ?? v.printedSaved ?? 0),
+                    })}
+                  </span>{' '}
+                  <button type="button" className="owed-settle small" onClick={() => void saveSettings({ checksOk: [...(settings.checksOk ?? []), vacationCheckKey(v)] })}>
+                    {t('check.isRight')}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        </>
+      )}
+
       {(missingDays > 0 || noSlip.length > 0 || unchecked.unread.length > 0) && (
         <>
           <h2 className="issues-heading">{t('issues.missing')}</h2>
@@ -88,6 +121,18 @@ export function IssuesView() {
         <Fold title={t('issues.answered', { n: answered })} sub={t('issues.answeredSub')}>
           {owed && <SettledList owed={owed} />}
           <AnsweredWages />
+          {okChecks.length > 0 && (
+            <ul className="owed-items">
+              {okChecks.map((k) => (
+                <li key={k}>
+                  <strong>{k.startsWith('vacation:') ? t('check.vacationOk', { month: fmt.month(k.split(':')[1]) }) : k}</strong>{' '}
+                  <button type="button" className="owed-settle small" onClick={() => void saveSettings({ checksOk: okChecks.filter((x) => x !== k) })}>
+                    {t('owed.unsettle')}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
           {nightAnswered && (
             <ul className="owed-items">
               <li>
