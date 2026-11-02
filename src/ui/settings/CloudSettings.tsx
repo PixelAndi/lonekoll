@@ -53,6 +53,13 @@ export function CloudSettings() {
         </button>
       </div>
       <p className="muted small">{t(drive ? 'cloud.driveText' : 'cloud.localText')}</p>
+      {/* What choosing Drive means, where it is chosen. */}
+      {!drive && <p className="muted small">{t('cloud.driveAbout')}</p>}
+      <p className="small">
+        <a href="privacy.html" target="_blank" rel="noopener noreferrer">
+          {t('privacy.policyLink')}
+        </a>
+      </p>
       {error && <Notice kind="error">{error}</Notice>}
 
       {drive && (

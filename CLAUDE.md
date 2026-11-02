@@ -233,8 +233,9 @@ line dates or the pay day and flagged (`periodDoubt`) for the user to check.
    behaviour); if it fails, switch to a redirect-based sign-in.
 5. Google OAuth app: moving from Testing to In production. Only the
    non-sensitive `drive.file` scope, so no security assessment; the consent
-   screen uses `public/about.html` (home page) and `public/privacy.html`
-   (privacy policy, Swedish + English, with Google's Limited Use statement;
-   checked by privacy.test.ts). Keep both pages true to what the app does.
+   screen's home page is the app itself (the owner wants no landing page in
+   front of it) and its privacy policy `public/privacy.html` (Swedish +
+   English, Google's Limited Use statement; checked by privacy.test.ts),
+   linked from the Drive setting and Om appen. Keep it true to the app.
 6. Drive sync doesn't propagate deletions between phones (documented).
 7. Possible: a space-saving option for the local-only mode.

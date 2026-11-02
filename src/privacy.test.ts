@@ -159,8 +159,8 @@ describe('privacy: nothing leaves the device', () => {
     expect(browser).toContain("import('pdfjs-dist/build/pdf.worker.min.mjs?url')");
   });
 
-  it('the home page and the privacy policy (for Google’s consent screen) run nothing and load nothing from elsewhere', () => {
-    for (const name of ['about.html', 'privacy.html']) {
+  it('the privacy policy page (for Google’s consent screen) runs nothing and loads nothing from elsewhere', () => {
+    for (const name of ['privacy.html']) {
       const page = readFileSync(path.join(root, 'public', name), 'utf8');
       expect(page, name).toContain(`content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self'"`);
       expect(page, name).not.toMatch(/<script|<iframe|<form|<link[^>]+stylesheet/i);

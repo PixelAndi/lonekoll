@@ -863,6 +863,7 @@ export const pl: Record<TextKey, string> = {
   'months.key.after': 'Jeszcze nie',
   'months.key.slip': 'Odcinek wypłaty',
   'months.gaps': '{n} miesięcy między {from} a {to} nie ma dni – zeskanuj karty czasu pracy lub je dodaj:',
+  'cloud.driveAbout': 'Jeśli wybierzesz Google Drive, kopia zostanie też zapisana na Twoim Dysku, w folderze Lönekoll, aby można było wszystko przywrócić na nowym telefonie. Aplikacja widzi tylko pliki, które sama tam umieści – nic innego na Twoim Dysku – i nikt inny, nawet twórca aplikacji, ich nie widzi.',
   'privacy.policyLink': 'Przeczytaj pełną politykę prywatności',
   'owed.archive': 'Archiwizuj',
   'owed.restore': 'Przywróć',
