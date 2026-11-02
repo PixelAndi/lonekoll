@@ -99,8 +99,8 @@ in Playwright by routing `https://accounts.google.com/gsi/client` and
   add up, ≥ 2 lines), the weekday worked ≥ 2 times within ±5 weeks (stamps,
   else the slip's per-day lines), the holiday itself not worked, hours capped
   at the ordinary shift, a surplus on the next slip counted; §5.1.2–5.1.5. On
-  the owner's slips it finds exactly three holidays with no helglön (2022 and
-  2024), and none where helglön was paid. Shown on the pay slip page and per slip in the report
+  the owner's slips it finds exactly three holidays with no helglön, and
+  none where helglön was paid. Shown on the pay slip page and per slip in the report
   (`AgreementFindings.tsx`). On the owner's slips it found the missed step
   after a year's employment (the owner confirms it happened).
 - `src/domain/wageHistory.ts` – the wage on the slips step by step: each
@@ -159,8 +159,16 @@ in Playwright by routing `https://accounts.google.com/gsi/client` and
   14 days; registered sick days a weekend apart are one period, a day
   worked between splits them); "Lönen framåt" – next pay's gross and net from the log for
   hourly pay, the monthly salary otherwise, komptid saved/used this month;
-  vacation days left from the latest slip) · Kalender (DaysView: the month's
-  days, link to Månad's calculated pay) · Lön (SlipsView) · Kontroll (the
+  vacation days left from the latest slip) · Kalender (`CalendarView.tsx` +
+  `domain/calendar.ts`; `#/days` = this year, `#/days/2027` a year,
+  `#/days/2027-05` a month: the year as small squares coloured by what each
+  day was – worked, sick, vacation, komp/leave, a usual working day with
+  nothing registered – holidays outlined, this month highlighted with its
+  counts, upcoming holidays with what they mean for you; a month as large
+  squares with hours and marks (OB, öt, karens, pay day, !), the tapped
+  day, the month's numbers, what to check, its holidays (helglön on the
+  slip / missing), and DaysView's `DayList` in a fold. Days with nothing
+  logged take vacation/sick from the slips' dated lines, `slipAbsences`) · Lön (SlipsView) · Kontroll (the
   former Ärenden: everything the app double-checks, kept out of the everyday
   pages; includes the vacation ledger, `domain/vacationDays.ts` – each slip's
   "Betalda/Sparade" balance against the one before less the days taken, the

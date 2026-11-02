@@ -11,7 +11,7 @@ import { href, useRoute, type Route } from './router.ts';
 import { CompareView } from './ui/CompareView.tsx';
 import { Icon, Spinner } from './ui/common.tsx';
 import { DayEditor } from './ui/DayEditor.tsx';
-import { DaysView } from './ui/DaysView.tsx';
+import { CalendarView } from './ui/CalendarView.tsx';
 import { MonthView } from './ui/MonthView.tsx';
 import { ReportView } from './ui/ReportView.tsx';
 import { SettingsView } from './ui/SettingsView.tsx';
@@ -64,7 +64,7 @@ function Screen({ route }: { route: Route }) {
     case 'today':
       return <TodayView />;
     default:
-      return <DaysView month={route.month} />;
+      return <CalendarView month={route.month} />;
   }
 }
 

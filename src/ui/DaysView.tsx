@@ -1,13 +1,13 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useMemo, useState } from 'react';
 import { useApp } from '../app-context.ts';
-import { calculatePeriod, calculateShifts } from '../domain/calc.ts';
+import { calculateShifts } from '../domain/calc.ts';
 import { monthCoverage, type MonthCoverage } from '../domain/coverage.ts';
 import { db } from '../db.ts';
 import { specialDay } from '../domain/holidays.ts';
 import { datesInRange, monthEnd, todayLocal } from '../domain/time.ts';
 import { href } from '../router.ts';
-import { Icon, Notice, Page } from './common.tsx';
+import { Icon, Notice } from './common.tsx';
 import { missingCount, useMissing } from './MissingView.tsx';
 import { hasManual, stampText } from './stamps.ts';
 
@@ -92,7 +92,7 @@ function MonthPicker({ coverage, current, route, onPick }: { coverage: MonthCove
 }
 
 /** The way to the page of what is missing since the employment started, with how much is. */
-function MissingLink() {
+export function MissingLink() {
   const { t } = useApp();
   const { months } = useMissing();
   const n = missingCount(months);
@@ -127,43 +127,20 @@ export function GapNotice({ route = 'days' }: { route?: 'days' | 'month' }) {
   );
 }
 
-export function DaysView({ month }: { month?: string }) {
+/** A month's days as a list, newest first: stamps, flags and hours, each a link to the day. */
+export function DayList({ month }: { month: string }) {
   const { t, fmt, days, settings } = useApp();
   const today = todayLocal();
-  const monthKey = month ?? today.slice(0, 7);
-  const start = `${monthKey}-01`;
+  const start = `${month}-01`;
   const end = monthEnd(start);
-
   const { results, issues } = useMemo(() => calculateShifts(days, settings), [days, settings]);
-  const period = useMemo(() => calculatePeriod(days, settings, start, end), [days, settings, start, end]);
   const byDate = useMemo(() => new Map(days.map((d) => [d.date, d])), [days]);
-
   // Empty days before the first logged day are just noise for a new user.
   const firstLogged = days.reduce<string | null>((min, d) => (min === null || d.date < min ? d.date : min), null);
   const last = end < today ? end : today;
   const dates = start <= last ? datesInRange(start, last).filter((d) => byDate.has(d) || (firstLogged !== null && d >= firstLogged)).reverse() : [];
-  const obMinutes = period.buckets.filter((b) => b.category.startsWith('ob')).reduce((s, b) => s + b.minutes, 0);
-  const otMinutes = period.buckets.filter((b) => b.category.startsWith('ot')).reduce((s, b) => s + b.minutes, 0);
-  const missing = dates.filter((d) => !byDate.has(d)).length;
-
   return (
-    <Page title={t('nav.calendar')}>
-      <MonthNav month={monthKey} route="days" />
-      <GapNotice />
-      <MissingLink />
-      <p className="month-summary">
-        {t('days.summary', {
-          shifts: period.shifts.length,
-          hours: fmt.duration(period.workedMinutes),
-          ob: fmt.duration(obMinutes),
-          ot: fmt.duration(otMinutes),
-        })}
-      </p>
-      {missing > 0 && <p className="muted small">{t('days.missingDays', { count: missing })}</p>}
-      <p className="small">
-        <a href={href({ name: 'month', month: monthKey })}>{t('days.monthPay')}</a>
-      </p>
-
+    <>
       <ul className="day-list">
         {dates.map((date) => {
           const record = byDate.get(date);
@@ -208,7 +185,6 @@ export function DaysView({ month }: { month?: string }) {
         })}
       </ul>
       {dates.length === 0 && <p className="muted">{t('days.nothingThisMonth')}</p>}
-      <Notice>{t('privacy.short')}</Notice>
-    </Page>
+    </>
   );
 }

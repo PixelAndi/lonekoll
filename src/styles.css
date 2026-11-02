@@ -3310,3 +3310,333 @@ input[type='checkbox'] {
 .agreement-part p {
   margin: 4px 0;
 }
+
+/* Kalender (CalendarView): the year in small squares, a month in large ones. */
+:root {
+  --cal-worked: #c7ecd3;
+  --cal-worked-strong: #2f9e5b;
+  --cal-sick: #fbd5d2;
+  --cal-sick-strong: #d4443a;
+  --cal-vacation: #d2e3fc;
+  --cal-vacation-strong: #2f6fd6;
+  --cal-komp: #e5dcfa;
+  --cal-komp-strong: #7c5bd1;
+  --cal-missing: #fde7b0;
+  --cal-missing-strong: #c98a06;
+  --cal-holiday: #b42318;
+  --cal-empty: #ece8e1;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --cal-worked: #1f4a31;
+    --cal-worked-strong: #5bd08a;
+    --cal-sick: #5a2522;
+    --cal-sick-strong: #f2877e;
+    --cal-vacation: #1f3a63;
+    --cal-vacation-strong: #7fb0ff;
+    --cal-komp: #3a2f5c;
+    --cal-komp-strong: #b9a2f5;
+    --cal-missing: #5a4413;
+    --cal-missing-strong: #f3c454;
+    --cal-holiday: #ff8a80;
+    --cal-empty: #2a2e33;
+  }
+}
+:root[data-theme='dark'] {
+  --cal-worked: #1f4a31;
+  --cal-worked-strong: #5bd08a;
+  --cal-sick: #5a2522;
+  --cal-sick-strong: #f2877e;
+  --cal-vacation: #1f3a63;
+  --cal-vacation-strong: #7fb0ff;
+  --cal-komp: #3a2f5c;
+  --cal-komp-strong: #b9a2f5;
+  --cal-missing: #5a4413;
+  --cal-missing-strong: #f3c454;
+  --cal-holiday: #ff8a80;
+  --cal-empty: #2a2e33;
+}
+
+.cal-year-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.cal-year-nav a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  min-height: 40px;
+  font-size: 1.4rem;
+  text-decoration: none;
+  color: var(--text);
+}
+.cal-focus {
+  border: 2px solid var(--primary);
+}
+.cal-focus-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.cal-focus p {
+  margin: 8px 0 0;
+}
+.cal-counts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  margin: 6px 0;
+}
+.cal-count {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border-radius: 8px;
+  padding: 5px 0;
+  font-size: 11px;
+}
+.cal-count strong {
+  font-size: 1.05rem;
+}
+.cal-count.cal-worked { background: var(--cal-worked); }
+.cal-count.cal-sick { background: var(--cal-sick); }
+.cal-count.cal-vacation { background: var(--cal-vacation); }
+.cal-count.cal-holiday { border: 2px solid var(--cal-holiday); padding: 3px 0; }
+
+.cal-year {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 10px 0 6px;
+}
+.cal-mini {
+  display: block;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 6px;
+  color: inherit;
+  text-decoration: none;
+}
+.cal-mini-now {
+  border: 2px solid var(--primary);
+  padding: 5px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.15);
+}
+.cal-mini-now .cal-mini-head strong {
+  color: var(--primary);
+}
+.cal-mini-later {
+  opacity: 0.75;
+}
+.cal-mini-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  margin-bottom: 4px;
+  text-transform: capitalize;
+}
+.cal-mini-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 2px;
+}
+.cal-mini-grid i {
+  display: block;
+  height: 9px;
+  border-radius: 2px;
+}
+.cal-mini-grid i.cal-day { background: var(--cal-empty); }
+.cal-mini-grid i.cal-weekend.cal-free,
+.cal-mini-grid i.cal-future { background: transparent; box-shadow: inset 0 0 0 1px var(--cal-empty); }
+.cal-mini-grid i.cal-worked { background: var(--cal-worked-strong); }
+.cal-mini-grid i.cal-sick { background: var(--cal-sick-strong); }
+.cal-mini-grid i.cal-vacation { background: var(--cal-vacation-strong); }
+.cal-mini-grid i.cal-komp,
+.cal-mini-grid i.cal-leave { background: var(--cal-komp-strong); }
+.cal-mini-grid i.cal-missing { background: var(--cal-missing-strong); }
+.cal-mini-grid i.cal-holiday { box-shadow: inset 0 0 0 2px var(--cal-holiday); }
+.cal-mini-grid i.cal-today { outline: 2px solid var(--text); outline-offset: 0; }
+
+.cal-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  color: var(--muted);
+  margin: 6px 0;
+}
+.cal-key {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  vertical-align: -1px;
+}
+.cal-key.cal-worked { background: var(--cal-worked-strong); }
+.cal-key.cal-sick { background: var(--cal-sick-strong); }
+.cal-key.cal-vacation { background: var(--cal-vacation-strong); }
+.cal-key.cal-komp { background: var(--cal-komp-strong); }
+.cal-key.cal-missing { background: var(--cal-missing-strong); }
+.cal-key.cal-holiday { box-shadow: inset 0 0 0 2px var(--cal-holiday); }
+
+.cal-hols {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.cal-hols li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 0;
+  font-size: 0.9rem;
+}
+.cal-hols li + li {
+  border-top: 1px solid var(--border);
+}
+.cal-hols li span:last-child {
+  text-align: right;
+  font-size: 0.85rem;
+}
+
+.cal-back {
+  display: inline-block;
+  margin: -4px 0 6px;
+}
+.cal-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.cal-chip {
+  border-radius: 20px;
+  padding: 5px 10px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  background: var(--surface-2);
+  color: var(--text);
+  text-decoration: none;
+}
+.cal-chip-ok { background: var(--cal-worked); }
+.cal-chip-warn { background: var(--cal-missing); }
+.cal-chip-vacation { background: var(--cal-vacation); }
+
+.cal-month {
+  padding: 10px;
+}
+.cal-weekdays,
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+.cal-weekdays {
+  text-align: center;
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.cal-grid .cal-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 50px;
+  padding: 4px 1px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  overflow: hidden;
+}
+.cal-grid .cal-num {
+  font-size: 13px;
+  font-weight: 700;
+}
+.cal-grid .cal-label {
+  font-size: 10px;
+  font-weight: 600;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cal-grid .cal-mark {
+  font-size: 9px;
+  color: var(--muted);
+  min-height: 11px;
+}
+.cal-grid .cal-worked { background: var(--cal-worked); }
+.cal-grid .cal-sick { background: var(--cal-sick); }
+.cal-grid .cal-vacation { background: var(--cal-vacation); }
+.cal-grid .cal-komp,
+.cal-grid .cal-leave { background: var(--cal-komp); }
+.cal-grid .cal-missing { background: transparent; box-shadow: inset 0 0 0 2px var(--cal-missing-strong); }
+.cal-grid .cal-free,
+.cal-grid .cal-future { color: var(--muted); }
+.cal-grid .cal-holiday { box-shadow: inset 0 0 0 2px var(--cal-holiday); }
+.cal-grid .cal-holiday .cal-label { color: var(--cal-holiday); }
+.cal-grid .cal-warn { box-shadow: inset 0 -4px 0 var(--cal-missing-strong); }
+.cal-grid .cal-today { box-shadow: inset 0 0 0 2px var(--text); }
+.cal-grid .cal-selected { outline: 3px solid var(--primary); outline-offset: -1px; }
+
+.cal-selected-card {
+  border: 2px solid var(--text);
+}
+.cal-sel-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 1.05rem;
+  text-transform: capitalize;
+}
+.cal-sel-stamps {
+  margin: 4px 0;
+  font-size: 1.05rem;
+}
+.cal-sel-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0;
+}
+.cal-sel-tags span {
+  background: var(--surface-2);
+  border-radius: 6px;
+  padding: 2px 8px;
+}
+
+.cal-numbers {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+  margin-bottom: 8px;
+}
+.cal-numbers div {
+  display: flex;
+  flex-direction: column;
+}
+.cal-numbers strong {
+  font-size: 1.2rem;
+}
+.cal-check {
+  border-color: var(--cal-missing-strong);
+  background: var(--cal-missing);
+}
+.cal-check-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.cal-check-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 0.9rem;
+}
