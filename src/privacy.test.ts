@@ -158,4 +158,19 @@ describe('privacy: nothing leaves the device', () => {
     for (const code of [extract, browser]) expect(code).not.toMatch(/\burl\s*:|cMapUrl|standardFontDataUrl|wasmUrl|iccUrl/);
     expect(browser).toContain("import('pdfjs-dist/build/pdf.worker.min.mjs?url')");
   });
+
+  it('the home page and the privacy policy (for Google’s consent screen) run nothing and load nothing from elsewhere', () => {
+    for (const name of ['about.html', 'privacy.html']) {
+      const page = readFileSync(path.join(root, 'public', name), 'utf8');
+      expect(page, name).toContain(`content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self'"`);
+      expect(page, name).not.toMatch(/<script|<iframe|<form|<link[^>]+stylesheet/i);
+      // Images and the icon are the site's own files; other addresses are plain links, opened only by a tap.
+      for (const m of page.matchAll(/\b(src|href)="([^"]+)"/g)) {
+        if (m[1] === 'src' || !/^https?:/.test(m[2])) expect(m[2], `${name} ${m[1]}`).not.toMatch(/^(https?:)?\/\//);
+      }
+    }
+    // The policy says what the app asks Google for: the same scope as the code.
+    expect(readFileSync(path.join(root, 'public', 'privacy.html'), 'utf8')).toContain('<code>drive.file</code>');
+    expect(readFileSync(path.join(root, 'src', 'cloud', 'google.ts'), 'utf8')).toContain("const SCOPE = 'https://www.googleapis.com/auth/drive.file';");
+  });
 });

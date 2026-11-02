@@ -147,6 +147,11 @@ function PrivacyGuide() {
       <GuideArt name="privacy" />
       <p>{t('privacy.full')}</p>
       <p className="small">{t('slips.privacy')}</p>
+      <p className="small">
+        <a href="privacy.html" target="_blank" rel="noopener noreferrer">
+          {t('privacy.policyLink')}
+        </a>
+      </p>
     </Card>
   );
 }

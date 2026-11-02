@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self'">
+<meta name="referrer" content="no-referrer">
+<title>Lönekoll – kolla lönen mot stämpelklockan</title>
+<link rel="icon" href="icon.svg">
+<style>
+  :root { color-scheme: light dark; --bg: #f6f4f0; --card: #fff; --text: #1f2328; --muted: #5f6670; --line: #dcd7ce; --link: #1d5c87; --button: #1d5c87; --button-text: #fff; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #15171a; --card: #1e2125; --text: #e8eaed; --muted: #a0a7b0; --line: #353a40; --link: #6aaee0; --button: #6aaee0; --button-text: #0d1720; } }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 720px; margin: 0 auto; padding: 16px; }
+  header { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+  header img { width: 56px; height: 56px; border-radius: 12px; }
+  h1 { font-size: 1.6rem; margin: 0; }
+  h2 { font-size: 1.15rem; margin: 18px 0 6px; }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 4px 18px 14px; margin: 14px 0; }
+  p, li { margin: 6px 0; }
+  ul { padding-left: 1.2rem; }
+  a { color: var(--link); }
+  .button { display: inline-block; background: var(--button); color: var(--button-text); padding: 12px 20px; border-radius: 10px; text-decoration: none; font-weight: 600; margin: 8px 0; }
+  .muted { color: var(--muted); font-size: 0.9rem; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <img src="icon-192.png" alt="">
+    <div>
+      <h1>Lönekoll</h1>
+      <div class="muted">Kolla lönen mot stämpelklockan</div>
+    </div>
+  </header>
+
+  <section>
+    <p>Lönekoll är en gratis app för dig som jobbar på bageri under Livsmedelsavtalet och Tilläggsavtal Bagerier. Den är en dagbok över dina arbetsdagar som också kontrollerar din lön:</p>
+    <ul>
+      <li>Fota stämpelklockan eller tidkortet – tiderna läses av direkt i telefonen.</li>
+      <li>Appen räknar ut lönen enligt kollektivavtalet: timlön, OB, övertid, sjuklön, helglön med mera.</li>
+      <li>Lägg in dina lönebesked (PDF eller foto) så jämförs de med det du har jobbat och med avtalet.</li>
+      <li>Det appen hittar samlas under Ärenden, och du kan ta fram en rapport att gå igenom med arbetsgivaren.</li>
+    </ul>
+    <a class="button" href="./">Öppna appen</a>
+  </section>
+
+  <section>
+    <h2>Dina uppgifter stannar hos dig</h2>
+    <p>Allt sparas bara på din egen enhet. Det finns inget konto, ingen server och ingen spårning. Vill du kan du spara en kopia i din egen Google Drive – då kommer appen bara åt de filer den själv skapar där. Läs mer i <a href="privacy.html">integritetspolicyn</a>.</p>
+  </section>
+
+  <section lang="en">
+    <h2>In English</h2>
+    <p>Lönekoll is a free app for bakery workers in Sweden covered by the food industry's collective agreement (Livsmedelsavtalet, Tilläggsavtal Bagerier). It is a log of your working days that checks your pay: photograph the time clock or your timecard, and the app works out your pay under the agreement and compares it with your pay slips. Everything stays on your device; an optional copy can be kept in your own Google Drive, where the app can only access the files it creates. See the <a href="privacy.html#en">privacy policy</a>.</p>
+    <a class="button" href="./">Open the app</a>
+  </section>
+
+  <p class="muted">Gjord av en privatperson, utan koppling till arbetsgivare eller fack. Öppen källkod: <a href="https://github.com/PixelAndi/lonekoll" rel="noopener noreferrer">github.com/PixelAndi/lonekoll</a> · <a href="privacy.html">Integritetspolicy / Privacy policy</a></p>
+</main>
+</body>
+</html>

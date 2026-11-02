@@ -244,6 +244,11 @@ export function SettingsView() {
           <Cited text={t('settings.source')} />
         </p>
         <p className="small">{t('privacy.full')}</p>
+        <p className="small">
+          <a href="privacy.html" target="_blank" rel="noopener noreferrer">
+            {t('privacy.policyLink')}
+          </a>
+        </p>
         <p className="muted small">Version {__APP_VERSION__}</p>
       </Card>
       </FoldCards.Provider>

@@ -867,6 +867,7 @@ export const prs: Record<TextKey, string> = {
   'months.key.after': 'هنوز نه',
   'months.key.slip': 'فیش معاش',
   'months.gaps': '{n} ماه بین {from} و {to} هیچ روزی ندارد – کارت ساعت کاری را اسکن کنید یا روزها را اضافه کنید:',
+  'privacy.policyLink': 'خواندن کامل سیاست حریم خصوصی',
   'owed.archive': 'بایگانی',
   'owed.restore': 'بازگردانی',
   'owed.allOld': 'همه این بیش از دو سال پیش پرداخت شده – ممکن است برای مطالبه خیلی قدیمی باشد. می‌توانید آن را بایگانی کنید.',

@@ -863,6 +863,7 @@ export const pl: Record<TextKey, string> = {
   'months.key.after': 'Jeszcze nie',
   'months.key.slip': 'Odcinek wypłaty',
   'months.gaps': '{n} miesięcy między {from} a {to} nie ma dni – zeskanuj karty czasu pracy lub je dodaj:',
+  'privacy.policyLink': 'Przeczytaj pełną politykę prywatności',
   'owed.archive': 'Archiwizuj',
   'owed.restore': 'Przywróć',
   'owed.allOld': 'Wszystko to wypłacono ponad dwa lata temu – może być za stare, by tego żądać. Możesz to zarchiwizować.',
