@@ -89,7 +89,7 @@ export const LEAST_DIFFERENCE = 100;
 
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
-export const findingKey = (f: AgreementFinding) => `agr:${f.rule}:${f.cause ?? f.level ?? ''}:${f.months[0]}`;
+export const findingKey = (f: AgreementFinding) => `agr:${f.rule}:${f.cause ?? f.level ?? (f.rule === 'holidayMissing' ? f.from : '')}:${f.months[0]}`;
 export const comparisonKey = (month: LocalDate) => `cmp:${month}`;
 
 /** The day a month's pay was paid: its slip's pay day, else the 25th of the month after. */

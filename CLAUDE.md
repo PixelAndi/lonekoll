@@ -94,7 +94,13 @@ in Playwright by routing `https://accounts.google.com/gsi/client` and
   for wages above the minimum, and OB / overtime / sick pay / holiday pay
   prices; findings joined over months, with later "retro" or "Övrig
   ersättning" lines named as possible corrections, and the months that
-  couldn't be checked. Shown on the pay slip page and per slip in the report
+  couldn't be checked; and (`holidayPay.ts`, rule `holidayMissing`, needs the
+  days) helglön missing on Mon–Fri public holidays: the slip read whole (lines
+  add up, ≥ 2 lines), the weekday worked ≥ 2 times within ±5 weeks (stamps,
+  else the slip's per-day lines), the holiday itself not worked, hours capped
+  at the ordinary shift, a surplus on the next slip counted; §5.1.2–5.1.5. On
+  the owner's slips it finds exactly three holidays with no helglön (2022 and
+  2024), and none where helglön was paid. Shown on the pay slip page and per slip in the report
   (`AgreementFindings.tsx`). On the owner's slips it found the missed step
   after a year's employment (the owner confirms it happened).
 - `src/domain/wageHistory.ts` – the wage on the slips step by step: each

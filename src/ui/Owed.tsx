@@ -39,7 +39,7 @@ export function useOwedComputed(): OwedWithIds | null {
   function compute(records: SlipRecord[]): OwedWithIds {
     const today = todayLocal();
     const slips = records.map((r) => applyOverrides(r.slip, settings.codeOverrides));
-    const findings = checkAgainstAgreement(slips, settings);
+    const findings = checkAgainstAgreement(slips, settings, days);
     // Months where the settings' wage isn't the one the slips pay: the comparison would measure the settings.
     const steps = wageHistory(slips, settings);
     // A wage the user says the slips have wrong (the settings hold the deal) is compared all the same.

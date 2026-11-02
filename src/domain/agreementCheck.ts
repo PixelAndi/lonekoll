@@ -1,5 +1,6 @@
 import { AGREEMENT_PERIODS, agreementFor, payShare, RULES, type ObLevel } from './agreement.ts';
-import { ageOn, minimumWageOn, monthlyPayOn, type Settings } from './model.ts';
+import { ageOn, minimumWageOn, monthlyPayOn, type DayRecord, type Settings } from './model.ts';
+import { missingHolidayPay } from './holidayPay.ts';
 import type { PaySlip, SlipLine } from './payslip.ts';
 import { addDays, daysBetween, type LocalDate } from './time.ts';
 
@@ -11,7 +12,7 @@ import { addDays, daysBetween, type LocalDate } from './time.ts';
 // agreement and the law set. Each finding says what was paid, what is due,
 // on which slips, and roughly how much it comes to.
 
-export type FindingRule = 'minimum' | 'lowestRaise' | 'ob' | 'overtime' | 'sickPay' | 'holidayPay' | 'shiftForm';
+export type FindingRule = 'minimum' | 'lowestRaise' | 'ob' | 'overtime' | 'sickPay' | 'holidayPay' | 'shiftForm' | 'holidayMissing';
 
 /** Why a wage is below the minimum: the step after a year's employment not given, a 1 April revision not applied, or neither. */
 export type MinimumCause = 'oneYear' | 'revision' | 'below';
@@ -23,6 +24,8 @@ export interface AgreementFinding {
   level?: number;
   /** The first and last slip period it was seen on (their start dates). */
   months: LocalDate[];
+  /** For a missing helglön: the holiday's name (translation key). */
+  holiday?: string;
   /** About how much of it each month (the months' first days). */
   byMonth: Record<LocalDate, number>;
   /** When it applies from (the one-year date, the revision date, or the first slip's period). */
@@ -222,8 +225,24 @@ export function correctionsAfter(slips: PaySlip[], month: LocalDate, amount: num
   return out.length ? out : undefined;
 }
 
+/** Helglön missing on weekday holidays (needs the stamps or the slips' per-day lines), one finding each. */
+function holidayFindings(slips: PaySlip[], days: DayRecord[], settings: Settings): AgreementFinding[] {
+  return missingHolidayPay(slips, days, settings).map((m) => ({
+    rule: 'holidayMissing',
+    holiday: m.name,
+    months: [m.month],
+    byMonth: { [m.month]: m.amount },
+    from: m.date,
+    paid: 0,
+    due: m.rate,
+    hours: round2(m.hours - m.paidHours),
+    amount: m.amount,
+    estimate: true,
+  }));
+}
+
 /** Every finding on the slips, those in a row with the same prices joined into one. */
-export function checkAgainstAgreement(slips: PaySlip[], settings: Settings): AgreementFinding[] {
+export function checkAgainstAgreement(slips: PaySlip[], settings: Settings, days: DayRecord[] = []): AgreementFinding[] {
   const seen = allSeen(slips, settings).sort(
     (a, b) => a.rule.localeCompare(b.rule) || (a.level ?? 0) - (b.level ?? 0) || a.month.localeCompare(b.month),
   );
@@ -242,17 +261,22 @@ export function checkAgainstAgreement(slips: PaySlip[], settings: Settings): Agr
       out.push({ ...rest, months: [month], byMonth: { [month]: rest.amount } });
     }
   }
+  out.push(...holidayFindings(slips, days, settings));
   for (const f of out) f.corrections = correctionsAfter(slips, f.months[f.months.length - 1], f.amount);
   return out.sort((a, b) => b.amount - a.amount);
 }
 
 /** The findings on one slip (the lowest raise needs the slips around it). */
-export function slipFindings(slip: PaySlip, all: PaySlip[], settings: Settings): AgreementFinding[] {
+export function slipFindings(slip: PaySlip, all: PaySlip[], settings: Settings, days: DayRecord[] = []): AgreementFinding[] {
   if (!slip.periodStart) return [];
+  const holidays = holidayFindings(all.includes(slip) ? all : [...all, slip], days, settings).filter((f) => f.months[0] === slip.periodStart);
   const own = [...minimumOnSlip(slip, settings), ...pricesOnSlip(slip, settings), ...shiftFormOnSlip(slip, settings)];
   const around = all.includes(slip) ? all : [...all, slip];
   const raises = lowestRaises(around.filter((s) => s.periodStart), settings).filter((s) => s.month === slip.periodStart);
-  return [...own, ...raises].map(({ month, ...rest }) => ({ ...rest, months: [month], byMonth: { [month]: rest.amount }, corrections: correctionsAfter(all, month, rest.amount) }));
+  return [
+    ...[...own, ...raises].map(({ month, ...rest }) => ({ ...rest, months: [month], byMonth: { [month]: rest.amount }, corrections: correctionsAfter(all, month, rest.amount) })),
+    ...holidays.map((f) => ({ ...f, corrections: correctionsAfter(all, f.months[0], f.amount) })),
+  ];
 }
 
 /**

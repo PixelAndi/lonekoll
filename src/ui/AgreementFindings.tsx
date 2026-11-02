@@ -49,6 +49,7 @@ export function FindingItem({ f, settings, t, fmt, report = false, children }: {
     since: fmt.date(higherMinimumFrom(settings) ?? f.from, 'inText'),
     raise: fmt.money(raise),
     before: fmt.money(f.due - raise),
+    holiday: f.holiday ? t(f.holiday as TextKey) : '',
   };
   return (
     <li className="finding">

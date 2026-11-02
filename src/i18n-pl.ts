@@ -859,6 +859,8 @@ export const pl: Record<TextKey, string> = {
   'months.key.after': 'Jeszcze nie',
   'months.key.slip': 'Odcinek wypłaty',
   'months.gaps': '{n} miesięcy między {from} a {to} nie ma dni – zeskanuj karty czasu pracy lub je dodaj:',
+  'agr.rule.holidayMissing': 'Brak wynagrodzenia za święto: {holiday}',
+  'agr.text.holidayMissing': '{holiday} ({from}) było świętem w dzień powszedni, w który zwykle pracujesz, i nie pracowałeś. Należy się wtedy wynagrodzenie za godziny, które byś przepracował (Livsmedelsavtalet §5.1.2) – także na urlopie i w pierwszych 14 dniach choroby (§5.1.3). Odcinek nie pokazuje wynagrodzenia za ten dzień. Nie należy się, jeśli bez ważnego powodu byłeś nieobecny w dzień roboczy przed lub po.',
   'guide.agreement.title': 'Układ zbiorowy w skrócie',
   'guide.agreement.summary': 'Co układ mówi o płacy, dodatkach, chorobie i urlopie – z dzisiejszymi kwotami.',
   'guide.agreement.intro': 'Obejmuje Cię Livsmedelsavtalet {edition} i układ dodatkowy dla piekarni (Tilläggsavtal för Bageriföretag), zawarty między Livsmedelsföretagen a Livsmedelsarbetareförbundet. Układ to minimum: pracodawca nie może dać gorszych warunków, ale może lepsze. Poniższe kwoty obowiązują od {from} i rosną co roku 1 kwietnia. To streszczenie – obowiązuje tekst układu, mogą też istnieć umowy lokalne.',

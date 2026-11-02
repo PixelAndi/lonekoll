@@ -147,14 +147,14 @@ function ReportPage({
   const slipsAll = (allSlips ?? []).map((r) => applyOverrides(r.slip, settings.codeOverrides));
   // What the user said about each finding (kept on the finding joined over months): one said to be
   // no error is left out; one put right says how.
-  const joined = checkAgainstAgreement(slipsAll, settings);
+  const joined = checkAgainstAgreement(slipsAll, settings, app.days);
   const resolutionOf = (f: AgreementFinding): Resolution | undefined => {
-    const j = joined.find((x) => x.rule === f.rule && x.cause === f.cause && x.level === f.level && x.months.includes(f.months[0]));
+    const j = joined.find((x) => x.rule === f.rule && x.cause === f.cause && x.level === f.level && x.months.includes(f.months[0]) && (f.rule !== 'holidayMissing' || x.from === f.from));
     if (!j) return undefined;
     const key = findingKey(j);
     return settings.owedResolutions?.[key] ?? (settings.settledOwed?.includes(key) ? { kind: 'settled', date: todayLocal() } : undefined);
   };
-  const findings = slipFindings(slip, slipsAll, settings).filter((f) => resolutionOf(f)?.kind !== 'notError');
+  const findings = slipFindings(slip, slipsAll, settings, app.days).filter((f) => resolutionOf(f)?.kind !== 'notError');
   // The slips paying another wage than the settings in the period, and what the user said about it.
   const wageQuestions = wagePatterns(wageHistory(slipsAll, settings), settings)
     .filter((p) => p.differs && p.from <= end && p.to >= start)
