@@ -153,7 +153,10 @@ in Playwright by routing `https://accounts.google.com/gsi/client` and
   karens day 1, läkarintyg from day 8 of the period (8 §: the seventh day
   after the sick report) – earlier only if the employer names the doctor and
   pays (Livsmedelsavtalet §5.4; "ask for it in writing" is advice, not a
-  rule); a period beginning within five days of the last one's end continues
+  rule). From day 8 the employee picks the doctor and usually pays the fee
+  (the text says to ask if it's reimbursed); an earlier demand is called
+  unusual: ask where to go, in writing, and keep the receipt if left to
+  choose; a period beginning within five days of the last one's end continues
   it (7 §, checked against the law text: 14 days of sick pay across both, no
   new karens, the certificate counted afresh); Försäkringskassan after the
   14 days; registered sick days a weekend apart are one period, a day
