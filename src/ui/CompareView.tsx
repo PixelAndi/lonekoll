@@ -271,15 +271,9 @@ export function CompareView({ id }: { id: string }) {
           {t('common.delete')}
         </button>
         <span className="spacer" />
-        {BETA ? (
-          <button type="button" className="button" disabled title={t('beta.reportLocked')}>
-            🔒 {t('compare.report')}
-          </button>
-        ) : (
-          <a className="button button-primary" href={href({ name: 'report', id })}>
-            {t('compare.report')}
-          </a>
-        )}
+        <a className="button button-primary" href={href({ name: 'report', id })}>
+          {t('compare.report')}
+        </a>
       </div>
     </Page>
   );

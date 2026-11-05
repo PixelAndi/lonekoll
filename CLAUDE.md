@@ -9,10 +9,12 @@ README.md describes the features and rules in detail – read it first.
 
 ## Beta
 
-`src/beta.ts` (`BETA = true`): the app is being tested at work; the report
-(print / save as PDF) is locked – the slip page's button is disabled with a
-note, `#/report/…` shows a notice – and the header shows a "Beta" badge. The
-owner says when to open it (set `BETA = false`).
+`src/beta.ts` (`BETA = true`): the app is being tested at work. The report can
+be opened and looked at, but every page carries a red "Testversion (beta)"
+banner and a diagonal TESTVERSION watermark, the "Spara som PDF" buttons are
+disabled with a note, and printing from the browser's own menu shows only a
+"can't be printed while testing" note (`@media print` in styles.css). The
+header shows a "Beta" badge. The owner says when to open it (set `BETA = false`).
 
 ## Hard rules
 

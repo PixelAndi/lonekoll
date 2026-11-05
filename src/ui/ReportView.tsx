@@ -6,8 +6,8 @@ import { hourlyRateOn, hourlySupplement, minimumWageOn, monthlyPayOn, wagePeriod
 import { datesInRange, formatDuration, todayLocal } from '../domain/time.ts';
 import { formatter, ltr } from '../format.ts';
 import { isRightToLeft, LANGUAGE_NAMES, LANGUAGE_TAGS, translator, type Language } from '../i18n.ts';
-import { goBack, href } from '../router.ts';
-import { Notice, Page, PhotoThumb, Spinner } from './common.tsx';
+import { goBack } from '../router.ts';
+import { PhotoThumb, Spinner } from './common.tsx';
 import { Cited } from './Cited.tsx';
 import { coverageText, totalText } from './CompareView.tsx';
 import { SlipNotFound } from './SlipsView.tsx';
@@ -32,24 +32,11 @@ import { wageHistory, wagePatterns } from '../domain/wageHistory.ts';
 import { wageRowText } from './wageText.ts';
 
 /** The report for the employer, in Swedish, and in the user's own language too when that is another. */
-/** The report; locked while the app is in beta (see beta.ts). */
+/**
+ * While the app is in beta (see beta.ts) the report can be looked at but not printed or saved as PDF,
+ * and every page is marked as a test version – a banner at the top and a watermark across it.
+ */
 export function ReportView({ id }: { id: string }) {
-  const { t } = useApp();
-  if (BETA)
-    return (
-      <div className="beta-locked">
-      <Page title={t('report.title')}>
-        <Notice kind="info">🔒 {t('beta.reportLocked')}</Notice>
-        <p>
-          <a href={href({ name: 'slip', id })}>{t('common.back')}</a>
-        </p>
-      </Page>
-      </div>
-    );
-  return <ReportBuilder id={id} />;
-}
-
-function ReportBuilder({ id }: { id: string }) {
   const app = useApp();
   const data = useSlipComparison(id);
   const check = useReportCheck(data);
@@ -74,6 +61,7 @@ function ReportBuilder({ id }: { id: string }) {
       setPrinting(null);
     };
     window.addEventListener('afterprint', done, { once: true });
+    if (BETA) return done();
     window.print();
     return () => window.removeEventListener('afterprint', done);
   }, [printing, data]);
@@ -82,10 +70,11 @@ function ReportBuilder({ id }: { id: string }) {
   if (data === null) return <SlipNotFound />;
   const shown = printing ?? [preview];
   // Anything to look at first opens the checks; otherwise straight to saving.
-  const save = (langs: Language[]) => (check?.warnings ? setPending(langs) : setPrinting(langs));
+  const save = (langs: Language[]) => (BETA ? undefined : check?.warnings ? setPending(langs) : setPrinting(langs));
 
   return (
-    <div className="report">
+    <div className={`report ${BETA ? 'report-beta' : ''}`}>
+      {BETA && <p className="beta-print-note">{app.t('beta.printLocked')}</p>}
       <div className="report-controls no-print">
         <button type="button" className="button" onClick={() => goBack({ name: 'slip', id })}>
           {app.t('common.back')}
@@ -104,17 +93,23 @@ function ReportBuilder({ id }: { id: string }) {
         </label>
         <div className="report-downloads">
           {languages.map((l) => (
-            <button key={l} type="button" className={`button ${l === 'sv' ? 'button-primary' : ''}`} onClick={() => save([l])}>
+            <button key={l} type="button" className={`button ${l === 'sv' && !BETA ? 'button-primary' : ''}`} disabled={BETA} onClick={() => save([l])}>
+              {BETA && '🔒 '}
               {app.t('report.downloadIn', { language: LANGUAGE_NAMES[l] })}
             </button>
           ))}
           {languages.length > 1 && (
-            <button type="button" className="button" onClick={() => save(languages)}>
+            <button type="button" className="button" disabled={BETA} onClick={() => save(languages)}>
+              {BETA && '🔒 '}
               {app.t('report.downloadBoth')}
             </button>
           )}
         </div>
-        <p className="muted small report-download-hint">{app.t(languages.length > 1 ? 'report.downloadHintBoth' : 'report.downloadHint')}</p>
+        {BETA ? (
+          <p className="small beta-note">🔒 {app.t('beta.reportLocked')}</p>
+        ) : (
+          <p className="muted small report-download-hint">{app.t(languages.length > 1 ? 'report.downloadHintBoth' : 'report.downloadHint')}</p>
+        )}
       </div>
       {pending && check && (
         <ReportCheckDialog
@@ -224,6 +219,16 @@ function ReportPage({
 
   return (
       <article className="report-page" lang={LANGUAGE_TAGS[lang]} dir={isRightToLeft(lang) ? 'rtl' : 'ltr'}>
+        {BETA && (
+          <>
+            <div className="report-watermark" aria-hidden="true">
+              {Array.from({ length: 12 }, (_, i) => (
+                <span key={i}>{t('beta.watermark')}</span>
+              ))}
+            </div>
+            <p className="report-beta-banner">{t('beta.reportBanner')}</p>
+          </>
+        )}
         <header>
           <h1>{t('report.title')}</h1>
           <p className="report-subtitle">{t('report.subtitle')}</p>

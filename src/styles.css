@@ -3916,3 +3916,53 @@ input[type='checkbox'] {
   margin: 10px 0;
 }
 .share-buttons { justify-content: center; }
+
+/* Beta: the report is marked as a test version on every page, and can't be printed. */
+.report-beta .report-page {
+  position: relative;
+  overflow: hidden;
+}
+.report-watermark {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  align-items: center;
+  pointer-events: none;
+  user-select: none;
+  z-index: 0;
+}
+.report-watermark span {
+  transform: rotate(-30deg);
+  font-size: 64px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: rgb(180 35 24 / 0.1);
+  white-space: nowrap;
+}
+.report-beta .report-page > :not(.report-watermark) {
+  position: relative;
+  z-index: 1;
+}
+.report-beta-banner {
+  margin: -8px 0 16px;
+  padding: 8px 12px;
+  border: 2px dashed #b42318;
+  border-radius: 8px;
+  background: #fef3f2;
+  color: #7a1a12;
+  font-weight: 700;
+  text-align: center;
+}
+.beta-print-note { display: none; }
+@media print {
+  .report-beta .report-page,
+  .report-beta .report-controls { display: none !important; }
+  .report-beta .beta-print-note {
+    display: block;
+    padding: 40px;
+    font-size: 18px;
+    text-align: center;
+  }
+}
