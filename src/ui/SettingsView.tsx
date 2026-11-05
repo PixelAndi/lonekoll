@@ -25,6 +25,7 @@ import { WorkPattern } from './settings/WorkPattern.tsx';
 import { WageSettings } from './settings/WageSettings.tsx';
 import { WageFromSlips } from './WageFromSlips.tsx';
 import { CloudSettings } from './settings/CloudSettings.tsx';
+import { ShareAppCard } from './ShareApp.tsx';
 
 export function SettingsView() {
   const { t, settings } = useApp();
@@ -64,6 +65,7 @@ export function SettingsView() {
         </span>
         <Icon name="chevronRight" />
       </a>
+      <ShareAppCard />
       <AppCountsWith />
       <WageFromSlips onlyChanges />
       <FoldCards.Provider value={true}>

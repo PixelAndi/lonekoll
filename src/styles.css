@@ -3893,3 +3893,26 @@ input[type='checkbox'] {
 .beta-locked { padding: 16px; max-width: 640px; margin: 0 auto; }
 /* A link-style button on the light pages (the plain one is white, for the scanners' dark screen). */
 .link-button.on-light { color: var(--primary); }
+
+/* Sharing the app: its address as a QR code (ShareApp.tsx). */
+.share-app-link {
+  width: 100%;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.share-hint { text-align: center; margin: 0 0 10px; }
+.share-qr {
+  display: block;
+  width: min(78vw, 300px);
+  height: auto;
+  margin: 0 auto;
+  border-radius: 8px;
+}
+.share-address {
+  text-align: center;
+  font-weight: 600;
+  word-break: break-all;
+  margin: 10px 0;
+}
+.share-buttons { justify-content: center; }

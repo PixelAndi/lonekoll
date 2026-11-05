@@ -255,6 +255,11 @@ in Playwright by routing `https://accounts.google.com/gsi/client` and
 - `src/ui/` – React screens. `SlipCheck.tsx` is the check card shown after a
   slip is photographed or its period is uncertain.
 - `src/db.ts` – Dexie (IndexedDB) tables; `src/backup.ts` – zip backup.
+- Sharing the app: Mer → "Dela appen" (`src/ui/ShareApp.tsx`) shows the app's
+  address as a QR code (qrcode-generator, drawn on the phone, nothing fetched),
+  the share sheet and copy. The address is `appAddress()` in `src/share.ts`:
+  origin + path only, never the hash (checked by privacy.test.ts). Decoded with
+  jsQR in a test browser: the code gives exactly the page's address.
 
 ## Pay slips: the two layouts
 

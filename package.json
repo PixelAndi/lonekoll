@@ -21,6 +21,7 @@
     "fflate": "^0.8.3",
     "onnxruntime-web": "^1.31.1",
     "pdfjs-dist": "^6.4.299",
+    "qrcode-generator": "^1.5.2",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "tesseract.js": "^7.0.0"

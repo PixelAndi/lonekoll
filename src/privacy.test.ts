@@ -82,6 +82,9 @@ describe('privacy: nothing leaves the device', () => {
     const code = readFileSync(path.join(root, 'src', 'share.ts'), 'utf8');
     expect(code.match(/navigator\.share\(/g)).toHaveLength(1);
     expect(code).not.toMatch(/fetch|https?:/);
+    // Passing on the app shares its address only: the page it runs from, never the part after # (a day, a slip).
+    expect(code).toContain('`${location.origin}${location.pathname.replace(/index\\.html$/, \'\')}`');
+    expect(code).not.toMatch(/location\.(hash|href|search)/);
   });
 
   it('the app’s code has no way of sending data out', () => {
