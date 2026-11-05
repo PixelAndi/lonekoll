@@ -88,9 +88,9 @@ report you can go through with your employer.
   and checks the tax and net pay on the slip with Skatteverket's tables.
 - **Pay slip comparison.** Import the PDF; each line is matched against the
   calculation, with the difference and the agreement section that applies.
-- **Languages.** Swedish, English, Polish, Dari and Amharic (chosen from the
-  phone's language at first start, changeable in Settings). Dari is shown
-  right to left; Dari and Amharic use Gregorian dates and the clock's Latin
+- **Languages.** Swedish, English, Polish, Dari, Amharic and Arabic (chosen from the
+  phone's language at first start, changeable in Settings). Dari and Arabic are shown
+  right to left; Dari, Amharic and Arabic use Gregorian dates and the clock's Latin
   digits.
 - **Report.** An A4 report, saved as PDF in Swedish (for the employer), in the
   user's app language, or both in one file (Swedish first), with the summary,
@@ -410,7 +410,7 @@ Code layout:
 - `src/pdf/`: pdf.js text extraction.
 - `src/ui/`: React screens; `src/db.ts` (Dexie/IndexedDB), `src/backup.ts`,
   `src/i18n.ts` (Swedish and English), `src/i18n-pl.ts` (Polish),
-  `src/i18n-prs.ts` (Dari) and `src/i18n-am.ts` (Amharic).
+  `src/i18n-prs.ts` (Dari), `src/i18n-am.ts` (Amharic) and `src/i18n-ar.ts` (Arabic).
 
 ## Deploying
 

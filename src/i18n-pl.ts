@@ -1357,6 +1357,13 @@ export const pl: Record<TextKey, string> = {
   'weekday.5': 'Piątek',
   'weekday.6': 'Sobota',
   'weekday.7': 'Niedziela',
+  'weekdayShort.1': 'Pon',
+  'weekdayShort.2': 'Wto',
+  'weekdayShort.3': 'Śro',
+  'weekdayShort.4': 'Czw',
+  'weekdayShort.5': 'Pią',
+  'weekdayShort.6': 'Sob',
+  'weekdayShort.7': 'Nie',
 
   'holiday.newYearsDay': 'Nowy Rok',
   'holiday.epiphany': 'Trzech Króli',

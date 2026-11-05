@@ -1361,6 +1361,13 @@ export const prs: Record<TextKey, string> = {
   'weekday.5': 'جمعه',
   'weekday.6': 'شنبه',
   'weekday.7': 'یکشنبه',
+  'weekdayShort.1': 'دوش',
+  'weekdayShort.2': 'سه‌',
+  'weekdayShort.3': 'چها',
+  'weekdayShort.4': 'پنج',
+  'weekdayShort.5': 'جمع',
+  'weekdayShort.6': 'شنب',
+  'weekdayShort.7': 'یکش',
 
   'holiday.newYearsDay': 'روز سال نو',
   'holiday.epiphany': 'روز تجلی (Trettondagen)',

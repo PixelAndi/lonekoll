@@ -121,7 +121,7 @@ export interface TaxSettings {
 }
 
 export interface Settings {
-  language: 'sv' | 'en' | 'pl' | 'prs' | 'am';
+  language: 'sv' | 'en' | 'pl' | 'prs' | 'am' | 'ar';
   /** Light or dark look; auto follows the phone. */
   theme: Theme;
   name: string;

@@ -253,7 +253,7 @@ function WeekStrip() {
             d.kind === 'worked' ? fmt.duration(d.minutes) : KIND_LABEL[d.kind] ? t(KIND_LABEL[d.kind]!) : d.date === today ? t('today.weekToday') : d.holiday ? t(d.holiday.name as TextKey) : '';
           return (
             <button key={d.date} type="button" className={`${cellClass(d, today)} ${d.warn ? 'cal-warn' : ''}`} aria-label={fmt.date(d.date, 'long')} onClick={() => navigate({ name: 'day', date: d.date })}>
-              <span className="cal-mark">{t(`weekday.${isoWeekday(d.date)}` as TextKey).slice(0, 3)}</span>
+              <span className="cal-mark">{t(`weekdayShort.${isoWeekday(d.date)}` as TextKey)}</span>
               <span className="cal-num">{Number(d.date.slice(8))}</span>
               <span className="cal-label">{label}</span>
             </button>

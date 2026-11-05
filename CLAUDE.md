@@ -50,12 +50,15 @@ header shows a "Beta" badge. The owner says when to open it (set `BETA = false`)
 
 - The owner tests on their phone (Android, Chrome, app added to the home
   screen) and replies in English; the app's UI is Swedish first.
-- Every user-facing string exists in five languages: `src/i18n.ts` (Swedish
-  `sv` and English `en`), `src/i18n-pl.ts` (Polish), `src/i18n-prs.ts` (Dari),
-  `src/i18n-am.ts` (Amharic, Ethiopic script, left to right; translated from
-  the English, Swedish names such as Sjuklönelagen and Tilläggsavtal Bagerier
-  kept so citations link). Swedish is the source; all dictionaries must have
-  the same keys.
+- Every user-facing string exists in six languages: `src/i18n.ts` (Swedish
+  `sv` and English `en`), `src/i18n-pl.ts` (Polish), `src/i18n-prs.ts` (Dari,
+  right to left), `src/i18n-am.ts` (Amharic, Ethiopic script, left to right),
+  `src/i18n-ar.ts` (Arabic, right to left; time ranges wrapped in U+2066/U+2069
+  but never after "§"). Amharic and Arabic were translated from the English,
+  with Swedish names such as Sjuklönelagen and Tilläggsavtal Bagerier kept so
+  citations link. Swedish is the source; all dictionaries must have the same
+  keys. Short weekday names are their own keys (`weekdayShort.N`) – Arabic
+  names can't be cut to three letters.
 - Prefer measuring on real data over guessing; say plainly what was and
   wasn't tested.
 

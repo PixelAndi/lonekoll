@@ -3,8 +3,8 @@ import { formatDuration, parseDate, type LocalDate } from './domain/time.ts';
 
 // Number and date formatting for each language.
 
-// Dari and Amharic: the Gregorian calendar and Latin digits, as on the clock and the pay slips.
-const LOCALES: Record<Language, string> = { sv: 'sv-SE', en: 'en-GB', pl: 'pl-PL', prs: 'fa-AF-u-ca-gregory-nu-latn', am: 'am-ET-u-ca-gregory-nu-latn' };
+// Dari, Amharic and Arabic: the Gregorian calendar and Latin digits, as on the clock and the pay slips.
+const LOCALES: Record<Language, string> = { sv: 'sv-SE', en: 'en-GB', pl: 'pl-PL', prs: 'fa-AF-u-ca-gregory-nu-latn', am: 'am-ET-u-ca-gregory-nu-latn', ar: 'ar-u-ca-gregory-nu-latn' };
 const locale = (lang: Language) => LOCALES[lang];
 
 /**

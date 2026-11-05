@@ -4,6 +4,7 @@
 import { pl } from './i18n-pl.ts';
 import { prs } from './i18n-prs.ts';
 import { am } from './i18n-am.ts';
+import { ar } from './i18n-ar.ts';
 
 const sv = {
   'app.title': 'Lönekoll',
@@ -1358,6 +1359,13 @@ const sv = {
   'weekday.5': 'Fredag',
   'weekday.6': 'Lördag',
   'weekday.7': 'Söndag',
+  'weekdayShort.1': 'Mån',
+  'weekdayShort.2': 'Tis',
+  'weekdayShort.3': 'Ons',
+  'weekdayShort.4': 'Tor',
+  'weekdayShort.5': 'Fre',
+  'weekdayShort.6': 'Lör',
+  'weekdayShort.7': 'Sön',
 
   'holiday.newYearsDay': 'Nyårsdagen',
   'holiday.epiphany': 'Trettondedag jul',
@@ -2732,6 +2740,13 @@ const en: Record<TextKey, string> = {
   'weekday.5': 'Friday',
   'weekday.6': 'Saturday',
   'weekday.7': 'Sunday',
+  'weekdayShort.1': 'Mon',
+  'weekdayShort.2': 'Tue',
+  'weekdayShort.3': 'Wed',
+  'weekdayShort.4': 'Thu',
+  'weekdayShort.5': 'Fri',
+  'weekdayShort.6': 'Sat',
+  'weekdayShort.7': 'Sun',
 
   'holiday.newYearsDay': 'New Year’s Day',
   'holiday.epiphany': 'Epiphany',
@@ -2751,17 +2766,17 @@ const en: Record<TextKey, string> = {
   'holiday.newYearsEve': 'New Year’s Eve',
 };
 
-export type Language = 'sv' | 'en' | 'pl' | 'prs' | 'am';
-export const DICTIONARIES: Record<Language, Record<TextKey, string>> = { sv, en, pl, prs, am };
+export type Language = 'sv' | 'en' | 'pl' | 'prs' | 'am' | 'ar';
+export const DICTIONARIES: Record<Language, Record<TextKey, string>> = { sv, en, pl, prs, am, ar };
 
-/** Languages written right to left (Dari). */
-export const isRightToLeft = (lang: Language) => lang === 'prs';
+/** Languages written right to left (Dari, Arabic). */
+export const isRightToLeft = (lang: Language) => lang === 'prs' || lang === 'ar';
 
 /** The language tag for the page: Dari is Persian as written in Afghanistan. */
-export const LANGUAGE_TAGS: Record<Language, string> = { sv: 'sv', en: 'en', pl: 'pl', prs: 'fa-AF', am: 'am' };
+export const LANGUAGE_TAGS: Record<Language, string> = { sv: 'sv', en: 'en', pl: 'pl', prs: 'fa-AF', am: 'am', ar: 'ar' };
 
 /** Language names, each in its own language. */
-export const LANGUAGE_NAMES: Record<Language, string> = { sv: 'Svenska', en: 'English', pl: 'Polski', prs: 'دری (Dari)', am: 'አማርኛ (Amharic)' };
+export const LANGUAGE_NAMES: Record<Language, string> = { sv: 'Svenska', en: 'English', pl: 'Polski', prs: 'دری (Dari)', am: 'አማርኛ (Amharic)', ar: 'العربية (Arabic)' };
 
 export type Translate = (key: TextKey, values?: Record<string, string | number>) => string;
 

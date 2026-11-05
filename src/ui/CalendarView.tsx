@@ -256,7 +256,7 @@ function CalendarMonth({ month }: { month: string }) {
       <section className="card cal-month">
         <div className="cal-weekdays" aria-hidden="true">
           {[1, 2, 3, 4, 5, 6, 7].map((w) => (
-            <span key={w}>{t(`weekday.${w}` as TextKey).slice(0, 3)}</span>
+            <span key={w}>{t(`weekdayShort.${w}` as TextKey)}</span>
           ))}
         </div>
         <div className="cal-grid">
