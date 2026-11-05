@@ -33,6 +33,8 @@ export interface SickPeriod {
   certificateFrom: LocalDate;
   /** From this day Försäkringskassan pays (after 14 days of sick pay, across a relapse). */
   insuranceFrom: LocalDate;
+  /** A day of the period is marked as a work injury (arbetsskada). */
+  workInjury: boolean;
 }
 
 /** Sick days as periods: runs of sick days, joined across a weekend (not across a day worked). */
@@ -73,6 +75,7 @@ export function sickPeriodOn(days: DayRecord[], date: LocalDate, added: LocalDat
     relapse,
     certificateFrom: addDays(p.start, 7),
     insuranceFrom: addDays(p.start, left),
+    workInjury: days.some((d) => d.absence?.type === 'sick' && !!d.absence.workInjury && d.date >= p.start && d.date <= p.last),
   };
 }
 

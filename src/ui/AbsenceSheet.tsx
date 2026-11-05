@@ -7,7 +7,7 @@ import { usualWeekdays } from '../domain/reportCheck.ts';
 import { datesInRange, isoWeekday, todayLocal } from '../domain/time.ts';
 import { sickPeriodOn } from '../domain/sick.ts';
 import { Field, Modal } from './common.tsx';
-import { SickInfo } from './SickInfo.tsx';
+import { SickInfo, WorkInjuryField } from './SickInfo.tsx';
 import { TimeField } from './StampRowsEditor.tsx';
 
 // Registering sickness or time off for a day or a stretch of days, without
@@ -26,6 +26,8 @@ export function AbsenceSheet({ kind, onClose }: { kind: 'sick' | 'leave'; onClos
   const [type, setType] = useState<AbsenceType>(kind === 'sick' ? 'sick' : 'vacation');
   const [bookedStart, setBookedStart] = useState<string | null>(null);
   const [bookedEnd, setBookedEnd] = useState<string | null>(null);
+  /** Ticked by the user; until then, as the sick period these days continue was marked. */
+  const [injuryChoice, setInjuryChoice] = useState<boolean | null>(null);
   const byDate = new Map(days.map((d) => [d.date, d]));
   const usual = usualWeekdays(days, today);
   const range = from && to && from <= to ? datesInRange(from, to) : [];
@@ -34,13 +36,15 @@ export function AbsenceSheet({ kind, onClose }: { kind: 'sick' | 'leave'; onClos
   const free = chosen.filter((d) => !(byDate.get(d)?.rows.length ?? 0));
   // The sick period these days make (with any before them), seen from the first of them.
   const sickPeriod = kind === 'sick' && free.length ? sickPeriodOn(days, free[0], free) : null;
+  const injury = injuryChoice ?? sickPeriod?.workInjury ?? false;
 
   const save = async () => {
     for (const date of free) {
       const before = byDate.get(date);
       const day: DayRecord = {
         ...(before ?? { date, rows: [], photoIds: [] }),
-        absence: type === 'sick' ? { type, bookedStart: bookedStart ?? undefined, bookedEnd: bookedEnd ?? undefined } : { type },
+        absence:
+          type === 'sick' ? { type, bookedStart: bookedStart ?? undefined, bookedEnd: bookedEnd ?? undefined, workInjury: injury || undefined } : { type },
         updatedAt: Date.now(),
       };
       await saveDay(day);
@@ -101,7 +105,8 @@ export function AbsenceSheet({ kind, onClose }: { kind: 'sick' | 'leave'; onClos
             </div>
             <span className="field-hint">{t('day.bookedHint.sick')}</span>
           </div>
-          {sickPeriod && <SickInfo period={sickPeriod} />}
+          <WorkInjuryField checked={injury} onChange={setInjuryChoice} />
+          {sickPeriod && <SickInfo period={{ ...sickPeriod, workInjury: injury }} />}
         </>
       )}
     </Modal>

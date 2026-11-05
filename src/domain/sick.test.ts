@@ -33,3 +33,14 @@ describe('the sick period going on', () => {
     expect(currentSickPeriod([sick('2027-03-01')], '2027-03-04')).toBeNull();
   });
 });
+
+describe('a sick period after a work injury', () => {
+  const sick = (date: string, workInjury?: boolean): DayRecord => ({ date, rows: [], absence: { type: 'sick', workInjury }, photoIds: [], updatedAt: 0 });
+  it('is marked when one of its days is', () => {
+    const days = [sick('2030-03-04', true), sick('2030-03-05'), sick('2030-03-06')];
+    expect(sickPeriodOn(days, '2030-03-06')?.workInjury).toBe(true);
+  });
+  it('is not marked otherwise', () => {
+    expect(sickPeriodOn([sick('2030-03-04'), sick('2030-03-05')], '2030-03-05')?.workInjury).toBe(false);
+  });
+});

@@ -161,7 +161,12 @@ in Playwright by routing `https://accounts.google.com/gsi/client` and
   + TFA from day 15, costs, sveda och värk – "enligt Afa minst 31 dagar", men,
   livränta at ≥ 1/15 income loss for ≥ 1 year). Checked against search results
   in Nov 2026 (afaforsakring.se and avtalat.se weren't reachable from the cloud
-  session); the text tells users to confirm amounts with Afa/FK/the union. A bare "N §" is linked as an agreement
+  session); the text tells users to confirm amounts with Afa/FK/the union. Sick days can be marked
+  "Arbetsskada" (`absence.workInjury`; checkbox `WorkInjuryField` in the Sjuk
+  sheet and the day editor; `SickPeriod.workInjury` if any day of the period
+  is, and the sheet pre-ticks a period that continues one); a marked period
+  shows a short what-to-do list (`WorkInjuryChecklist` in SickInfo.tsx) on
+  Idag, and the Kalender's day shows an "arbetsskada" tag. A bare "N §" is linked as an agreement
   section by `splitCitations`, so other laws (MBL) are written without §.
 - **Ärenden** (`src/ui/IssuesView.tsx`, tab with a badge; `issues-context.tsx`
   works out everything once for the app): questions only the user can answer

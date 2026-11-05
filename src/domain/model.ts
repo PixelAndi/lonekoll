@@ -38,6 +38,8 @@ export interface Absence {
   /** The shift you were booked for (sick days, public holidays). End before start = next day. */
   bookedStart?: LocalTime;
   bookedEnd?: LocalTime;
+  /** Sick because of a work injury (arbetsskada): hurt at work, or on the way to or from it. */
+  workInjury?: boolean;
 }
 
 /** A shift in a schedule. End at or before start = ends the next day. */

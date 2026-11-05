@@ -385,6 +385,7 @@ function SelectedDay({ day }: { day: CalendarDay }) {
       {record?.rows.length ? <p className="cal-sel-stamps">{stampText(record.rows)}</p> : null}
       <p className="cal-sel-tags small">
         {record?.absence && <span>{t(`absence.${record.absence.type}`)}</span>}
+        {record?.absence?.workInjury && <span className="warn-text">{t('injury.tag')}</span>}
         {day.holiday && <span>{t(day.holiday.name as TextKey)}</span>}
         {day.ob && <span>OB</span>}
         {day.overtime && <span>{t('cal.tag.ot')}</span>}

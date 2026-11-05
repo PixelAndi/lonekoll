@@ -13,6 +13,7 @@ import { CardById, OriginalButton, PreviewNote, useBlobUrl } from './Sources.tsx
 import { useOriginal } from '../cloud/useCloud.ts';
 import { Card, Field, Icon, Modal, Notice, Page, PhotoThumb, usePhotoUrl } from './common.tsx';
 import { Cited } from './Cited.tsx';
+import { WorkInjuryField } from './SickInfo.tsx';
 import { flushFocusedField, StampRowsEditor, TimeField } from './StampRowsEditor.tsx';
 
 const ABSENCE_TYPES: AbsenceType[] = ['sick', 'vacation', 'komp', 'timebank', 'holiday', 'permission', 'unpaid'];
@@ -145,6 +146,7 @@ function DayForm({ date, existing, days, t, fmt, settings }: FormProps) {
               <TimeField label={t('day.out')} value={absence.bookedEnd ?? null} onChange={(v) => patchAbsence({ bookedEnd: v ?? undefined })} />
             </div>
             <p className="muted small"><Cited date={date} text={t(absence.type === 'sick' ? 'day.bookedHint.sick' : 'day.bookedHint.holiday')} /></p>
+            {absence.type === 'sick' && <WorkInjuryField checked={!!absence.workInjury} onChange={(v) => patchAbsence({ workInjury: v || undefined })} />}
           </>
         )}
         <Field label={t('day.note')}>

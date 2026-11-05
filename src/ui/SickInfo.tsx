@@ -30,10 +30,42 @@ export function SickInfo({ period }: { period: SickPeriod }) {
           <Cited text={t('sick.insurance', { date: date(period.insuranceFrom) })} />
         </li>
         {!period.relapse && <li>{t('sick.relapse')}</li>}
-        <li>
-          {t('sick.injury')} <a href={href({ name: 'help', section: 'injury' })}>{t('sick.injuryLink')}</a>
-        </li>
+        {!period.workInjury && (
+          <li>
+            {t('sick.injury')} <a href={href({ name: 'help', section: 'injury' })}>{t('sick.injuryLink')}</a>
+          </li>
+        )}
       </ul>
+      {period.workInjury && <WorkInjuryChecklist />}
+    </div>
+  );
+}
+
+/** "Arbetsskada" ticked on sick days: hurt at work, or on the way to or from it. */
+export function WorkInjuryField({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+  const { t } = useApp();
+  return (
+    <label className="inline-field work-injury-field">
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} /> <span>{t('injury.checkbox')}</span>
+    </label>
+  );
+}
+
+/** What to do about a work injury, in short, with the way to the whole guide. */
+function WorkInjuryChecklist() {
+  const { t } = useApp();
+  return (
+    <div className="cal-check work-injury-check">
+      <strong>{t('injury.checkTitle')}</strong>
+      <ul className="small">
+        <li>{t('injury.check.tell')}</li>
+        <li>{t('injury.check.report')}</li>
+        <li>{t('injury.check.care')}</li>
+        <li>{t('injury.check.apply')}</li>
+      </ul>
+      <a className="small" href={href({ name: 'help', section: 'injury' })}>
+        {t('sick.injuryLink')}
+      </a>
     </div>
   );
 }
