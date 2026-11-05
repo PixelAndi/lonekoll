@@ -40,7 +40,7 @@ export function SlipCheck({ id }: { id: string }) {
   if (!needsCheck(record) && !editing)
     return (
       <p className="small">
-        <button type="button" className="link-button" onClick={() => setEditing(true)}>
+        <button type="button" className="link-button on-light" onClick={() => setEditing(true)}>
           {t('slipCheck.edit')}
         </button>
       </p>

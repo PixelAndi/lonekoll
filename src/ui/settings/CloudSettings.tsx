@@ -111,7 +111,7 @@ export function CloudSettings() {
           {counts && counts.archived > 0 && (
             <p className="muted small">
               {t('cloud.archived', { n: counts.archived })}{' '}
-              <button type="button" className="link-button" onClick={() => void act(fetchAllOriginals)}>
+              <button type="button" className="link-button on-light" onClick={() => void act(fetchAllOriginals)}>
                 {t('cloud.fetchAll')}
               </button>
             </p>

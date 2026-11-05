@@ -249,7 +249,7 @@ function Results({ results, onClose }: { results: Result[]; onClose: () => void 
           </li>
         ))}
       </ul>
-      <button type="button" className="link-button small" onClick={onClose}>
+      <button type="button" className="link-button on-light small" onClick={onClose}>
         {t('common.close')}
       </button>
     </Card>
