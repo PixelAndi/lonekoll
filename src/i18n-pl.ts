@@ -59,7 +59,7 @@ export const pl: Record<TextKey, string> = {
   'issue.missing-out': 'Brak odbicia wyjścia (wejście {time})',
   'issue.missing-in': 'Brak odbicia wejścia (wyjście {time})',
   'issue.too-long': 'Ponad 16 godzin między wejściem a wyjściem ({time})',
-  'warn.no-break': 'Ponad 5 godzin bez odbitej przerwy',
+  'warn.no-break': 'Ponad 5 godzin bez żadnej odbitej przerwy',
   'warn.short-rest': 'Mniej niż 11 godzin odpoczynku od poprzedniej zmiany',
   'warn.extra-shift': 'Szósta lub kolejna zmiana w tym tygodniu – liczona jako nadgodziny',
   'warn.no-rate': 'Brak wynagrodzenia dla tej daty – dodaj je w Ustawieniach',

@@ -127,6 +127,8 @@ export const RULES = {
   vacationPayPercent: 0.132,
   /** Working Hours Act: break after at most 5 h, 11 h daily rest. */
   maxMinutesWithoutBreak: 300,
+  /** A stop between an Ut and the next In this long is a stamped break (lunch); shorter ones are re-stamps. */
+  minBreakMinutes: 10,
   minDailyRestMinutes: 660,
   /** §4.4 skiftformstillägg per worked (non-overtime) hour, share of the hourly wage. */
   shiftFormPercent: { none: 0, 'two-shift': 0.053, continuous: 0.111 },

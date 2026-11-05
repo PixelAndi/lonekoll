@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { calculatePeriod, calculateShifts, inFullOvertimeWindow, ordinaryStartOn } from './calc.ts';
+import { calculatePeriod, calculateShifts, inFullOvertimeWindow, noStampedBreak, ordinaryStartOn } from './calc.ts';
 import { DEFAULT_SETTINGS, hourlyRateOn, minimumWageOn, type DayRecord, type Settings, type StampPair } from './model.ts';
 import { buildShifts, forgottenStamps, otherDayNeeded } from './shifts.ts';
 import { addDays, isoWeekday, toMinutes as toMinutesOf } from './time.ts';
@@ -64,7 +64,8 @@ describe('October week', () => {
       [120, 25],
     ]);
     expect(results[2].overtimeReason).toBe('long-shift');
-    expect(results[2].warnings).toContain('no-break');
+    // The lunch at 18:00–18:30 is stamped: no break warning for the long evening after it.
+    expect(results[2].warnings).not.toContain('no-break');
   });
 
   it('sums the period like a pay slip', () => {
@@ -286,5 +287,21 @@ describe('when the Sunday and holiday overtime windows end', () => {
     // Overtime 15:00–20:00 that day (shift 06:30–20:00 with a 30-minute break): 3 h before 18:00, 2 h after.
     const r = calculateShifts([day('2026-10-30', [['06:30', '10:00'], ['10:30', '20:00']])], { ...settings, ordinaryShiftMinutes: 480 }).results[0];
     expect([r.overtime50, r.overtime100]).toEqual([120, 180]);
+  });
+});
+
+describe('the stamped break', () => {
+  const at = (h: number, m = 0) => Date.UTC(2030, 0, 7, h, m);
+  it('warns for a shift over five hours with no break stamped', () => {
+    expect(noStampedBreak([{ start: at(6), end: at(12) }])).toBe(true);
+    expect(noStampedBreak([{ start: at(6), end: at(10) }])).toBe(false);
+  });
+  it('counts a lunch of any usual length, and no longer holds the rest of the shift to five hours', () => {
+    expect(noStampedBreak([{ start: at(12), end: at(14) }, { start: at(14, 30), end: at(20, 45) }])).toBe(false);
+    expect(noStampedBreak([{ start: at(12), end: at(14) }, { start: at(14, 15), end: at(20) }])).toBe(false);
+    expect(noStampedBreak([{ start: at(12), end: at(14) }, { start: at(15, 10), end: at(20) }])).toBe(false);
+  });
+  it('does not take a stamp a few minutes apart for a break', () => {
+    expect(noStampedBreak([{ start: at(6), end: at(9) }, { start: at(9, 3), end: at(12) }])).toBe(true);
   });
 });

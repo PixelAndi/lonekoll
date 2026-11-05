@@ -138,6 +138,17 @@ interface ClassifyOptions {
   days?: Map<LocalDate, DayRecord>;
 }
 
+/**
+ * A shift over five hours with no stamped break: no stop of at least `minBreakMinutes` between an
+ * Ut and the next In. A lunch of any length counts; the stretch after it isn't held to the five
+ * hours, as short pauses (coffee breaks) are seldom stamped.
+ */
+export function noStampedBreak(intervals: { start: number; end: number }[]): boolean {
+  if (!intervals.length) return false;
+  for (let i = 1; i < intervals.length; i++) if (intervals[i].start - intervals[i - 1].end >= RULES.minBreakMinutes * MINUTE_MS) return false;
+  return intervals[intervals.length - 1].end - intervals[0].start > RULES.maxMinutesWithoutBreak * MINUTE_MS;
+}
+
 /** Classifies every minute of a set of work intervals. */
 function classify(intervals: { start: number; end: number }[], settings: Settings, opts: ClassifyOptions) {
   const shiftFormPercent = RULES.shiftFormPercent[settings.shiftForm] ?? 0;
@@ -316,7 +327,7 @@ function shiftsOf(days: DayRecord[], settings: Settings): { results: ShiftResult
     if (reason === 'long-shift' && shift.workedMinutes - ordinaryMinutes < settings.minOvertimeMinutes) ordinaryMinutes = Infinity;
     const komp = (byDate.get(shift.date)?.overtimeAs ?? settings.overtimeAs) === 'komp';
     const c = classify(shift.intervals, settings, { ordinaryMinutes, shiftedFrom, komp, days: byDate });
-    if (shift.intervals.some((iv) => iv.end - iv.start > RULES.maxMinutesWithoutBreak * MINUTE_MS)) warnings.push('no-break');
+    if (noStampedBreak(shift.intervals)) warnings.push('no-break');
     if (previousEnd !== null && shift.start - previousEnd < RULES.minDailyRestMinutes * MINUTE_MS) warnings.push('short-rest');
     if (c.missingRate) warnings.push('no-rate');
     if (c.missingAgreement) warnings.push('no-agreement');
