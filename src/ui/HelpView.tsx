@@ -212,7 +212,7 @@ function InjuryGuide() {
       </section>
       <section className="agreement-part">
         <h3>{t('guide.injury.money.h')}</h3>
-        {list('money', 5)}
+        {list('money', 6)}
       </section>
       <p className="small muted">{t('guide.injury.note')}</p>
     </Card>

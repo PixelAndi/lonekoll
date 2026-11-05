@@ -159,9 +159,12 @@ in Playwright by routing `https://accounts.google.com/gsi/client` and
   Arbetsmiljöverket, via anmalarbetsskada.se; copy to employee and skyddsombud;
   investigate), compensation (sjuklön + TFA for karens/lost income, sjukpenning
   + TFA from day 15, costs, sveda och värk – "enligt Afa minst 31 dagar", men,
-  livränta at ≥ 1/15 income loss for ≥ 1 year). Checked against search results
-  in Nov 2026 (afaforsakring.se and avtalat.se weren't reachable from the cloud
-  session); the text tells users to confirm amounts with Afa/FK/the union. Sick days can be marked
+  livränta at ≥ 1/15 income loss for ≥ 1 year; färdolycksfall: no income loss
+  during sick leave from TFA, motor vehicle → trafikförsäkringen; costs up to
+  högkostnadsskyddet, 500 kr självrisk for private employees). Checked against
+  afaforsakring.se and av.se in Nov 2026 – read with `curl` in the shell; the
+  WebFetch tool can't resolve those hosts though the session's network can.
+  The text tells users to confirm amounts with Afa/FK/the union. Sick days can be marked
   "Arbetsskada" (`absence.workInjury`; checkbox `WorkInjuryField` in the Sjuk
   sheet and the day editor; `SickPeriod.workInjury` if any day of the period
   is, and the sheet pre-ticks a period that continues one); a marked period
