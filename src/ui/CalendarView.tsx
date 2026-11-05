@@ -31,7 +31,7 @@ export function CalendarView({ month }: { month?: string }) {
   return <CalendarYear year={year} />;
 }
 
-function useCalendar(from: string, to: string): CalendarDay[] {
+export function useCalendar(from: string, to: string): CalendarDay[] {
   const { days, settings } = useApp();
   const today = todayLocal();
   const { results, issues } = useMemo(() => calculateShifts(days, settings), [days, settings]);
@@ -40,7 +40,7 @@ function useCalendar(from: string, to: string): CalendarDay[] {
   return useMemo(() => calendarDays(from, to, { days, results, issues, settings, today, fromSlips }), [from, to, days, results, issues, settings, today, fromSlips]);
 }
 
-const KIND_LABEL: Record<CalendarDay['kind'], TextKey | null> = {
+export const KIND_LABEL: Record<CalendarDay['kind'], TextKey | null> = {
   worked: null,
   sick: 'cal.kind.sick',
   vacation: 'cal.kind.vacation',
@@ -51,7 +51,7 @@ const KIND_LABEL: Record<CalendarDay['kind'], TextKey | null> = {
   free: null,
 };
 
-const cellClass = (d: CalendarDay, today: string) =>
+export const cellClass = (d: CalendarDay, today: string) =>
   ['cal-day', `cal-${d.kind}`, d.holiday?.kind === 'holiday' ? 'cal-holiday' : '', d.date === today ? 'cal-today' : '', d.weekend ? 'cal-weekend' : ''].filter(Boolean).join(' ');
 
 function Legend() {
@@ -168,7 +168,7 @@ function Counts({ counts }: { counts: ReturnType<typeof monthCounts> }) {
 }
 
 /** What a holiday means for you: worked (OB), not one of your days, or helglön if you're off. */
-function holidayNote(t: ReturnType<typeof useApp>['t'], h: { date: string; kind: 'holiday' | 'sunday' }, usual: Set<number>, day?: CalendarDay): string {
+export function holidayNote(t: ReturnType<typeof useApp>['t'], h: { date: string; kind: 'holiday' | 'sunday' }, usual: Set<number>, day?: CalendarDay): string {
   if (h.kind === 'sunday') return day?.kind === 'worked' ? t('cal.hol.eveWorked') : t('cal.hol.eve');
   if (day?.kind === 'worked') return t('cal.hol.worked');
   if (!usual.has(isoWeekday(h.date))) return t('cal.hol.notYourDay');

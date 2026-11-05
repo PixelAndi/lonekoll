@@ -7,6 +7,13 @@ Bagerier. Live at https://pixelandi.github.io/lonekoll/ (GitHub Pages, deployed
 by `.github/workflows/deploy.yml` on every push to `main`; the tests must pass).
 README.md describes the features and rules in detail – read it first.
 
+## Beta
+
+`src/beta.ts` (`BETA = true`): the app is being tested at work; the report
+(print / save as PDF) is locked – the slip page's button is disabled with a
+note, `#/report/…` shows a notice – and the header shows a "Beta" badge. The
+owner says when to open it (set `BETA = false`).
+
 ## Hard rules
 
 - **This repository is public. Never commit personal data**: no real names,
@@ -184,6 +191,21 @@ in Playwright by routing `https://accounts.google.com/gsi/client` and
   lives once in the app (`ClockImportHost` in PhotoImport.tsx), opened
   through `actions.ts` (which can also ask the Lön page to open its slip
   scanner). A floating + button was tried and removed at the owner's wish.
+- **The Kalender's look on every page** (owner liked it): coloured squares for
+  how things stand, one highlighted "now" card (`cal-focus`), chips
+  (`cal-chips`), big numbers (`cal-numbers`), a yellow "to check" card
+  (`cal-check`), what's coming, details in folds. Idag: this week as 7
+  squares, the register card, chips (missing days, vacation left, Kontroll),
+  "Lönen framåt" as numbers + this month's registered-days bar, "Snart" (pay
+  day, days off registered ahead, next holidays). Lön: the latest slip
+  highlighted (`useSlipStatus` in SlipsView.tsx), the year's slips as 12
+  squares (ok / to check / too little by the agreement / none), the wage on
+  the slips as steps; the slip page: chips, calculated-vs-slip bars per row,
+  the month in numbers, the period's days as squares, row details in folds.
+  Kontroll: "Läget just nu" tiles (scroll to their sections) and the last 24
+  months as squares in the owed card. Mer: "Appen räknar med" (wage, overtime
+  limit, tax table, pay day, whether the latest slip matched) and a status
+  dot + current value under each settings fold (`CardStatus` in common.tsx).
 - `src/domain/owed.ts` + `src/ui/Owed.tsx` – the rough owed estimate, shown
   in Ärenden. Each item: a later line suggested as its correction ("Ja,
   koppla den hit" links it – a line covers items oldest first, never more

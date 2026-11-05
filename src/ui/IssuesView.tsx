@@ -4,6 +4,7 @@ import { useApp } from '../app-context.ts';
 import { db, saveSettings } from '../db.ts';
 import { uncheckedMonths } from '../domain/agreementCheck.ts';
 import { href } from '../router.ts';
+import { todayLocal } from '../domain/time.ts';
 import { monthRanges } from './AgreementFindings.tsx';
 import { Card, Fold, Icon, Page } from './common.tsx';
 import { missingCount, useMissing } from './MissingView.tsx';
@@ -41,9 +42,23 @@ export function IssuesView() {
   return (
     <Page title={t('nav.issues')}>
       <p className="muted small">{t('issues.intro')}</p>
+      <StatusTiles
+        tiles={[
+          { id: 'issues-errors', label: t('kon.tile.likely'), n: owed?.likely.length ?? 0, sub: t('kon.tile.likelySub'), bad: true },
+          { id: 'issues-errors', label: t('kon.tile.investigate'), n: owed?.investigate.length ?? 0, sub: t('kon.tile.investigateSub') },
+          { id: 'issues-questions', label: t('kon.tile.questions'), n: questions, sub: t('kon.tile.questionsSub') },
+          { id: 'issues-vacation', label: t('kon.tile.vacation'), n: vacation.length, sub: t('kon.tile.vacationSub') },
+          { id: 'issues-missing', label: t('kon.tile.days'), n: missingDays, sub: t('kon.tile.daysSub') },
+          { id: 'issues-missing', label: t('kon.tile.slips'), n: noSlip.length, sub: t('kon.tile.slipsSub') },
+        ]}
+      />
       {questions + checks === 0 && <p className="ok">✓ {t('issues.none')}</p>}
 
-      {questions > 0 && <h2 className="issues-heading">{t('issues.questions', { n: questions })}</h2>}
+      {questions > 0 && (
+        <h2 className="issues-heading" id="issues-questions">
+          {t('issues.questions', { n: questions })}
+        </h2>
+      )}
       {(records ?? [])
         .filter((r) => r.candidate)
         .map((r) => (
@@ -60,8 +75,11 @@ export function IssuesView() {
 
       {owed && errors > 0 && (
         <>
-          <h2 className="issues-heading">{t('issues.errors', { n: errors })}</h2>
+          <h2 className="issues-heading" id="issues-errors">
+            {t('issues.errors', { n: errors })}
+          </h2>
           <Card className="owed-card">
+            <OwedMonths />
             {!settings.employedSince && <p className="small warn-text">{t('agr.noEmployed')}</p>}
             {!settings.birthDate && <p className="small muted">{t('agr.noBirth')}</p>}
             <OwedSection owed={owed} />
@@ -71,7 +89,9 @@ export function IssuesView() {
 
       {vacation.length > 0 && (
         <>
-          <h2 className="issues-heading">{t('check.vacation', { n: vacation.length })}</h2>
+          <h2 className="issues-heading" id="issues-vacation">
+            {t('check.vacation', { n: vacation.length })}
+          </h2>
           <Card>
             <p className="small muted">{t('check.vacationIntro')}</p>
             <ul className="owed-items">
@@ -100,7 +120,9 @@ export function IssuesView() {
 
       {(missingDays > 0 || noSlip.length > 0 || unchecked.unread.length > 0) && (
         <>
-          <h2 className="issues-heading">{t('issues.missing')}</h2>
+          <h2 className="issues-heading" id="issues-missing">
+            {t('issues.missing')}
+          </h2>
           {missingDays > 0 && (
             <a className="card issue-link" href={href({ name: 'missing' })}>
               <span>{t('missing.link', { n: missingDays })}</span>
@@ -153,6 +175,74 @@ export function IssuesView() {
         </Fold>
       )}
     </Page>
+  );
+}
+
+interface Tile {
+  id: string;
+  label: string;
+  n: number;
+  sub: string;
+  bad?: boolean;
+}
+
+/** The situation at a glance, like the Kalender's counts: a square per kind of check, coloured by how it stands. */
+function StatusTiles({ tiles }: { tiles: Tile[] }) {
+  const { t } = useApp();
+  const go = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  return (
+    <section className="card cal-focus">
+      <div className="cal-focus-head">
+        <strong>{t('kon.now')}</strong>
+      </div>
+      <div className="kon-tiles">
+        {tiles.map((tile) => (
+          <button
+            key={tile.label}
+            type="button"
+            className={`kon-tile ${tile.n === 0 ? 'kon-ok' : tile.bad ? 'kon-bad' : 'kon-warn'}`}
+            disabled={tile.n === 0}
+            onClick={() => go(tile.id)}
+          >
+            <span className="kon-tile-head">
+              <strong>{tile.label}</strong>
+              <strong className="kon-tile-n">{tile.n === 0 ? '✓' : tile.n}</strong>
+            </span>
+            <span className="kon-tile-sub">{tile.n === 0 ? t('kon.tile.ok') : tile.sub}</span>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/** The last 24 months as squares: paid too little by the agreement, to look into, a slip that's fine, no slip. */
+function OwedMonths() {
+  const { t, fmt } = useApp();
+  const { owed } = useIssues();
+  const records = useLiveQuery(() => db.slips.toArray(), []);
+  if (!owed) return null;
+  const have = new Set((records ?? []).map((r) => r.periodStart));
+  const now = todayLocal().slice(0, 7);
+  const months: string[] = [];
+  for (let i = 23; i >= 0; i--) {
+    const d = new Date(Date.UTC(Number(now.slice(0, 4)), Number(now.slice(5, 7)) - 1 - i, 1));
+    months.push(d.toISOString().slice(0, 10));
+  }
+  const kind = (m: string) =>
+    owed.likely.some((i) => i.months.includes(m)) ? 'kon-m-bad' : owed.investigate.some((i) => i.months.includes(m)) ? 'kon-m-warn' : have.has(m) ? 'kon-m-ok' : 'kon-m-none';
+  return (
+    <div className="kon-months">
+      <div className="kon-months-grid">
+        {months.map((m) => (
+          <span key={m} className="kon-month">
+            <i className={kind(m)} />
+            <span>{fmt.monthShort(m).slice(0, 1).toLocaleUpperCase()}</span>
+          </span>
+        ))}
+      </div>
+      <p className="small muted">{t('kon.monthsKey', { from: fmt.month(months[0]), to: fmt.month(months[23]) })}</p>
+    </div>
   );
 }
 

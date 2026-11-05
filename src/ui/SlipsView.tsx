@@ -1,6 +1,9 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { withPayDay } from '../domain/payday.ts';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { wageHistory } from '../domain/wageHistory.ts';
+import { earningYearForVacationOn, vacationBasis } from '../domain/vacation.ts';
+import { useIssues } from './issues-context.tsx';
 import { useApp } from '../app-context.ts';
 import { db, newId, type SlipRecord } from '../db.ts';
 import { calculatePeriod } from '../domain/calc.ts';
@@ -155,6 +158,8 @@ export function SlipsView() {
           }}
         />
       )}
+      {slips && slips.length > 0 && <LatestSlip record={latestOf(slips)} all={slips} />}
+      {slips && slips.length > 0 && <SlipYear slips={slips} />}
       <div className="actions-stack">
         {/* The PDF from the employer first; a photo of a paper slip beside it. */}
         <div className="scan-row">
@@ -182,8 +187,9 @@ export function SlipsView() {
           <IssuesLine />
           <ToCheck slips={slips} />
           <YearList slips={slips} />
+          <WageSteps slips={slips} />
           <WageFromSlips />
-          <Fold title={t('vacation.title')}>
+          <Fold title={t('vacation.title')} sub={<VacationSub slips={slips} />}>
             <VacationProgress slips={slips} plain />
           </Fold>
         </>
@@ -309,14 +315,14 @@ function YearList({ slips }: { slips: SlipRecord[] }) {
   const order = [...years.keys()].sort((a, b) => (a === '' ? 1 : b === '' ? -1 : b.localeCompare(a)));
   return (
     <>
-      {order.map((year, i) => {
+      {order.map((year) => {
         const list = years.get(year)!;
         const unsure = list.filter(needsCheck).length;
         return (
           <Fold
             key={year || 'none'}
-            open={i === 0}
-            title={year || t('slips.noPeriod')}
+            open={false}
+            title={t('pay.allSlips', { year: year || t('slips.noPeriod') })}
             sub={`${t('slips.count', { n: list.length })}${unsure ? ` · ${t('slips.toCheckCount', { n: unsure })}` : ''}`}
             warn={unsure > 0}
           >
@@ -334,24 +340,9 @@ function YearList({ slips }: { slips: SlipRecord[] }) {
 
 /** A slip on one line: its month and pay day, what was paid out, and how it stands. */
 function SlipItem({ record, all }: { record: SlipRecord; all: SlipRecord[] }) {
-  const { t, fmt, days, settings } = useApp();
-  const slip = applyOverrides(record.slip, settings.codeOverrides);
-  const { start, end } = slipPeriod(slip, record.importedAt);
-  const taxYear = Number((slip.payDate ?? end).slice(0, 4));
-  const taxData = useTaxData(taxYear);
-  const tax = { basis: taxBasis(settings.tax, taxData.rates), tables: taxData.tables, column: taxColumn(settings.birthDate, taxYear) };
-  const vacation = vacationBasisFor(slip, all, settings);
-  // Without days logged in its period the comparison has nothing to go on: said as such, not as differences.
-  const logged = days.some((d) => d.date >= start && d.date <= end && (d.rows.length > 0 || !!d.absence));
-  const findings = logged ? countFindings(comparePeriod(calculatePeriod(days, settings, start, end), slip, days, settings, tax, vacation)) : 0;
+  const { t, fmt } = useApp();
+  const { slip, start, label, kind } = useSlipStatus(record, all);
   const photo = /^image\//.test(record.pdf.type);
-  const [label, kind] = needsCheck(record)
-    ? [t('slipCheck.badge'), 'warn']
-    : !logged
-      ? [t('slips.noDays'), 'muted']
-      : findings
-        ? [t('slips.differences', { n: findings }), 'diff']
-        : [t('slips.matches'), 'ok'];
   return (
     <li>
       <a className="slip-row" href={href({ name: 'slip', id: record.id })}>
@@ -365,6 +356,203 @@ function SlipItem({ record, all }: { record: SlipRecord; all: SlipRecord[] }) {
       </a>
     </li>
   );
+}
+
+/**
+ * How a slip stands against the log: its reading to be checked, nothing logged in its period, the
+ * number of rows that differ, or a match.
+ */
+export function useSlipStatus(record: SlipRecord, all: SlipRecord[]) {
+  const { t, days, settings } = useApp();
+  const slip = applyOverrides(record.slip, settings.codeOverrides);
+  const { start, end } = slipPeriod(slip, record.importedAt);
+  const taxYear = Number((slip.payDate ?? end).slice(0, 4));
+  const taxData = useTaxData(taxYear);
+  return useMemo(() => {
+    const tax = { basis: taxBasis(settings.tax, taxData.rates), tables: taxData.tables, column: taxColumn(settings.birthDate, taxYear) };
+    const vacation = vacationBasisFor(slip, all, settings);
+    // Without days logged in its period the comparison has nothing to go on: said as such, not as differences.
+    const logged = days.some((d) => d.date >= start && d.date <= end && (d.rows.length > 0 || !!d.absence));
+    const findings = logged ? countFindings(comparePeriod(calculatePeriod(days, settings, start, end), slip, days, settings, tax, vacation)) : 0;
+    const check = needsCheck(record);
+    const [label, kind]: [string, 'warn' | 'muted' | 'diff' | 'ok'] = check
+      ? [t('slipCheck.badge'), 'warn']
+      : !logged
+        ? [t('slips.noDays'), 'muted']
+        : findings
+          ? [t('slips.differences', { n: findings }), 'diff']
+          : [t('slips.matches'), 'ok'];
+    return { slip, start, end, logged, findings, check, label, kind };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [record, all, days, settings, taxData, taxYear, t]);
+}
+
+/** The newest slip (by period, then pay day). */
+const latestOf = (slips: SlipRecord[]) =>
+  [...slips].sort((a, b) => (b.periodStart || '').localeCompare(a.periodStart || '') || (b.slip.payDate ?? '').localeCompare(a.slip.payDate ?? ''))[0];
+
+const sumOf = (slip: PaySlip, prefix: string) => slip.lines.filter((l) => l.category.startsWith(prefix)).reduce((s, l) => s + (l.amount ?? 0), 0);
+
+/** The latest slip, highlighted like the Kalender's month: how it stands, and its figures. */
+function LatestSlip({ record, all }: { record: SlipRecord; all: SlipRecord[] }) {
+  const { t, fmt } = useApp();
+  const { slip, start, label, kind } = useSlipStatus(record, all);
+  const taxShare = slip.gross && slip.tax ? (slip.tax / slip.gross) * 100 : undefined;
+  const extra = sumOf(slip, 'ob') + sumOf(slip, 'ot');
+  return (
+    <section className="card cal-focus">
+      <div className="cal-focus-head">
+        <strong>{t('pay.latest', { month: fmt.month(start) })}</strong>
+        <a href={href({ name: 'slip', id: record.id })}>{t('pay.open')}</a>
+      </div>
+      <div className="cal-chips">
+        <a className={`cal-chip ${kind === 'ok' ? 'cal-chip-ok' : kind === 'muted' ? '' : 'cal-chip-warn'}`} href={href({ name: 'slip', id: record.id })}>
+          {kind === 'ok' ? `✓ ${t('pay.chip.matches')}` : label}
+        </a>
+        {slip.payDate && <span className="cal-chip">{t('pay.chip.paid', { date: fmt.date(slip.payDate) })}</span>}
+      </div>
+      <div className="cal-numbers">
+        <div>
+          <strong>{fmt.money(slip.gross)}</strong>
+          <span className="small muted">{t('pay.num.gross')}</span>
+        </div>
+        <div>
+          <strong>{fmt.money(slip.net)}</strong>
+          <span className="small muted">{t('pay.num.net')}</span>
+        </div>
+        <div>
+          <strong>{taxShare !== undefined ? `${fmt.number(taxShare, 1)} %` : '–'}</strong>
+          <span className="small muted">{slip.taxTable ? t('pay.num.taxTable', { table: slip.taxTable }) : t('pay.num.tax')}</span>
+        </div>
+        <div>
+          <strong>{fmt.money(extra)}</strong>
+          <span className="small muted">{t('pay.num.extra')}</span>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** One square of the year: a month and how its slip stands. */
+function MonthSquare({ month, records, all, now, owedKind, first }: { month: string; records: SlipRecord[]; all: SlipRecord[]; now: string; owedKind?: 'bad' | 'warn'; first: string }) {
+  const { fmt } = useApp();
+  const name = fmt.monthShort(`${month}-01`);
+  if (!records.length) {
+    // Before the employment (or the first slip) a month has nothing to miss.
+    const kind = month > now || month < first ? 'pay-sq-later' : month === now ? 'pay-sq-now' : 'pay-sq-none';
+    return (
+      <span className={`pay-sq ${kind}`}>
+        <strong>{name}</strong>
+        <span>{month === now ? '…' : ''}</span>
+      </span>
+    );
+  }
+  return <MonthSquareSlip name={name} record={records[0]} all={all} owedKind={owedKind} />;
+}
+
+function MonthSquareSlip({ name, record, all, owedKind }: { name: string; record: SlipRecord; all: SlipRecord[]; owedKind?: 'bad' | 'warn' }) {
+  const { kind } = useSlipStatus(record, all);
+  const cls = owedKind === 'bad' ? 'pay-sq-bad' : owedKind === 'warn' || kind === 'warn' || kind === 'diff' ? 'pay-sq-warn' : kind === 'ok' ? 'pay-sq-ok' : 'pay-sq-read';
+  return (
+    <a className={`pay-sq ${cls}`} href={href({ name: 'slip', id: record.id })}>
+      <strong>{name}</strong>
+      <span>{cls === 'pay-sq-ok' ? '✓' : cls === 'pay-sq-read' ? '·' : '!'}</span>
+    </a>
+  );
+}
+
+/** The year's slips as twelve squares, like the Kalender's year: what each month's slip says. */
+function SlipYear({ slips }: { slips: SlipRecord[] }) {
+  const { t, fmt, settings } = useApp();
+  const now = todayLocal().slice(0, 7);
+  const first = [settings.employedSince?.slice(0, 7), ...slips.map((r) => r.periodStart.slice(0, 7)).filter(Boolean)].filter(Boolean).sort()[0] ?? now;
+  const years = [...new Set(slips.map((r) => r.periodStart.slice(0, 4)).filter(Boolean))].sort();
+  const [year, setYear] = useState(() => latestOf(slips).periodStart.slice(0, 4) || now.slice(0, 4));
+  const { owed } = useIssues();
+  const owedKind = (m: string): 'bad' | 'warn' | undefined =>
+    owed?.likely.some((i) => i.months.includes(`${m}-01`)) ? 'bad' : owed?.investigate.some((i) => i.months.includes(`${m}-01`)) ? 'warn' : undefined;
+  const months = Array.from({ length: 12 }, (_, i) => `${year}-${String(i + 1).padStart(2, '0')}`);
+  const inYear = slips.filter((r) => r.periodStart.startsWith(year));
+  const gross = inYear.reduce((s, r) => s + (r.slip.gross ?? 0), 0);
+  const net = inYear.reduce((s, r) => s + (r.slip.net ?? 0), 0);
+  const i = years.indexOf(year);
+  return (
+    <section className="card pay-year">
+      <div className="cal-focus-head">
+        <strong>{t('pay.year')}</strong>
+        <span className="cal-year-nav">
+          <button type="button" className="link-inline" disabled={i <= 0} onClick={() => setYear(years[i - 1])} aria-label={t('common.previous')}>
+            ‹
+          </button>
+          <strong>{year}</strong>
+          <button type="button" className="link-inline" disabled={i < 0 || i >= years.length - 1} onClick={() => setYear(years[i + 1])} aria-label={t('common.next')}>
+            ›
+          </button>
+        </span>
+      </div>
+      <div className="pay-squares">
+        {months.map((m) => (
+          <MonthSquare key={m} month={m} records={slips.filter((r) => r.periodStart.startsWith(m))} all={slips} now={now} owedKind={owedKind(m)} first={first} />
+        ))}
+      </div>
+      <p className="cal-legend small">
+        <span>✓ {t('pay.key.ok')}</span>
+        <span>
+          <i className="cal-key cal-missing" /> {t('pay.key.check')}
+        </span>
+        <span>
+          <i className="cal-key cal-sick" /> {t('pay.key.bad')}
+        </span>
+        <span>▢ {t('pay.key.none')}</span>
+      </p>
+      {inYear.length > 0 && <p className="small muted">{t('pay.yearTotal', { n: inYear.length, gross: fmt.money(Math.round(gross)), net: fmt.money(Math.round(net)) })}</p>}
+    </section>
+  );
+}
+
+/** The hourly (or monthly) wage on the slips as steps, the latest on the right. */
+function WageSteps({ slips }: { slips: SlipRecord[] }) {
+  const { t, fmt, settings } = useApp();
+  const steps = useMemo(() => wageHistory(slips.map((r) => applyOverrides(r.slip, settings.codeOverrides)), settings), [slips, settings]);
+  const shown = steps.slice(-6);
+  if (shown.length < 1) return null;
+  const amounts = shown.map((s) => s.amount);
+  const low = Math.min(...amounts);
+  const high = Math.max(...amounts);
+  const span = (s: (typeof shown)[number]) => Math.max(1, (Date.parse(s.to) - Date.parse(s.from)) / 864e5);
+  const per = shown[0].basis === 'monthly' ? 'wageSlips.perMonth' : 'wageSlips.perHour';
+  const last = shown[shown.length - 1];
+  return (
+    <section className="card pay-wage">
+      <div className="cal-focus-head">
+        <strong>{t('pay.wageTitle')}</strong>
+        <span className="small">{t(per, { amount: fmt.money(last.amount) })}</span>
+      </div>
+      <div className="pay-wage-bars" aria-hidden="true">
+        {shown.map((s, i) => (
+          <i key={s.from} style={{ flexGrow: span(s), height: `${high === low ? 100 : 45 + (55 * (s.amount - low)) / (high - low)}%` }} className={i === shown.length - 1 ? 'pay-wage-now' : ''} />
+        ))}
+      </div>
+      <ul className="pay-wage-steps small">
+        {shown.map((s) => (
+          <li key={s.from}>
+            <span>{fmt.date(s.from, 'inText')}</span>
+            <span>{t(per, { amount: fmt.money(s.amount) })}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/** "4 av 12 lönebesked": how far the vacation pay's earning year is. */
+function VacationSub({ slips }: { slips: SlipRecord[] }) {
+  const { t, settings } = useApp();
+  const n = useMemo(() => {
+    const b = vacationBasis(slips.map((r) => applyOverrides(r.slip, settings.codeOverrides)), settings, earningYearForVacationOn(todayLocal(), settings));
+    return { done: b.months.filter((m) => m.covered).length, total: b.months.length };
+  }, [slips, settings]);
+  return <>{t('vacation.progress', { n: n.done, total: n.total, left: n.total - n.done })}</>;
 }
 
 export function SlipNotFound() {

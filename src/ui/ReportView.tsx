@@ -1,3 +1,4 @@
+import { BETA } from '../beta.ts';
 import { useEffect, useMemo, useState } from 'react';
 import { useApp } from '../app-context.ts';
 import { calculateShifts } from '../domain/calc.ts';
@@ -5,8 +6,8 @@ import { hourlyRateOn, hourlySupplement, minimumWageOn, monthlyPayOn, wagePeriod
 import { datesInRange, formatDuration, todayLocal } from '../domain/time.ts';
 import { formatter, ltr } from '../format.ts';
 import { isRightToLeft, LANGUAGE_NAMES, LANGUAGE_TAGS, translator, type Language } from '../i18n.ts';
-import { goBack } from '../router.ts';
-import { PhotoThumb, Spinner } from './common.tsx';
+import { goBack, href } from '../router.ts';
+import { Notice, Page, PhotoThumb, Spinner } from './common.tsx';
 import { Cited } from './Cited.tsx';
 import { coverageText, totalText } from './CompareView.tsx';
 import { SlipNotFound } from './SlipsView.tsx';
@@ -31,7 +32,24 @@ import { wageHistory, wagePatterns } from '../domain/wageHistory.ts';
 import { wageRowText } from './wageText.ts';
 
 /** The report for the employer, in Swedish, and in the user's own language too when that is another. */
+/** The report; locked while the app is in beta (see beta.ts). */
 export function ReportView({ id }: { id: string }) {
+  const { t } = useApp();
+  if (BETA)
+    return (
+      <div className="beta-locked">
+      <Page title={t('report.title')}>
+        <Notice kind="info">🔒 {t('beta.reportLocked')}</Notice>
+        <p>
+          <a href={href({ name: 'slip', id })}>{t('common.back')}</a>
+        </p>
+      </Page>
+      </div>
+    );
+  return <ReportBuilder id={id} />;
+}
+
+function ReportBuilder({ id }: { id: string }) {
   const app = useApp();
   const data = useSlipComparison(id);
   const check = useReportCheck(data);

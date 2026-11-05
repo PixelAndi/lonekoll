@@ -1,3 +1,4 @@
+import { BETA } from './beta.ts';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useEffect, useMemo, useState } from 'react';
 import { applyTheme } from './theme.ts';
@@ -121,6 +122,7 @@ export function App() {
           <header className="app-header no-print">
             <a href={href({ name: 'today' })} className="app-title">
               {t('app.title')}
+              {BETA && <span className="beta-badge">{t('beta.badge')}</span>}
             </a>
             <span className="app-tagline">{t('app.tagline')}</span>
             <CloudStatus />

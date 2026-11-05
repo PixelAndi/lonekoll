@@ -1,3 +1,4 @@
+import { BETA } from '../beta.ts';
 import { useApp } from '../app-context.ts';
 import { db, saveSettings } from '../db.ts';
 import type { Comparison, CoverageNote } from '../domain/compare.ts';
@@ -5,7 +6,9 @@ import type { SlipCategory } from '../domain/payslip.ts';
 import type { Formatter } from '../format.ts';
 import type { Translate } from '../i18n.ts';
 import { goBack, href } from '../router.ts';
-import { Card, Notice, Page, Spinner, StatusBadge } from './common.tsx';
+import { Card, Fold, Notice, Page, Spinner, StatusBadge } from './common.tsx';
+import { addDays, isoWeekday } from '../domain/time.ts';
+import { specialDay } from '../domain/holidays.ts';
 import { Cited } from './Cited.tsx';
 import { SlipSetupCard } from './SlipSetup.tsx';
 import { SlipCheck } from './SlipCheck.tsx';
@@ -59,6 +62,71 @@ export function totalText(c: Comparison, t: Translate, fmt: Formatter): { text: 
   return { text: t(c.totalDifference < 0 ? 'compare.underpaid' : 'compare.overpaid', { amount }) + net, kind: 'warn' };
 }
 
+/** Each row's calculation and the slip side by side as bars, with the difference. */
+function CompareBars({ rows }: { rows: Comparison['rows'] }) {
+  const { t, fmt } = useApp();
+  const shown = rows.filter((r) => r.key !== 'gross' && r.key !== 'net' && (r.expected.amount || r.slip.amount));
+  if (!shown.length) return null;
+  const max = Math.max(...shown.flatMap((r) => [Math.abs(r.expected.amount ?? 0), Math.abs(r.slip.amount ?? 0)]), 1);
+  const width = (n?: number) => `${Math.max(1, (100 * Math.abs(n ?? 0)) / max)}%`;
+  return (
+    <Card title={t('pay.barsTitle')}>
+      <div className="pay-bars">
+        {shown.map((r) => {
+          const ok = r.status === 'ok';
+          const diff = r.diff.amount;
+          return (
+            <div key={r.key} className="pay-bar-row">
+              <span className="pay-bar-name">{rowLabel(r, t)}</span>
+              <span className="pay-bar-pair" aria-hidden="true">
+                <i className="pay-bar-calc" style={{ width: width(r.expected.amount) }} />
+                <i className="pay-bar-slip" style={{ width: width(r.slip.amount), opacity: r.slip.amount ? 1 : 0.2 }} />
+              </span>
+              <span className={`pay-bar-diff ${ok ? 'ok' : diff && diff < 0 ? 'negative' : 'muted'}`}>{ok ? '✓' : diff ? fmt.signedMoney(Math.round(diff)) : '–'}</span>
+            </div>
+          );
+        })}
+      </div>
+      <p className="cal-legend small">
+        <span>
+          <i className="cal-key pay-bar-calc" /> {t('compare.expected')}
+        </span>
+        <span>
+          <i className="cal-key pay-bar-slip" /> {t('compare.slip')}
+        </span>
+      </p>
+    </Card>
+  );
+}
+
+/** The period's days as squares: logged, missing from the basis, holidays outlined. */
+function PaidDays({ start, end, logged, gaps }: { start: string; end: string; logged: string[]; gaps: string[] }) {
+  const { t } = useApp();
+  const have = new Set(logged);
+  const lack = new Set(gaps);
+  const list: string[] = [];
+  for (let d = start; d <= end && list.length < 62; d = addDays(d, 1)) list.push(d);
+  const lead = (isoWeekday(start) + 6) % 7;
+  return (
+    <Card title={t('pay.daysTitle')}>
+      <div className="pay-days" aria-hidden="true">
+        {Array.from({ length: lead }, (_, i) => (
+          <i key={`b${i}`} className="pay-day-blank" />
+        ))}
+        {list.map((d) => (
+          <i
+            key={d}
+            className={['pay-day', have.has(d) ? 'cal-worked' : lack.has(d) ? 'cal-missing' : isoWeekday(d) >= 6 ? 'cal-weekend' : '', specialDay(d)?.kind === 'holiday' ? 'cal-holiday' : ''].join(' ')}
+          >
+            {Number(d.slice(8))}
+          </i>
+        ))}
+      </div>
+      <p className="small muted">{t('pay.daysCount', { logged: logged.length, missing: gaps.length })}</p>
+    </Card>
+  );
+}
+
 export function CompareView({ id }: { id: string }) {
   const { t, fmt, settings, days } = useApp();
   const data = useSlipComparison(id);
@@ -87,6 +155,13 @@ export function CompareView({ id }: { id: string }) {
       <SlipSetupCard id={id} slip={slip} start={start} end={end} />
       {/* Which days the comparison rests on, and which are missing (the same as the report says). */}
       <BasisNotice basis={basis} t={t} fmt={fmt} />
+      <div className="cal-chips">
+        {slip.payDate && <span className="cal-chip">{t('pay.chip.paid', { date: fmt.date(slip.payDate) })}</span>}
+        {basis.state !== 'none' && (
+          <span className={`cal-chip ${total.kind === 'ok' ? 'cal-chip-ok' : 'cal-chip-warn'}`}>{total.kind === 'ok' ? `✓ ${t('pay.chip.matches')}` : t('pay.chip.differs')}</span>
+        )}
+        <span className={`cal-chip ${basis.state === 'full' ? 'cal-chip-ok' : 'cal-chip-warn'}`}>{t(`pay.chip.basis.${basis.state}`)}</span>
+      </div>
       {basis.state !== 'none' && (
         <Notice kind={total.kind}>
           <strong>{total.text}</strong>
@@ -94,6 +169,32 @@ export function CompareView({ id }: { id: string }) {
         </Notice>
       )}
 
+      {basis.state !== 'none' && <CompareBars rows={comparison.rows} />}
+
+      <Card title={t('cal.numbers')}>
+        <div className="cal-numbers">
+          <div>
+            <strong>{fmt.money(slip.gross)}</strong>
+            <span className="small muted">{basis.state !== 'none' ? t('pay.num.grossCalc', { amount: fmt.money(Math.round(period.expectedGross)) }) : t('pay.num.gross')}</span>
+          </div>
+          <div>
+            <strong>{fmt.money(slip.net)}</strong>
+            <span className="small muted">{t('pay.num.netTax', { amount: fmt.money(slip.tax) })}</span>
+          </div>
+          <div>
+            <strong>{fmt.duration(period.workedMinutes)}</strong>
+            <span className="small muted">{t('cal.num.worked', { n: period.shifts.length })}</span>
+          </div>
+          <div>
+            <strong>{fmt.money(slip.lines.filter((l) => l.category.startsWith('ob') || l.category.startsWith('ot')).reduce((s, l) => s + (l.amount ?? 0), 0))}</strong>
+            <span className="small muted">{t('pay.num.extra')}</span>
+          </div>
+        </div>
+      </Card>
+
+      <PaidDays start={start} end={end} logged={basis.logged} gaps={[...basis.paidNotLogged.map((d) => d.date), ...basis.unlogged]} />
+
+      <Fold title={t('pay.rows')} sub={t('pay.rowsSub', { n: comparison.rows.length })}>
       <div className="compare-rows">
         {comparison.rows.map((row) => (
           <Card key={row.key} className={`compare-row compare-${row.status}`}>
@@ -128,12 +229,13 @@ export function CompareView({ id }: { id: string }) {
           </Card>
         ))}
       </div>
+      </Fold>
 
       <PeriodWarnings period={period} />
 
       {slip.balances.timeBankHours ? <Notice>{t('compare.timeBankBalance', { hours: fmt.number(slip.balances.timeBankHours) })}</Notice> : null}
 
-      <Card title={t('compare.lines')}>
+      <Fold title={t('compare.lines')} sub={t('pay.rowsSub', { n: slip.lines.length })}>
         <ul className="slip-lines">
           {slip.lines.map((l, i) => (
             <li key={i}>
@@ -161,16 +263,23 @@ export function CompareView({ id }: { id: string }) {
             </li>
           ))}
         </ul>
-      </Card>
+      </Fold>
 
+      {BETA && <p className="small muted beta-note">🔒 {t('beta.reportLocked')}</p>}
       <div className="form-actions">
         <button type="button" className="button button-danger" onClick={remove}>
           {t('common.delete')}
         </button>
         <span className="spacer" />
-        <a className="button button-primary" href={href({ name: 'report', id })}>
-          {t('compare.report')}
-        </a>
+        {BETA ? (
+          <button type="button" className="button" disabled title={t('beta.reportLocked')}>
+            🔒 {t('compare.report')}
+          </button>
+        ) : (
+          <a className="button button-primary" href={href({ name: 'report', id })}>
+            {t('compare.report')}
+          </a>
+        )}
       </div>
     </Page>
   );

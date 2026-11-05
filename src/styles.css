@@ -3640,3 +3640,254 @@ input[type='checkbox'] {
   padding: 4px 0;
   font-size: 0.9rem;
 }
+
+/* The Kalender's look on the other pages: squares for how things stand, a highlighted "now" card, numbers. */
+.today-week .cal-grid .cal-day { min-height: 54px; }
+.today-week .cal-grid .cal-mark { order: -1; }
+.today-numbers {
+  color: inherit;
+  text-decoration: none;
+}
+.today-bar,
+.pay-progress {
+  height: 8px;
+  background: var(--cal-empty);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.today-bar i {
+  display: block;
+  height: 100%;
+  background: var(--cal-worked-strong);
+}
+.today-progress p { margin: 4px 0 0; }
+
+.pay-squares {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 5px;
+  margin: 4px 0 6px;
+}
+.pay-sq {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border-radius: 8px;
+  padding: 4px 0;
+  min-height: 40px;
+  box-sizing: border-box;
+  color: var(--text);
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+.pay-sq strong {
+  font-size: 11px;
+  text-transform: capitalize;
+}
+.pay-sq-ok { background: var(--cal-worked); }
+.pay-sq-warn { background: var(--cal-missing); }
+.pay-sq-bad { background: var(--cal-sick); }
+.pay-sq-read { background: var(--surface-2); }
+.pay-sq-none { box-shadow: inset 0 0 0 1px var(--border); color: var(--muted); }
+.pay-sq-later { box-shadow: inset 0 0 0 1px var(--cal-empty); color: var(--muted); opacity: 0.7; }
+.pay-sq-now { box-shadow: inset 0 0 0 2px var(--primary); color: var(--primary); }
+.pay-year .cal-year-nav button {
+  min-width: 36px;
+  min-height: 36px;
+  font-size: 1.3rem;
+}
+.pay-year .cal-year-nav button:disabled { opacity: 0.3; }
+.pay-year p { margin: 4px 0 0; }
+
+.pay-wage-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 46px;
+  margin: 4px 0;
+}
+.pay-wage-bars i {
+  display: block;
+  flex-basis: 0;
+  min-width: 6px;
+  background: var(--cal-vacation);
+  border-radius: 4px 4px 0 0;
+}
+.pay-wage-bars i.pay-wage-now { background: var(--primary); }
+.pay-wage-steps {
+  list-style: none;
+  padding: 0;
+  margin: 4px 0 0;
+}
+.pay-wage-steps li {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 0;
+}
+
+.pay-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pay-bar-row {
+  display: grid;
+  grid-template-columns: minmax(0, 7.5em) minmax(0, 1fr) 6.5em;
+  gap: 8px;
+  align-items: center;
+  font-size: 0.85rem;
+}
+.pay-bar-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pay-bar-pair {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pay-bar-pair i {
+  display: block;
+  height: 6px;
+  border-radius: 2px;
+}
+.pay-bar-calc { background: #9cc3dd; }
+.pay-bar-slip { background: var(--text); }
+.cal-key.pay-bar-calc { background: #9cc3dd; }
+.cal-key.pay-bar-slip { background: var(--text); }
+.pay-bar-diff {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.pay-bar-diff.negative { color: var(--cal-holiday); font-weight: 700; }
+
+.pay-days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 3px;
+}
+.pay-days i {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  border-radius: 4px;
+  font-style: normal;
+  font-size: 10px;
+  background: var(--cal-empty);
+  color: var(--text);
+}
+.pay-days i.pay-day-blank { background: transparent; }
+.pay-days i.cal-worked { background: var(--cal-worked); }
+.pay-days i.cal-missing { background: var(--cal-missing); }
+.pay-days i.cal-weekend { background: transparent; color: var(--muted); box-shadow: inset 0 0 0 1px var(--cal-empty); }
+.pay-days i.cal-holiday { box-shadow: inset 0 0 0 2px var(--cal-holiday); }
+
+.kon-tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+.kon-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border: 0;
+  border-radius: 10px;
+  padding: 7px 9px;
+  text-align: left;
+  font: inherit;
+  color: var(--text);
+  cursor: pointer;
+}
+.kon-tile:disabled { cursor: default; }
+.kon-tile-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 0.85rem;
+}
+.kon-tile-n { font-size: 1.05rem; }
+.kon-tile-sub { font-size: 11px; }
+.kon-ok { background: var(--cal-worked); }
+.kon-warn { background: var(--cal-missing); }
+.kon-bad { background: var(--cal-sick); }
+[dir='rtl'] .kon-tile { text-align: right; }
+
+.kon-months { margin-bottom: 8px; }
+.kon-months-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 3px;
+}
+.kon-month {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: 9px;
+  color: var(--muted);
+}
+.kon-month i {
+  display: block;
+  width: 100%;
+  height: 14px;
+  border-radius: 3px;
+}
+.kon-m-bad { background: var(--cal-sick-strong); }
+.kon-m-warn { background: var(--cal-missing-strong); }
+.kon-m-ok { background: var(--cal-empty); }
+.kon-m-none { box-shadow: inset 0 0 0 1px var(--border); }
+.kon-months p { margin: 4px 0 0; }
+
+.mer-tiles {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+.mer-tiles span {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  background: var(--surface-2);
+  border-radius: 8px;
+  padding: 5px 2px;
+  font-size: 10px;
+  color: var(--muted);
+}
+.mer-tiles strong {
+  font-size: 0.95rem;
+  color: var(--text);
+}
+.status-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: none;
+  margin-inline-end: 8px;
+  vertical-align: 1px;
+}
+.status-ok { background: var(--cal-worked-strong); }
+.status-warn { background: var(--cal-missing-strong); }
+.status-grey { background: var(--border); }
+.fold-status > summary { align-items: center; }
+.fold-status .fold-sub {
+  flex-basis: 100%;
+  padding-inline-start: 46px;
+  font-size: 0.85rem;
+}
+.beta-badge {
+  display: inline-block;
+  margin-inline-start: 6px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--cal-missing);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 700;
+  vertical-align: 2px;
+}
+.beta-locked { padding: 16px; max-width: 640px; margin: 0 auto; }

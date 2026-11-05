@@ -35,15 +35,23 @@ export function Fold({ title, sub, open: initial = false, warn = false, id, chil
 /** Inside it, a card with a title opens on a tap (a long page of cards becomes a list of their titles). */
 export const FoldCards = createContext(false);
 
+/** Inside folded cards: what the next titled card holds just now, shown under its title with a dot (Mer). */
+export const CardStatus = createContext<{ sub: ReactNode; kind: 'ok' | 'warn' | 'grey' } | null>(null);
+
 export function Card({ title, children, className = '' }: { title?: ReactNode; children: ReactNode; className?: string }) {
   const fold = useContext(FoldCards);
+  const status = useContext(CardStatus);
   if (fold && title)
     return (
-      <details className={`card fold ${className}`}>
+      <details className={`card fold ${status ? 'fold-status' : ''} ${className}`}>
         <summary>
+          {status && <i className={`status-dot status-${status.kind}`} aria-hidden="true" />}
           <span className="fold-title">{title}</span>
+          {status && <span className="fold-sub">{status.sub}</span>}
         </summary>
-        <div className="fold-body">{children}</div>
+        <CardStatus.Provider value={null}>
+          <div className="fold-body">{children}</div>
+        </CardStatus.Provider>
       </details>
     );
   return (
