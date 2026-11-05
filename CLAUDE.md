@@ -75,11 +75,13 @@ in Playwright by routing `https://accounts.google.com/gsi/client` and
 ## Map
 
 - `src/domain/` – the rules and calculations: `model.ts` (settings, wage
-  periods, minimum wage), `calc.ts` (the "Över 5 timmar utan rast" warning,
-  `noStampedBreak`: only a shift over 5 h with no stop ≥ 10 min between Ut and
-  In – a lunch of any length counts, and the stretch after it isn't held to
-  5 h since coffee breaks aren't stamped; on the owner's history 230 → 39
-  warnings, all shifts with no lunch stamped), `compare.ts` (calculated pay vs the slip),
+  periods, minimum wage), `calc.ts` (arbetstidslagen 15 §, `breakCheck`: counted from the
+  shift's start, the work before the first stamped break – a stop ≥ 10 min
+  between Ut and In; shorter gaps are one stretch – may not pass 5 h
+  ('no-break'); a stretch past 5 h after the break is 'no-break-after', but not
+  on a shift with overtime, where short breaks are taken but not stamped – the
+  owner's rule. Texts write the law without § so it isn't linked as the
+  agreement), `compare.ts` (calculated pay vs the slip),
   `payslip.ts` (pay slip parser for PDF and photo text), `raises.ts`,
   `coverage.ts`, `missing.ts`, `vacation.ts`, `tax.ts`, `sources.ts` (links to
   the agreement).

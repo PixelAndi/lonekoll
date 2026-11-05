@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { calculatePeriod, calculateShifts, inFullOvertimeWindow, noStampedBreak, ordinaryStartOn } from './calc.ts';
+import { calculatePeriod, calculateShifts, inFullOvertimeWindow, breakCheck, ordinaryStartOn } from './calc.ts';
 import { DEFAULT_SETTINGS, hourlyRateOn, minimumWageOn, type DayRecord, type Settings, type StampPair } from './model.ts';
 import { buildShifts, forgottenStamps, otherDayNeeded } from './shifts.ts';
 import { addDays, isoWeekday, toMinutes as toMinutesOf } from './time.ts';
@@ -64,8 +64,9 @@ describe('October week', () => {
       [120, 25],
     ]);
     expect(results[2].overtimeReason).toBe('long-shift');
-    // The lunch at 18:00–18:30 is stamped: no break warning for the long evening after it.
+    // The lunch at 18:00–18:30 is stamped, and the long evening after it is overtime: no break warning.
     expect(results[2].warnings).not.toContain('no-break');
+    expect(results[2].warnings).not.toContain('no-break-after');
   });
 
   it('sums the period like a pay slip', () => {
@@ -290,18 +291,25 @@ describe('when the Sunday and holiday overtime windows end', () => {
   });
 });
 
-describe('the stamped break', () => {
+describe('five hours without a break (arbetstidslagen), from the start of the shift', () => {
   const at = (h: number, m = 0) => Date.UTC(2030, 0, 7, h, m);
   it('warns for a shift over five hours with no break stamped', () => {
-    expect(noStampedBreak([{ start: at(6), end: at(12) }])).toBe(true);
-    expect(noStampedBreak([{ start: at(6), end: at(10) }])).toBe(false);
+    expect(breakCheck([{ start: at(6), end: at(12) }], false)).toBe('no-break');
+    expect(breakCheck([{ start: at(6), end: at(12) }], true)).toBe('no-break');
+    expect(breakCheck([{ start: at(6), end: at(10) }], false)).toBeNull();
   });
-  it('counts a lunch of any usual length, and no longer holds the rest of the shift to five hours', () => {
-    expect(noStampedBreak([{ start: at(12), end: at(14) }, { start: at(14, 30), end: at(20, 45) }])).toBe(false);
-    expect(noStampedBreak([{ start: at(12), end: at(14) }, { start: at(14, 15), end: at(20) }])).toBe(false);
-    expect(noStampedBreak([{ start: at(12), end: at(14) }, { start: at(15, 10), end: at(20) }])).toBe(false);
+  it('warns when the first break comes after more than five hours', () => {
+    expect(breakCheck([{ start: at(6), end: at(11, 30) }, { start: at(12), end: at(14) }], false)).toBe('no-break');
   });
-  it('does not take a stamp a few minutes apart for a break', () => {
-    expect(noStampedBreak([{ start: at(6), end: at(9) }, { start: at(9, 3), end: at(12) }])).toBe(true);
+  it('counts a lunch of any usual length as the break', () => {
+    expect(breakCheck([{ start: at(12), end: at(14) }, { start: at(14, 15), end: at(17) }], false)).toBeNull();
+    expect(breakCheck([{ start: at(12), end: at(14) }, { start: at(15, 10), end: at(18) }], false)).toBeNull();
+  });
+  it('notes over five hours after the lunch, but not on a shift with overtime', () => {
+    expect(breakCheck([{ start: at(12), end: at(14) }, { start: at(14, 30), end: at(20, 45) }], false)).toBe('no-break-after');
+    expect(breakCheck([{ start: at(12), end: at(14) }, { start: at(14, 30), end: at(20, 45) }], true)).toBeNull();
+  });
+  it('does not take stamps a few minutes apart for a break', () => {
+    expect(breakCheck([{ start: at(6), end: at(9) }, { start: at(9, 3), end: at(12) }], false)).toBe('no-break');
   });
 });

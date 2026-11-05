@@ -85,6 +85,7 @@ export function inFullOvertimeWindow(date: LocalDate, minute: number, ordinarySt
 
 export type ShiftWarningCode =
   | 'no-break'
+  | 'no-break-after'
   | 'short-rest'
   | 'extra-shift'
   | 'unscheduled-shift'
@@ -139,14 +140,24 @@ interface ClassifyOptions {
 }
 
 /**
- * A shift over five hours with no stamped break: no stop of at least `minBreakMinutes` between an
- * Ut and the next In. A lunch of any length counts; the stretch after it isn't held to the five
- * hours, as short pauses (coffee breaks) are seldom stamped.
+ * The Working Hours Act's five hours in a row without a break (arbetstidslagen 15 §), counted from
+ * the shift's start: the work before the first stamped break – a stop of at least `minBreakMinutes`
+ * between an Ut and the next In; stamps a few minutes apart are one stretch – may not run past five
+ * hours ('no-break'). After a break, a stretch past five hours is noted too ('no-break-after'), but
+ * not on a shift with overtime: there short pauses are taken and seldom stamped.
  */
-export function noStampedBreak(intervals: { start: number; end: number }[]): boolean {
-  if (!intervals.length) return false;
-  for (let i = 1; i < intervals.length; i++) if (intervals[i].start - intervals[i - 1].end >= RULES.minBreakMinutes * MINUTE_MS) return false;
-  return intervals[intervals.length - 1].end - intervals[0].start > RULES.maxMinutesWithoutBreak * MINUTE_MS;
+export function breakCheck(intervals: { start: number; end: number }[], overtime: boolean): 'no-break' | 'no-break-after' | null {
+  if (!intervals.length) return null;
+  const stretches: { start: number; end: number }[] = [];
+  for (const iv of intervals) {
+    const last = stretches[stretches.length - 1];
+    if (last && iv.start - last.end < RULES.minBreakMinutes * MINUTE_MS) last.end = Math.max(last.end, iv.end);
+    else stretches.push({ ...iv });
+  }
+  const tooLong = (s: { start: number; end: number }) => s.end - s.start > RULES.maxMinutesWithoutBreak * MINUTE_MS;
+  if (tooLong(stretches[0])) return 'no-break';
+  if (!overtime && stretches.slice(1).some(tooLong)) return 'no-break-after';
+  return null;
 }
 
 /** Classifies every minute of a set of work intervals. */
@@ -327,7 +338,8 @@ function shiftsOf(days: DayRecord[], settings: Settings): { results: ShiftResult
     if (reason === 'long-shift' && shift.workedMinutes - ordinaryMinutes < settings.minOvertimeMinutes) ordinaryMinutes = Infinity;
     const komp = (byDate.get(shift.date)?.overtimeAs ?? settings.overtimeAs) === 'komp';
     const c = classify(shift.intervals, settings, { ordinaryMinutes, shiftedFrom, komp, days: byDate });
-    if (noStampedBreak(shift.intervals)) warnings.push('no-break');
+    const breakWarning = breakCheck(shift.intervals, c.overtime50 + c.overtime100 > 0);
+    if (breakWarning) warnings.push(breakWarning);
     if (previousEnd !== null && shift.start - previousEnd < RULES.minDailyRestMinutes * MINUTE_MS) warnings.push('short-rest');
     if (c.missingRate) warnings.push('no-rate');
     if (c.missingAgreement) warnings.push('no-agreement');
