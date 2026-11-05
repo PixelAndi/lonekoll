@@ -152,7 +152,16 @@ in Playwright by routing `https://accounts.google.com/gsi/client` and
   Help section `agreement` ("Kollektivavtalet i korthet"): minimum wage, OB,
   overtime, förskjuten tid, shifts, holidays, sick, vacation, permission,
   claims – amounts read from `AGREEMENT_PERIODS` for today, so the guide
-  says what the app calculates with. A bare "N §" is linked as an agreement
+  says what the app calculates with. Help section `injury` ("Skadad på jobbet",
+  `InjuryGuide` in HelpView.tsx, linked from the agreement guide's sick part
+  and from SickInfo): what counts (incl. färdolycksfall), the employee's steps,
+  the employer's duties (report to Försäkringskassan, serious ones to
+  Arbetsmiljöverket, via anmalarbetsskada.se; copy to employee and skyddsombud;
+  investigate), compensation (sjuklön + TFA for karens/lost income, sjukpenning
+  + TFA from day 15, costs, sveda och värk – "enligt Afa minst 31 dagar", men,
+  livränta at ≥ 1/15 income loss for ≥ 1 year). Checked against search results
+  in Nov 2026 (afaforsakring.se and avtalat.se weren't reachable from the cloud
+  session); the text tells users to confirm amounts with Afa/FK/the union. A bare "N §" is linked as an agreement
   section by `splitCitations`, so other laws (MBL) are written without §.
 - **Ärenden** (`src/ui/IssuesView.tsx`, tab with a badge; `issues-context.tsx`
   works out everything once for the app): questions only the user can answer

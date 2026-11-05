@@ -18,7 +18,7 @@ type GuideCategory = { title: TextKey; guides: HelpSection[] };
 
 const CATEGORIES: GuideCategory[] = [
   { title: 'help.cat.clock', guides: ['forgot', 'scan'] },
-  { title: 'help.cat.pay', guides: ['agreement', 'slips', 'komp', 'vacation', 'night'] },
+  { title: 'help.cat.pay', guides: ['agreement', 'injury', 'slips', 'komp', 'vacation', 'night'] },
   { title: 'help.cat.app', guides: ['install', 'offline', 'privacy'] },
 ];
 
@@ -29,6 +29,7 @@ const TITLES: Record<HelpSection, TextKey> = {
   komp: 'guide.komp.title',
   vacation: 'guide.vacation.title',
   night: 'guide.night.title',
+  injury: 'guide.injury.title',
   agreement: 'guide.agreement.title',
   offline: 'offline.title',
   install: 'install.title',
@@ -90,6 +91,8 @@ function Guide({ section }: { section: HelpSection }) {
       return <NightGuide />;
     case 'agreement':
       return <AgreementGuide />;
+    case 'injury':
+      return <InjuryGuide />;
     default:
       return <StepsGuide section={section} />;
   }
@@ -165,10 +168,53 @@ function AgreementGuide() {
       </section>
       {section('holiday')}
       {section('sick')}
+      <p className="small">
+        <a href={href({ name: 'help', section: 'injury' })}>{t('guide.injury.link')}</a>
+      </p>
       {section('vacation', { perDay: money(period.vacationPayPerDayMin) })}
       {section('permission')}
       {section('claims')}
       <p className="small muted">{t('guide.agreement.note')}</p>
+    </Card>
+  );
+}
+
+/**
+ * Hurt at work, or on the way there or home (arbetsskada): what the employee does, what the employer
+ * must do, and what can be paid – the statutory insurance (Försäkringskassan) and the collectively
+ * agreed TFA (Afa Försäkring). Checked against Arbetsmiljöverket's, Försäkringskassan's and Afa's
+ * information in November 2026; the guide says to check amounts and conditions with them.
+ */
+function InjuryGuide() {
+  const { t } = useApp();
+  const list = (prefix: 'you' | 'employer' | 'money', n: number, ordered = false) => {
+    const items = Array.from({ length: n }, (_, i) => (
+      <li key={i}>
+        <Cited text={t(`guide.injury.${prefix}.${i + 1}` as TextKey)} />
+      </li>
+    ));
+    return ordered ? <ol>{items}</ol> : <ul>{items}</ul>;
+  };
+  return (
+    <Card title={t('guide.injury.title')}>
+      <p>{t('guide.injury.summary')}</p>
+      <section className="agreement-part">
+        <h3>{t('guide.injury.what.h')}</h3>
+        <p>{t('guide.injury.what')}</p>
+      </section>
+      <section className="agreement-part">
+        <h3>{t('guide.injury.you.h')}</h3>
+        {list('you', 5, true)}
+      </section>
+      <section className="agreement-part">
+        <h3>{t('guide.injury.employer.h')}</h3>
+        {list('employer', 4)}
+      </section>
+      <section className="agreement-part">
+        <h3>{t('guide.injury.money.h')}</h3>
+        {list('money', 5)}
+      </section>
+      <p className="small muted">{t('guide.injury.note')}</p>
     </Card>
   );
 }

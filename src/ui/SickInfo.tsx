@@ -1,6 +1,7 @@
 import { useApp } from '../app-context.ts';
 import type { SickPeriod } from '../domain/sick.ts';
 import { Cited } from './Cited.tsx';
+import { href } from '../router.ts';
 
 // What the law and the agreement ask of someone off sick, with the dates of
 // their sick period: tell the employer the first day; the karensavdrag (none
@@ -29,6 +30,9 @@ export function SickInfo({ period }: { period: SickPeriod }) {
           <Cited text={t('sick.insurance', { date: date(period.insuranceFrom) })} />
         </li>
         {!period.relapse && <li>{t('sick.relapse')}</li>}
+        <li>
+          {t('sick.injury')} <a href={href({ name: 'help', section: 'injury' })}>{t('sick.injuryLink')}</a>
+        </li>
       </ul>
     </div>
   );
