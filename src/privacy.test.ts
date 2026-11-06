@@ -159,7 +159,7 @@ describe('privacy: nothing leaves the device', () => {
     expect(extract).toMatch(/getDocument\(\{ data, isEvalSupported: false \}\)/);
     // No fonts, character maps or decoders from elsewhere, and the reader itself is bundled with the app.
     for (const code of [extract, browser]) expect(code).not.toMatch(/\burl\s*:|cMapUrl|standardFontDataUrl|wasmUrl|iccUrl/);
-    expect(browser).toContain("import('pdfjs-dist/build/pdf.worker.min.mjs?url')");
+    expect(browser).toContain("import('pdfjs-dist/legacy/build/pdf.worker.min.mjs?url')");
   });
 
   it('the privacy policy page (for Google’s consent screen) runs nothing and loads nothing from elsewhere', () => {

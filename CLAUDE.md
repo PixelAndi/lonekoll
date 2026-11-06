@@ -264,7 +264,12 @@ in Playwright by routing `https://accounts.google.com/gsi/client` and
   check; a new reading of a slip already saved (same period and pay day)
   replaces it only when more complete. In Settings the wage card is one line
   linking to the pay slip page.
-- `src/pdf/` – pay slip PDFs via pdf.js (bundled).
+- `src/pdf/` – pay slip PDFs via pdf.js (bundled): its **legacy** build (polyfills
+  for older browsers), plus `addStreamIteration` in browser.ts – Safari can't
+  `for await` over a ReadableStream, which pdf.js's getTextContent does; without
+  it every PDF import on an iPhone failed with "undefined is not a function
+  (near '...e of t...')". Reproduced in Chromium by deleting
+  `ReadableStream.prototype[Symbol.asyncIterator]`; fixed build reads the slip.
 - `src/cloud/` – optional Google Drive copy: `google.ts` (only network file;
   OAuth client ID is here; Google's token lasts an hour and can't be renewed
   without a tap – no server, so no refresh tokens). Sync waits quietly when
